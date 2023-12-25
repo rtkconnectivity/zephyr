@@ -1,0 +1,39 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  rtl87x2g ADC.
+
+compatible: "realtek,rtl87x2g-adc"
+
+include: [adc-controller.yaml, reset-device.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+#  resets:
+#    required: true
+
+  channels:
+    type: int
+    description: Number of external channels
+    required: true
+
+  interrupts:
+    required: true
+
+  "#io-channel-cells":
+    const: 1
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+io-channel-cells:
+  - input

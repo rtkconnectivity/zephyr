@@ -1,0 +1,27 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+    RTL87X2G PIN CONTROLLER.
+    The rtl87x2g pin controller is a singleton node responsible for controlling
+    pin function selection and pin properties.
+
+compatible: "realtek,rtl87x2g-pinctrl"
+
+include: base.yaml
+
+child-binding:
+  description: |
+    rtl87x2g pin controller pin configuration state nodes.
+  child-binding:
+    description: |
+      rtl87x2g pin controller pin configuration group.
+
+    properties:
+      psels:
+        required: true
+        type: array
+        description: |
+          pinmux number and pad type to config.
+
+

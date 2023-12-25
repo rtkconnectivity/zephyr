@@ -1,0 +1,36 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  RTL87X2G UART.
+
+compatible: "realtek,rtl87x2g-uart"
+
+include: [uart-controller.yaml, base.yaml, pinctrl-device.yaml]
+
+bus: uart
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-1:
+    required: false
+
+  pinctrl-names:
+    required: true
+
+  flow-ctrl:
+    type: boolean
+    description: |
+      Enable cts and rts or not.
+

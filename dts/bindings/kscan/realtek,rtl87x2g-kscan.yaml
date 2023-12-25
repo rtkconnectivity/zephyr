@@ -1,0 +1,61 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  RTL87X2G KSCAN.
+
+compatible: "realtek,rtl87x2g-kscan"
+
+include: [kscan.yaml, pinctrl-device.yaml]
+
+properties:
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+  max-row-size:
+    type: int
+    default: 12
+    required: true
+    description: Max row size of kscan array.
+
+  max-col-size:
+    type: int
+    default: 20
+    required: true
+    description: Max column size of kscan array.
+
+  row-size:
+    type: int
+    required: true
+    description: Row size of kscan array.
+
+  col-size:
+    type: int
+    required: true
+    description: Column size of kscan array.
+
+  debounce-time-ms:
+    type: int
+    description: Debounce time, unit is ms.
+
+  scan-time-ms:
+    type: int
+    description: Scan interval time, uint is ms.
+
+  release-time-ms:
+    type: int
+    description: All release detect time, unit is ms.
+
