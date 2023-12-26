@@ -173,6 +173,7 @@ static int rtk_task_init(void)
     /* SCB->VTOR points to zephyr's vector table which is placed in flash.
     However, vector table place in flash will trigger hardfault when flash erasing.
     So we need copy the zephyr's vector table to Ram*/
+    uint32_t key = arch_irq_lock();
 
     size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
 #if (CONFIG_TRUSTED_EXECUTION_NONSECURE==1)
@@ -185,6 +186,8 @@ static int rtk_task_init(void)
 
     /* connect rtk-rom-irq to zephyr's vector table */
     rtk_rom_irq_connect();
+
+    arch_irq_unlock(key);
 
     return 0;
 }
