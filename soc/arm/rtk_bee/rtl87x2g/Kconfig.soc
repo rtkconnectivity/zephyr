@@ -1,0 +1,20 @@
+choice
+	prompt "RealTek RTL87x2G MCU Selection"
+	depends on SOC_SERIES_RTL87X2G
+
+config SOC_RTL8772GWP
+	bool "SOC_RTL8772GWP"
+
+config SOC_RTL8762GN
+	bool "SOC_RTL8762GN"
+
+endchoice
+
+if SOC_SERIES_RTL87X2G
+
+config SOC_PART_NUMBER_RTL8772GWP
+	bool
+config SOC_PART_NUMBER_RTL8762GN
+	bool
+
+endif
