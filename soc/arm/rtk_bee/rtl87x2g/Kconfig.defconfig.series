@@ -1,0 +1,25 @@
+if SOC_SERIES_RTL87X2G
+
+config SOC_SERIES
+	default "rtl87x2g"
+
+config SOC_PART_NUMBER
+	default "rtl8772gwp" if SOC_PART_NUMBER_RTL8772GWP
+	default "rtl8762gn" if SOC_PART_NUMBER_RTL8762GN
+
+config NUM_IRQS
+	int
+	# must be >= the highest interrupt number used
+	default 171
+
+config SYS_CLOCK_TICKS_PER_SEC
+	int
+	default 100
+    #10ms/1tick
+
+config IDLE_STACK_SIZE
+    default 1024
+
+rsource "Kconfig.defconfig.rtl8762gn"
+
+endif # SOC_SERIES_RTL87X2G

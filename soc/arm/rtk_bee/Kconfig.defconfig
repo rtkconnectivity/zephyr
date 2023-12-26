@@ -1,0 +1,7 @@
+if SOC_FAMILY_RTK_BEE
+
+rsource "*/Kconfig.defconfig.series"
+
+endif
+
+
