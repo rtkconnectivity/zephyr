@@ -53,7 +53,7 @@
 #define APBPeriph_GPIOB_CLOCK              30U
 #define APBPeriph_GPIOA_CLOCK              31U
 #define APBPeriph_DISP_CLOCK               32U
-#define APBPeriph_RTZIP_CLOCK              33U
+#define APBPeriph_IMDC_CLOCK              33U
 #define APBPeriph_TIMER_CLOCK              34U
 #define APBPeriph_ENHTIMER_CLOCK           35U
 #define APBPeriph_ENHTIMER_PWM1_CLOCK      36U
