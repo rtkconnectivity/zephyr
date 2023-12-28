@@ -310,10 +310,6 @@ static int uart_rtl87x2g_fifo_fill(const struct device *dev,
     while ((size - num_tx > 0) &&
            UART_GetFlagStatus(uart, UART_FLAG_TX_EMPTY))
     {
-        /* TXE flag will be cleared with byte write to DR|RDR register */
-
-        /* Send a character (8bit , parity none) */
-
         UART_SendByte(uart, (uint8_t)tx_data[num_tx++]);
     }
 
@@ -335,8 +331,6 @@ static int uart_rtl87x2g_fifo_read(const struct device *dev, uint8_t *rx_data,
     while ((size - num_rx > 0) &&
            UART_GetFlagStatus(uart, UART_FLAG_RX_DATA_AVA))
     {
-        /* RXNE flag will be cleared upon read from DR register */
-
         rx_data[num_rx++] = UART_ReceiveByte(uart);
     }
 
@@ -817,12 +811,7 @@ void uart_rtl87x2g_dma_rx_cb(const struct device *dma_dev, void *user_data,
         DBG_DIRECT("[uart_rtl87x2g_dma_rx_cb] channel=%d, status=%d, data->rx_next_buffer == NULL", channel,
                    status);
 #endif
-        /* Buffer full without valid next buffer,
-        * an UART_RX_DISABLED event must be generated,
-        * but uart_rtl87x2g_async_rx_disable() cannot be
-        * called in ISR context. So force the RX timeout
-        * to minimum value and let the RX timeout to do the job.
-        */
+
         k_work_reschedule(&data->dma_rx.timeout_work, K_TICKS(1));
     }
 #if DBG_DIRECT_SHOW
@@ -978,7 +967,7 @@ static int uart_rtl87x2g_async_rx_enable(const struct device *dev,
     /* Enable RX DMA requests */
     uart_rtl87x2g_dma_rx_enable(dev);
 
-    /* Enable IRQ IDLE to define the end of a
+    /* Enable UART_INT_RX_IDLE to define the end of a
     * RX DMA transaction.
     */
     UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
