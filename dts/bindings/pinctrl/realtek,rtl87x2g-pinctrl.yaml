@@ -2,9 +2,61 @@
 # SPDX-License-Identifier: Apache-2.0
 
 description: |
-    RTL87X2G PIN CONTROLLER.
+    RTL87X2G pin controller.
     The rtl87x2g pin controller is a singleton node responsible for controlling
-    pin function selection and pin properties.
+    pin function selection and pin properties. For example, you can use this
+    node to route UART2 TX to pin P3_2 and enable the pull-up resistor on the
+    pin.
+
+    The node has the 'pinctrl' node label set in your SoC's devicetree,
+    so you can modify it like this:
+
+      &pinctrl {
+              /* your modifications go here */
+      };
+
+    All device pin configurations should be placed in child nodes of the
+    'pinctrl' node, as shown in this example:
+
+      /* You can put this in places like a board-pinctrl.dtsi file in
+       * your board directory, or a devicetree overlay in your application.
+       */
+      &pinctrl {
+        /* configuration for uart2 device, default state */
+        uart2_default: uart2_default {
+          /* group 1 ('group1' name is arbitrary) */
+          group1 {
+            /* configure P3_2 as UART_TX and P3_3 as UART_RX */
+            psels = <RTL87X2G_PSEL(UART2_TX, P3_2, DIR_OUT, DRV_HIGH, PULL_UP)>,
+                    <RTL87X2G_PSEL(UART2_RX, P3_3, DIR_IN, DRV_HIGH, PULL_UP)>;
+          };
+        };
+      };
+
+    The 'uart2_default' child node encodes the pin configurations for a
+    particular state of a device; in this case, the default (that is, active)
+    state. You would specify the low-power configuration for the same device
+    in a separate child node.
+
+    As shown, pin configurations are organized in groups within each child node.
+    Each group can specify a list of pin function selections in the 'psels'
+    property. The RTL87X2G_PSEL macro is used to specify a pin function selection
+    and pin configuration. You could choose pinmux specificed function to
+    specificed pin. And you could configure driver direction, driver state and
+    pull state for the specificed pad. Available pin functions and configurations
+    can be found in the include\zephyr\dt-bindings\pinctrl\rtl87x2g-pinctrl.h
+    header file.
+
+    To link this pin configuration with a device, use a pinctrl-N property
+    for some number N, like this example you could place in your board's DTS
+    file:
+
+       #include "rtl8762gn_evb-pinctrl.dtsi"
+
+       &uart1 {
+             pinctrl-0 = <&uart2_default>;
+             pinctrl-names = "default";
+       };
 
 compatible: "realtek,rtl87x2g-pinctrl"
 
@@ -12,16 +64,16 @@ include: base.yaml
 
 child-binding:
   description: |
-    rtl87x2g pin controller pin configuration state nodes.
+    Rtl87x2g pin controller pin configuration state nodes.
   child-binding:
     description: |
-      rtl87x2g pin controller pin configuration group.
+      Rtl87x2g pin controller pin configuration group.
 
     properties:
       psels:
         required: true
         type: array
         description: |
-          pinmux number and pad type to config.
+          Pinmux function number and pad configurations.
 
 
