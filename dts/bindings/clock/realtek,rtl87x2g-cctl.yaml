@@ -2,21 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 description: |
-  RTL87X2G Reset and Clock Unit (RCU) if a multi-function peripheral in
-  charge of reset control (RCTL) and clock control (CCTL) for all SoC
-  peripherals. This binding represents the clock controller (CCTL).
+  RTL87X2G clock unit for all SoC peripherals in charge of
+  clock control (CCTL). This binding represents the clock controller (CCTL).
 
   To specify the clocks in a peripheral, the standard clocks property needs
   to be used, e.g.:
 
     gpioa: gpio@xxx {
         ...
-        /* cell encodes RCU register offset and control bit position */
+        /* cell encodes related clock bit for specificed peripheral */
         clocks = <&cctl APB_CLK(GPIOA)>;
         ...
     }
 
-  Predefined RCU clock cells are available in
+  Predefined clock cells are available in
   include/zephyr/dts-bindings/clock/rtl87x2g-clocks.h header files.
 
 compatible: "realtek,rtl87x2g-cctl"
