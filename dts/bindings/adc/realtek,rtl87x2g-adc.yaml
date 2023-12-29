@@ -15,9 +15,6 @@ properties:
   clocks:
     required: true
 
-#  resets:
-#    required: true
-
   channels:
     type: int
     description: Number of external channels
