@@ -63,7 +63,7 @@ static const apb_cfg rtl87x2g_apb_table[] =
     {APBPeriph_GPIOB, APBPeriph_GPIOB_CLOCK        },
     {APBPeriph_GPIOA, APBPeriph_GPIOA_CLOCK        },
     {APBPeriph_DISP, APBPeriph_DISP_CLOCK         },
-//    {APBPeriph_IMDC, APBPeriph_IMDC_CLOCK        },
+    {APBPeriph_IMDC, APBPeriph_IMDC_CLOCK        },
     {APBPeriph_TIMER, APBPeriph_TIMER_CLOCK        },
     {APBPeriph_ENHTIMER, APBPeriph_ENHTIMER_CLOCK     },
     {APBPeriph_ENHTIMER_PWM1, APBPeriph_ENHTIMER_PWM1_CLOCK},

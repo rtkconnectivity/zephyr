@@ -1,0 +1,14 @@
+# RTL87X2G counter rtc configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig COUNTER_RTC_RTL87X2G
+	bool "RTL87X2G rtc counter driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL87X2G_RTC_ENABLED
+	select USE_RTL87X2G_RTC
+	select REALTEK_RTC
+	help
+	  This option enables the counter rtc driver for RTL87X2G family of
+	  processors.
