@@ -6,6 +6,8 @@ description: |
 
   channel: Select channel for data transmitting
 
+  slot: Handshake index, ref to rtl_gdma_def.h
+
   config: A 32bit mask specifying the DMA channel configuration
     - bit 0-1:     Direction  (see dma.h)
                  - 0x0: MEMORY to MEMORY
@@ -62,18 +64,16 @@ description: |
 
   Example of devicetree configuration
 
-  &uart0 {
+  &uart2 {
         status = "okay";
-        pinctrl-0 = <&uart0_default>;
-        pinctrl-names = "default";
-
-        dmas = <&dma0 3 1 0xa>, <&dma0 5 0 0x10021>;
+        dmas = <&dma0 2 5 0xa>, <&dma0 3 4 0x10021>;
         dma-names = "rx", "tx";
   };
 
-  "uart0" uses dma0 for transmitting and receiving in the example.
+  "uart2" uses dma0 for transmitting and receiving in the example.
   Each is named "rx" and "tx".
-  The channel cell assigns channel 3 to receive and channel 5 to transmit.
+  The channel cell assigns channel 2 to receive and channel 3 to transmit.
+  The slot cell configs specified handshake for different peripherals.
   The config cell can take various configs.
   But the setting used depends on each driver implementation.
   Set the priority for the transmitting channel as HIGH, LOW(the default) for receive channel.
