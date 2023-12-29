@@ -208,4 +208,5 @@ source "drivers/gpio/Kconfig.sedi"
 
 source "drivers/gpio/Kconfig.altera"
 
+source "drivers/gpio/Kconfig.rtl87x2g"
 endif # GPIO
