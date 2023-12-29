@@ -1,0 +1,15 @@
+# RTL87X2G uart configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config ADC_RTL87X2G
+	bool "RTL87X2G MCU adc driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL87X2G_ADC_ENABLED
+	select REALTEK_ADC
+	help
+	  This option enables the adc driver for RTL87X2G family of
+	  processors.
+	  Say y if you wish to use adc on RTL87X2G MCU.
+
