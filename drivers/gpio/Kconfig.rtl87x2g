@@ -1,0 +1,13 @@
+# RTL87X2G gpio configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config GPIO_RTL87X2G
+	bool "RTL87X2G MCU GPIO driver"
+	default y
+	select REALTEK_GPIO
+	depends on DT_HAS_REALTEK_RTL87X2G_GPIO_ENABLED
+	help
+	  This option enables the gpio driver for RTL87X2G family of
+	  processors.
