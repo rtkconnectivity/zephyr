@@ -1,0 +1,43 @@
+/*
+ * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+
+/ {
+    zephyr,user {
+        io-channels = <&adc 0>, <&adc 1>;
+    };
+};
+&adc {
+    pinctrl-0 = <&adc_default>;
+    pinctrl-names = "default";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    status = "okay";
+    channel@0 {
+        reg = <0>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+    channel@1 {
+        reg = <1>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+};
+
+&pinctrl {
+    adc_default: adc_default {
+        group1 {
+            psels = <RTL87X2G_PSEL(SW_MODE, P2_0,DIR_IN, DRV_LOW, PULL_DOWN)>,
+            <RTL87X2G_PSEL(SW_MODE, P2_1,DIR_IN, DRV_LOW, PULL_DOWN)>;
+        };
+    };
+};
+
