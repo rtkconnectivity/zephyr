@@ -1,0 +1,15 @@
+# RTL87X2G counter timer configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config COUNTER_TIMER_RTL87X2G
+	bool "RTL87X2G timer counter driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL87X2G_TIMER_ENABLED
+	select USE_RTL87X2G_TIMER
+	select REALTEK_TIM
+	select REALTEK_ENHTIM
+	help
+	  This option enables the counter timer driver for RTL87X2G family of
+	  processors.

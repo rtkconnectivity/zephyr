@@ -94,4 +94,8 @@ source "drivers/counter/Kconfig.dw"
 
 source "drivers/counter/Kconfig.rpi_pico"
 
+source "drivers/counter/Kconfig.rtl87x2g_timer"
+
+source "drivers/counter/Kconfig.rtl87x2g_rtc"
+
 endif # COUNTER

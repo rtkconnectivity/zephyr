@@ -10,9 +10,9 @@ description: |
         In order to use one of the available timers on your application add
         a <board>.overlay file with contents as below
 
-          &timer0 {
+          &timer2 {
                   status = "okay";
-                  prescaler = <10>;
+                  prescaler = <1>;
           };
 
         From the above, setting 'status' is required while the prescaler is
