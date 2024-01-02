@@ -1,4 +1,4 @@
-if SOC_FAMILY_RTK_BEE
+if SOC_FAMILY_REALTEK_BEE
 
 rsource "*/Kconfig.defconfig.series"
 

@@ -1,12 +1,12 @@
-config SOC_FAMILY_RTK_BEE
+config SOC_FAMILY_REALTEK_BEE
 	bool
 	# select HAS_SEGGER_RTT
 	select BUILD_OUTPUT_HEX
 
-if SOC_FAMILY_RTK_BEE
+if SOC_FAMILY_REALTEK_BEE
 config SOC_FAMILY
 	string
-	default "rtk_bee"
+	default "realtek_bee"
 
 rsource "*/Kconfig.soc"
 
@@ -16,10 +16,10 @@ config SYSTICK_USE_EXTERNAL_CLOCK
 config SYSTICK_USE_CPU_CLOCK
 	bool "systick use cpu clock"
 
-config RTK_IMAGE_HEADER
+config REALTEK_IMAGE_HEADER
     bool
 	default y
 	help
-	  This config will prepend rtk_image_header on the zephyr binary.
+	  This config will prepend realtek_image_header on the zephyr binary.
 
-endif # SOC_FAMILY_RTK_BEE
+endif # SOC_FAMILY_REALTEK_BEE
