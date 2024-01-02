@@ -1,0 +1,13 @@
+# RTL87X2G pwm configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config PWM_RTL87X2G
+	bool "RTL87X2G PWM driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL87X2G_PWM_ENABLED
+	select REALTEK_TIM
+	select REALTEK_ENHTIM
+	help
+	  Enable the RTL87X2G pwm driver.
