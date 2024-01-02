@@ -1,0 +1,32 @@
+/*
+ * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/pwm/pwm.h>
+#include <dt-bindings/pinctrl/rtl87x2g-pinctrl.h>
+
+/ {
+	aliases {
+		pwm-0 = &pwm8;
+	};
+};
+
+&timer8 {
+	status = "okay";
+	prescaler = <1>;
+	pwm8: pwm {
+		status = "okay";
+		pinctrl-0 = <&pwm8_default>;
+		pinctrl-names = "default";
+	};
+};
+
+&pinctrl {
+	pwm8_default: pwm8_default {
+		group1 {
+			psels = <RTL87X2G_PSEL(ENPWM0_P, P0_1,DIR_OUT, DRV_LOW, PULL_DOWN)>;
+		};
+	};
+};
