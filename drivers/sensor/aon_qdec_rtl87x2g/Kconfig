@@ -1,0 +1,10 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config AON_QDEC_RTL87X2G
+	bool "RTL87X2G MCU aon qdec driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL87X2G_AON_QDEC_ENABLED
+	select REALTEK_QDEC
+	help
+	  Enable support for aon qdec driver for RTL87X2G MCU series.
