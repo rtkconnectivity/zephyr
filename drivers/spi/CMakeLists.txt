@@ -44,6 +44,7 @@ zephyr_library_sources_ifdef(CONFIG_SPI_NUMAKER		spi_numaker.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_AMBIQ		spi_ambiq.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_RPI_PICO_PIO	spi_rpi_pico_pio.c)
 zephyr_library_sources_ifdef(CONFIG_MSPI_AMBIQ		mspi_ambiq.c)
+zephyr_library_sources_ifdef(CONFIG_SPI_RTL87X2G                 spi_rtl87x2g.c)
 
 zephyr_library_sources_ifdef(CONFIG_SPI_RTIO spi_rtio.c)
 zephyr_library_sources_ifdef(CONFIG_SPI_ASYNC spi_signal.c)
