@@ -1,0 +1,29 @@
+# RTL87X2G kscan configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config KSCAN_RTL87X2G
+	bool "RTL87X2G MCU kscan driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL87X2G_KSCAN_ENABLED
+	select REALTEK_KEYSCAN
+	help
+	  This option enables the kscan driver for RTL87X2G family of
+	  processors.
+	  Say y if you wish to use kscan port on RTL87X2G MCU.
+
+if KSCAN_RTL87X2G
+config RTL87X2G_KEYSCAN_MAX_ROW_SIZE
+	int "Max row size for rtl8762g kscan"
+	default 12
+	help
+	  Max row size for rtl8762g kscan.
+
+config RTL87X2G_KEYSCAN_MAX_COL_SIZE
+	int "Max column size for rtl8762g kscan"
+	default 20
+	help
+	  Max column size for rtl8762g kscan.
+
+endif # KSCAN_RTL87X2G
