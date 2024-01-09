@@ -19,6 +19,7 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/irq.h>
 
+#include <zephyr/dt-bindings/gpio/realtek-rtl87x2g-gpio.h>
 #include "gpio_rtl87x2g.h"
 #include <zephyr/drivers/gpio/gpio_utils.h>
 #include <zephyr/logging/log.h>
@@ -106,12 +107,15 @@ static int gpio_rtl87x2g_pin_configure(const struct device *port, gpio_pin_t pin
     LOG_DBG("port=%s, pin=%d, flags=0x%x, line%d\n", port->name, pin, flags, __LINE__);
 
     const struct gpio_rtl87x2g_config *config = port->config;
+    struct gpio_rtl87x2g_data *data = port->data;
     GPIO_TypeDef *port_base = config->port_base;
     uint8_t port_num = config->port_num;
     uint32_t gpio_bit = BIT(pin);
     int pad_pin = gpio_rtl87x2g_gpio2pad(port_num, pin);
     PAD_Pull_Mode pull_config;
     GPIO_InitTypeDef gpio_init_struct;
+    uint8_t debounce_ms = (flags & RTL87X2G_GPIO_INPUT_DEBOUNCE_MS_MASK) \
+                          >> RTL87X2G_GPIO_INPUT_DEBOUNCE_MS_POS;
 
     __ASSERT(pad_pin >= 0, "gpio port or pin error");
 
@@ -148,6 +152,20 @@ static int gpio_rtl87x2g_pin_configure(const struct device *port, gpio_pin_t pin
 
     GPIO_StructInit(&gpio_init_struct);
 
+    if (debounce_ms)
+    {
+        gpio_init_struct.GPIO_DebounceClkSource = GPIO_DEBOUNCE_32K;
+        gpio_init_struct.GPIO_DebounceClkDiv = GPIO_DEBOUNCE_DIVIDER_32;
+        gpio_init_struct.GPIO_DebounceCntLimit = debounce_ms;
+        gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_ENABLE;
+        data->pin_debounce_ms[pin] = debounce_ms;
+    }
+    else
+    {
+        gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_DISABLE;
+        data->pin_debounce_ms[pin] = 0;
+    }
+
     gpio_init_struct.GPIO_Pin = gpio_bit;
     gpio_init_struct.GPIO_Mode = flags & GPIO_OUTPUT ? GPIO_Mode_OUT : GPIO_Mode_IN;
     gpio_init_struct.GPIO_OutPutMode = flags & GPIO_OPEN_DRAIN ? GPIO_OUTPUT_OPENDRAIN :
@@ -157,10 +175,6 @@ static int gpio_rtl87x2g_pin_configure(const struct device *port, gpio_pin_t pin
                                       GPIO_INT_Trigger_EDGE;
     gpio_init_struct.GPIO_ITPolarity = flags & GPIO_INT_LOW_0 ? GPIO_INT_POLARITY_ACTIVE_LOW :
                                        GPIO_INT_POLARITY_ACTIVE_HIGH;
-    gpio_init_struct.GPIO_DebounceClkSource = GPIO_DEBOUNCE_32K;
-    gpio_init_struct.GPIO_DebounceClkDiv = GPIO_DEBOUNCE_DIVIDER_2;
-    gpio_init_struct.GPIO_DebounceCntLimit = 161;
-    gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_ENABLE;
     Pad_Config(pad_pin, PAD_PINMUX_MODE, \
                PAD_IS_PWRON, \
                pull_config, \
@@ -253,6 +267,7 @@ static int gpio_rtl87x2g_pin_interrupt_configure(const struct device *port,
     LOG_DBG("port=%s, pin=%d, mode=0x%x, trig=0x%x, line%d\n", port->name, pin, mode, trig,
             __LINE__);
     const struct gpio_rtl87x2g_config *config = port->config;
+    struct gpio_rtl87x2g_data *data = port->data;
     GPIO_TypeDef *port_base = config->port_base;
     uint32_t gpio_bit = BIT(pin);
     GPIO_InitTypeDef gpio_init_struct;
@@ -278,22 +293,29 @@ static int gpio_rtl87x2g_pin_interrupt_configure(const struct device *port,
 
     gpio_init_struct.GPIO_Pin = gpio_bit;
     gpio_init_struct.GPIO_Mode = GPIO_Mode_IN;
-    gpio_init_struct.GPIO_DebounceClkSource = GPIO_DEBOUNCE_32K;
-    gpio_init_struct.GPIO_DebounceClkDiv = GPIO_DEBOUNCE_DIVIDER_2;
-    gpio_init_struct.GPIO_DebounceCntLimit = 161;
-    gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_ENABLE;
+    if (data->pin_debounce_ms[pin])
+    {
+        gpio_init_struct.GPIO_DebounceClkSource = GPIO_DEBOUNCE_32K;
+        gpio_init_struct.GPIO_DebounceClkDiv = GPIO_DEBOUNCE_DIVIDER_32;
+        gpio_init_struct.GPIO_DebounceCntLimit = data->pin_debounce_ms[pin];
+        gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_ENABLE;
+    }
+    else
+    {
+        gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_DISABLE;
+    }
 
     switch (trig)
     {
-    case GPIO_INT_TRIG_LOW:
-        gpio_init_struct.GPIO_ITPolarity = GPIO_INT_POLARITY_ACTIVE_LOW;
-        break;
-    case GPIO_INT_TRIG_HIGH:
-        gpio_init_struct.GPIO_ITPolarity = GPIO_INT_POLARITY_ACTIVE_HIGH;
-        break;
-    case GPIO_INT_TRIG_BOTH:
-    default:
-        return -ENOTSUP;
+        case GPIO_INT_TRIG_LOW:
+            gpio_init_struct.GPIO_ITPolarity = GPIO_INT_POLARITY_ACTIVE_LOW;
+            break;
+        case GPIO_INT_TRIG_HIGH:
+            gpio_init_struct.GPIO_ITPolarity = GPIO_INT_POLARITY_ACTIVE_HIGH;
+            break;
+        case GPIO_INT_TRIG_BOTH:
+        default:
+            return -ENOTSUP;
     }
 
     if (mode == GPIO_INT_DISABLE)
@@ -409,20 +431,6 @@ static int gpio_rtl87x2g_init(const struct device *dev)
 {
     struct gpio_rtl87x2g_data *data = dev->data;
     const struct gpio_rtl87x2g_config *config = dev->config;
-    GPIO_TypeDef *port_base = config->port_base;
-
-    if (port_base == GPIOA)
-    {
-        RCC_PeriphClockCmd(APBPeriph_GPIOA, APBPeriph_GPIOA_CLOCK, DISABLE);
-    }
-    else if (port_base == GPIOB)
-    {
-        RCC_PeriphClockCmd(APBPeriph_GPIOB, APBPeriph_GPIOB_CLOCK, DISABLE);
-    }
-    else
-    {
-        return -EIO;
-    }
 
     (void)clock_control_on(RTL87X2G_CLOCK_CONTROLLER,
                            (clock_control_subsys_t)&config->clkid);
@@ -437,6 +445,7 @@ static int gpio_rtl87x2g_init(const struct device *dev)
     }
 
     data->dev = dev;
+    memset(data->pin_debounce_ms, 0, sizeof(data->pin_debounce_ms));
     return 0;
 }
 

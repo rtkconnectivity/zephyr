@@ -49,6 +49,7 @@ struct gpio_rtl87x2g_data
     struct gpio_driver_data common;
     const struct device *dev;
     sys_slist_t cb;
+    uint8_t pin_debounce_ms[32];
 };
 
 /**
