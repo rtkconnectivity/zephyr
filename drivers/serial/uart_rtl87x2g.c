@@ -234,19 +234,9 @@ static void uart_rtl87x2g_poll_out(const struct device *dev,
 {
     const struct uart_rtl87x2g_config *config = dev->config;
     UART_TypeDef *uart = config->uart;
-    unsigned int key;
-    while (1)
-    {
-        if (UART_GetFlagStatus(uart, UART_FLAG_TX_EMPTY))
-        {
-            key = irq_lock();
-            if (UART_GetFlagStatus(uart, UART_FLAG_TX_EMPTY))
-            {
-                break;
-            }
 
-            irq_unlock(key);
-        }
+    while (!(UART_GetTxFIFODataLen(uart) < UART_TX_FIFO_SIZE))
+    {
     }
 
 #if DBG_DIRECT_SHOW
@@ -254,7 +244,6 @@ static void uart_rtl87x2g_poll_out(const struct device *dev,
 #endif
 
     UART_SendByte(uart, (uint8_t)c);
-    irq_unlock(key);
 }
 
 static int uart_rtl87x2g_err_check(const struct device *dev)
@@ -1281,7 +1270,6 @@ static const struct uart_driver_api uart_rtl87x2g_driver_api =
  */
 static int uart_rtl87x2g_init(const struct device *dev)
 {
-
     const struct uart_rtl87x2g_config *config = dev->config;
     struct uart_rtl87x2g_data *data = dev->data;
     int err;
