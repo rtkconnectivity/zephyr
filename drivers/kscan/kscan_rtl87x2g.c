@@ -37,6 +37,7 @@ struct kscan_rtl87x2g_config
     uint16_t deb_ms;
     uint16_t scan_ms;
     uint16_t rel_ms;
+    uint8_t scan_debounce_cnt;
     void (*irq_config_func)();
 };
 
@@ -90,16 +91,19 @@ static int kscan_rtl87x2g_enable_callback(const struct device *dev)
     return 0;
 }
 
-
 static void kscan_rtl87x2g_isr(const struct device *dev)
 {
     const struct kscan_rtl87x2g_config *config = dev->config;
     struct kscan_rtl87x2g_data *data = dev->data;
     KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
+    uint32_t scan_debounce_cnt = config->scan_debounce_cnt;
+    kscan_callback_t callback = data->callback;
+    static uint8_t press_cnt = 0;
+    static bool all_release_flag = true;
+    static kscan_key_index last_keys[26] = {0};
     kscan_key_index new_keys[26];
     uint32_t new_key_map[CONFIG_RTL87X2G_KEYSCAN_MAX_ROW_SIZE];
-    uint8_t new_press_num = 0;
-    kscan_callback_t callback;
+    uint8_t new_press_num = KeyScan_GetFifoDataNum(keyscan);
 
     if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_SCAN_END) == SET)
     {
@@ -107,59 +111,118 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 
         if (KeyScan_GetFlagState(keyscan, KEYSCAN_FLAG_EMPTY) != SET)
         {
-            new_press_num = (uint32_t)KeyScan_GetFifoDataNum(keyscan);
+            memset(new_keys, 0, sizeof(new_keys));
             KeyScan_Read(keyscan, (uint16_t *)&new_keys, new_press_num);
         }
 
-        callback = data->callback;
-        memset(new_key_map, 0, sizeof(new_key_map));
-
-        for (uint8_t i = 0; i < new_press_num; i++)
+        if (all_release_flag)
         {
-            uint8_t new_row = new_keys[i].row;
-            uint8_t new_col = new_keys[i].column;
-            /* update new_key_map, set bit if releated key pressed */
+            press_cnt = 0;
 
-            new_key_map[new_row] |= BIT(new_col);
-
-            /* do nothing if the pressed key has been detected pressed during last scan */
-            if (data->key_map[new_row] & BIT(new_col)) { continue; }
-
-            /* update key_map, set bit if the key is detected pressed first time */
-
-            data->key_map[new_row] |= BIT(new_col);
-
-            if (callback && data->cb_en)
-            {
-                callback(dev, new_row, new_col, true);
-            }
+            memcpy(last_keys, new_keys, sizeof(new_keys));
+            all_release_flag = false;
         }
+
+        /* compare scan result between new_keys and last_keys */
+
+        if (!memcmp(last_keys, new_keys, sizeof(new_keys)))
+        {
+            /* new_keys is same as last_keys */
+
+            if (press_cnt >= scan_debounce_cnt)
+            {
+                memset(new_key_map, 0, sizeof(new_key_map));
+
+                /* update press keys */
+
+                for (uint8_t i = 0; i < new_press_num; i++)
+                {
+                    uint8_t new_row = new_keys[i].row;
+                    uint8_t new_col = new_keys[i].column;
+
+                    /* update new_key_map, set bit if releated key pressed */
+
+                    new_key_map[new_row] |= BIT(new_col);
+
+                    /* do nothing if the pressed key has been detected pressed during last scan */
+
+                    if (data->key_map[new_row] & BIT(new_col)) { continue; }
+
+                    /* update key_map, set bit if the key is detected pressed first time */
+
+                    data->key_map[new_row] |= BIT(new_col);
+
+                    if (callback && data->cb_en)
+                    {
+                        callback(dev, new_row, new_col, true);
+                    }
+                }
+
+                /* update release keys */
+
+                for (uint8_t i = 0; i < data->press_num; i++)
+                {
+                    uint8_t old_row = data->keys[i].row;
+                    uint8_t old_col = data->keys[i].column;
+
+                    /* do nothing if key detected pressed during last scan still pressed */
+
+                    if (new_key_map[old_row] & BIT(old_col)) { continue; }
+
+                    /* update key_map, clear bit if the key is detected released first time */
+
+                    data->key_map[old_row] &= ~BIT(old_col);
+
+                    if (callback && data->cb_en)
+                    {
+                        callback(dev, old_row, old_col, false);
+                    }
+                }
+
+                memcpy(data->keys, new_keys, sizeof(new_keys));
+                data->press_num = new_press_num;
+                press_cnt = 0;
+            }
+
+            press_cnt ++;
+
+        }
+        else
+        {
+            /* new_keys is different from last_keys */
+
+            press_cnt = 0;
+            memcpy(last_keys, new_keys, sizeof(new_keys));
+        }
+
+        KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
+        KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+    }
+
+    if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_ALL_RELEASE) == SET)
+    {
+        press_cnt = 0;
 
         for (uint8_t i = 0; i < data->press_num; i++)
         {
             uint8_t old_row = data->keys[i].row;
             uint8_t old_col = data->keys[i].column;
 
-            /* do nothing if key detected pressed during last scan still pressed */
-
-            if (new_key_map[old_row] & BIT(old_col)) { continue; }
-
-            /* update key_map, clear bit if the key is detected released first time */
-
-            data->key_map[old_row] &= ~BIT(old_col);
             if (callback && data->cb_en)
             {
                 callback(dev, old_row, old_col, false);
             }
         }
 
-        memcpy(data->keys, new_keys, sizeof(new_keys));
+        data->press_num = 0;
+        all_release_flag = true;
 
-        data->press_num = new_press_num;
-
-        KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
-        KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+        memset(data->keys, 0, sizeof(data->keys));
+        memset(data->key_map, 0, sizeof(data->key_map));
+        
+        KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_ALL_RELEASE);
     }
+
 }
 
 
@@ -178,8 +241,8 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
     int err;
 
-    memset(&data->key_map, 0, sizeof(data->key_map));
-    memset(&data->keys, 0, sizeof(data->keys));
+    memset(data->key_map, 0, sizeof(data->key_map));
+    memset(data->keys, 0, sizeof(data->keys));
 
     (void)clock_control_on(RTL87X2G_CLOCK_CONTROLLER,
                            (clock_control_subsys_t)&config->clkid);
@@ -212,9 +275,13 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     KeyScan_Init(keyscan, &kscan_init_struct);
 
     KeyScan_INTConfig(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
+    KeyScan_INTConfig(keyscan, KEYSCAN_INT_ALL_RELEASE, ENABLE);
 
     KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
+    KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_ALL_RELEASE);
+
     KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+    KeyScan_INTMask(keyscan, KEYSCAN_INT_ALL_RELEASE, DISABLE);
     KeyScan_Cmd(keyscan, ENABLE);
     config->irq_config_func();
 
@@ -242,16 +309,17 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     PINCTRL_DT_INST_DEFINE(index);                                            \
     \
     static const struct kscan_rtl87x2g_config kscan_rtl87x2g_cfg_##index = {      \
-        .reg = DT_INST_REG_ADDR(index),                        \
-               .clkid = DT_INST_CLOCKS_CELL(index, id),            \
-                        .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                     \
-                                .row_size = DT_INST_PROP(index, row_size),                 \
-                                            .col_size = DT_INST_PROP(index, col_size),                 \
-                                                        .deb_ms = DT_INST_PROP_OR(index, debounce_time_ms, 0),                 \
-                                                                  .scan_ms = DT_INST_PROP_OR(index, scan_time_ms, 0),                 \
-                                                                             .rel_ms = DT_INST_PROP_OR(index, release_time_ms, 0),                 \
-                                                                                       RTL87X2G_KSCAN_IRQ_HANDLER_FUNC(index)                                       \
-    };                                                                               \
+        .reg = DT_INST_REG_ADDR(index), \
+        .clkid = DT_INST_CLOCKS_CELL(index, id), \
+        .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index), \
+        .row_size = DT_INST_PROP(index, row_size), \
+        .col_size = DT_INST_PROP(index, col_size), \
+        .deb_ms = DT_INST_PROP_OR(index, debounce_time_ms, 0), \
+        .scan_ms = DT_INST_PROP_OR(index, scan_time_ms, 0), \
+        .rel_ms = DT_INST_PROP_OR(index, release_time_ms, 0), \
+        .scan_debounce_cnt = DT_INST_PROP(index, scan_debounce_cnt), \
+        RTL87X2G_KSCAN_IRQ_HANDLER_FUNC(index) \
+    }; \
     \
     static struct kscan_rtl87x2g_data kscan_rtl87x2g_data_##index = {                \
         .callback = NULL,             \

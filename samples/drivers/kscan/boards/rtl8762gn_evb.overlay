@@ -15,9 +15,10 @@
 	pinctrl-names = "default";
 	row-size = <2>;
 	col-size = <2>;
-	debounce-time-ms = <10>;
-	scan-time-ms = <10>;
-	release-time-ms = <10>;
+	debounce-time-ms = <2>;
+	scan-time-ms = <30>;
+	release-time-ms = <8>;
+	scan-debounce-cnt = <1>;
 	status = "okay";
 };
 

@@ -59,3 +59,10 @@ properties:
     type: int
     description: All release detect time, unit is ms.
 
+  scan-debounce-cnt:
+    type: int
+    default: 1
+    description: Counter for scan interval to realize software debounce, unit is times.
+
+
+
