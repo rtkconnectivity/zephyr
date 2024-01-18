@@ -7,7 +7,7 @@
 
 / {
     zephyr,user {
-        io-channels = <&adc 0>, <&adc 1>;
+        io-channels = <&adc 4>, <&adc 5>;
     };
 };
 &adc {
@@ -16,15 +16,15 @@
     #address-cells = <1>;
     #size-cells = <0>;
     status = "okay";
-    channel@0 {
-        reg = <0>;
+    channel@4 {
+        reg = <4>;
         zephyr,gain = "ADC_GAIN_1";
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,resolution = <12>;
     };
-    channel@1 {
-        reg = <1>;
+    channel@5 {
+        reg = <5>;
         zephyr,gain = "ADC_GAIN_1";
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
@@ -35,8 +35,8 @@
 &pinctrl {
     adc_default: adc_default {
         group1 {
-            psels = <RTL87X2G_PSEL(SW_MODE, P2_0,DIR_IN, DRV_LOW, PULL_DOWN)>,
-            <RTL87X2G_PSEL(SW_MODE, P2_1,DIR_IN, DRV_LOW, PULL_DOWN)>;
+            psels = <RTL87X2G_PSEL(SW_MODE, P2_4,DIR_IN, DRV_LOW, PULL_DOWN)>,
+            <RTL87X2G_PSEL(SW_MODE, P2_5,DIR_IN, DRV_LOW, PULL_DOWN)>;
         };
     };
 };
