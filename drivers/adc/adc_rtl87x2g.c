@@ -17,6 +17,7 @@
 #include <zephyr/irq.h>
 
 #include <rtl_adc.h>
+#include <adc_lib.h>
 
 #define ADC_CONTEXT_USES_KERNEL_TIMER
 #include "adc_context.h"
@@ -28,7 +29,6 @@ struct adc_rtl87x2g_config
 {
     uint32_t reg;
     uint16_t clkid;
-    struct reset_dt_spec reset;
     uint8_t channels;
     const struct pinctrl_dev_config *pcfg;
     uint8_t irq_num;
@@ -39,9 +39,10 @@ struct adc_rtl87x2g_data
 {
     struct adc_context ctx;
     const struct device *dev;
+    bool is_bypass_mode;
     uint8_t seq_map;
-    uint16_t *buffer;
-    uint16_t *repeat_buffer;
+    int32_t *buffer;
+    int32_t *repeat_buffer;
 };
 
 static int adc_rtl87x2g_start_read(const struct device *dev,
@@ -59,11 +60,20 @@ static int adc_rtl87x2g_start_read(const struct device *dev,
 
     data->seq_map = sequence->channels;
 
+    if (data->is_bypass_mode)
+    {
+        for (uint8_t i = 0; i < cfg->channels; i++)
+        {
+            if (sequence->channels & BIT(i))
+            {
+                ADC_BypassCmd(i, ENABLE);
+            }
+        }
+    }
     ADC_BitMapConfig(adc, BIT(cfg->channels) - 1, DISABLE);
     ADC_BitMapConfig(adc, sequence->channels, ENABLE);
 
     data->buffer = sequence->buffer;
-
     adc_context_start_read(&data->ctx, sequence);
 
     return adc_context_wait_for_completion(&data->ctx);
@@ -165,6 +175,9 @@ static void adc_rtl87x2g_isr(const struct device *dev)
     struct adc_rtl87x2g_data *data = dev->data;
     const struct adc_rtl87x2g_config *cfg = dev->config;
     ADC_TypeDef *adc = (ADC_TypeDef *)cfg->reg;
+    uint16_t raw_data;
+    int32_t voltage;
+    ADC_ErrorStatus error_status = NO_ERROR;
 
     if (ADC_GetINTStatus(adc, ADC_INT_ONE_SHOT_DONE))
     {
@@ -172,7 +185,16 @@ static void adc_rtl87x2g_isr(const struct device *dev)
         {
             if (data->seq_map & BIT(i))
             {
-                *data->buffer++ = (uint16_t)ADC_ReadRawData(adc, i);
+                raw_data = (uint16_t)ADC_ReadRawData(adc, i);
+                if (data->is_bypass_mode)
+                {
+                    voltage = ADC_GetVoltage(BYPASS_SINGLE_MODE, raw_data, &error_status);
+                }
+                else
+                {
+                    voltage = ADC_GetVoltage(DIVIDE_SINGLE_MODE, raw_data, &error_status);
+                }
+                *data->buffer++ = voltage;
             }
         }
 
@@ -215,11 +237,13 @@ static int adc_rtl87x2g_init(const struct device *dev)
         return ret;
     }
 
+    ADC_CalibrationInit();
+    
     ADC_InitTypeDef adc_init_struct;
     ADC_StructInit(&adc_init_struct);
     adc_init_struct.ADC_DataAvgEn        = DISABLE;
     adc_init_struct.ADC_PowerAlwaysOnEn  = ENABLE;
-    adc_init_struct.ADC_SampleTime       = 255;
+    adc_init_struct.ADC_SampleTime       = 19;
     for (uint32_t i = 0; i < cfg->channels; i++)
     {
         adc_init_struct.ADC_SchIndex[i] = EXT_SINGLE_ENDED(i);
@@ -247,15 +271,15 @@ static int adc_rtl87x2g_init(const struct device *dev)
         ADC_CONTEXT_INIT_TIMER(adc_rtl87x2g_data_##index, ctx),                 \
         ADC_CONTEXT_INIT_LOCK(adc_rtl87x2g_data_##index, ctx),                  \
         ADC_CONTEXT_INIT_SYNC(adc_rtl87x2g_data_##index, ctx),                  \
+        .is_bypass_mode = DT_INST_PROP(index, is_bypass_mode),                   \
     };                                          \
     const static struct adc_rtl87x2g_config adc_rtl87x2g_config_##index = {             \
         .reg = DT_INST_REG_ADDR(index),                         \
-               .clkid = DT_INST_CLOCKS_CELL(index, id),                        \
-                        /* .reset = RESET_DT_SPEC_INST_GET(index), */                       \
-                        .channels = DT_INST_PROP(index, channels),                      \
-                                    .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                  \
-                                            .irq_num = DT_INST_IRQN(index),                         \
-                                                       .irq_config_func = adc_rtl87x2g_irq_config_func,                   \
+        .clkid = DT_INST_CLOCKS_CELL(index, id),                        \
+        .channels = DT_INST_PROP(index, channels),                      \
+        .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                  \
+        .irq_num = DT_INST_IRQN(index),                         \
+        .irq_config_func = adc_rtl87x2g_irq_config_func,                   \
     };                                          \
     DEVICE_DT_INST_DEFINE(index,                                \
                           &adc_rtl87x2g_init, NULL,                     \

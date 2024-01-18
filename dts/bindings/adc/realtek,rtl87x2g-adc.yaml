@@ -6,7 +6,7 @@ description: |
 
 compatible: "realtek,rtl87x2g-adc"
 
-include: [adc-controller.yaml, reset-device.yaml, pinctrl-device.yaml]
+include: [adc-controller.yaml, pinctrl-device.yaml]
 
 properties:
   reg:
@@ -31,6 +31,10 @@ properties:
 
   pinctrl-names:
     required: true
+
+  is-bypass-mode:
+    type: boolean
+    description: Config adc channels as bypass mode or divide mode
 
 io-channel-cells:
   - input
