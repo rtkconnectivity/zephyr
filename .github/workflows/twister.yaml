@@ -60,7 +60,7 @@ jobs:
 
       - name: Checkout
         if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -156,7 +156,7 @@ jobs:
           git remote set-url origin ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -263,7 +263,7 @@ jobs:
 
       - name: Upload Unit Test Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Unit Test Results (Subset ${{ matrix.subset }})
           if-no-files-found: ignore
@@ -272,6 +272,24 @@ jobs:
             twister-out/twister.json
             module_tests/twister.xml
             testplan.json
+
+      - if: matrix.subset == 1 && github.event_name == 'push'
+        name: Save the list of Python packages
+        shell: bash
+        run: |
+          FREEZE_FILE="frozen-requirements.txt"
+          timestamp="$(date)"
+          version="$(git describe --abbrev=12 --always)"
+          echo -e "# Generated at $timestamp ($version)\n" > $FREEZE_FILE
+          pip3 freeze | tee -a $FREEZE_FILE
+
+      - if: matrix.subset == 1 && github.event_name == 'push'
+        name: Upload the list of Python packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: Frozen PIP package set
+          path: |
+            frozen-requirements.txt
 
   twister-test-results:
     name: "Publish Unit Tests Results"
@@ -287,13 +305,13 @@ jobs:
       # Needed for opensearch and upload script
       - if: github.event_name == 'push' || github.event_name == 'schedule'
         name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -319,7 +337,7 @@ jobs:
 
       - name: Upload Unit Test Results in HTML
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: HTML Unit Test Results
           if-no-files-found: ignore
