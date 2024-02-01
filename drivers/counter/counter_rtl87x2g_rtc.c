@@ -267,7 +267,7 @@ static int counter_rtl87x2g_rtc_init(const struct device *dev)
     __ASSERT(cfg->prescaler <= 0xfff, "rtc prescaler should be less than 0xfff");
 
     RTC_DeInit();
-    RTC_SetPrescaler(cfg->prescaler);
+    RTC_SetPrescaler(cfg->prescaler - 1);
     RTC_ResetCounter();
     RTC_NvCmd(ENABLE);
 
