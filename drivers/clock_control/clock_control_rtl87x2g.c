@@ -55,7 +55,7 @@ static const apb_cfg rtl87x2g_apb_table[] =
     {APBPeriph_ETH, APBPeriph_ETH_CLOCK         },
     {APBPeriph_PPE, APBPeriph_PPE_CLOCK          },
     {APBPeriph_KEYSCAN, APBPeriph_KEYSCAN_CLOCK      },
-    {APBPeriph_24BADC, APBPeriph_24BADC_CLOCK       },
+    {APBPeriph_HRADC, APBPeriph_HRADC_CLOCK       },
     {APBPeriph_ADC, APBPeriph_ADC_CLOCK          },
     {APBPeriph_CAN, APBPeriph_CAN_CLOCK          },
     {APBPeriph_IR, APBPeriph_IR_CLOCK           },
