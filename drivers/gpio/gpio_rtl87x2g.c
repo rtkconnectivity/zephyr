@@ -112,7 +112,7 @@ static int gpio_rtl87x2g_pin_configure(const struct device *port, gpio_pin_t pin
     uint8_t port_num = config->port_num;
     uint32_t gpio_bit = BIT(pin);
     int pad_pin = gpio_rtl87x2g_gpio2pad(port_num, pin);
-    PAD_Pull_Mode pull_config;
+    PADPullMode_TypeDef pull_config;
     GPIO_InitTypeDef gpio_init_struct;
     uint8_t debounce_ms = (flags & RTL87X2G_GPIO_INPUT_DEBOUNCE_MS_MASK) \
                           >> RTL87X2G_GPIO_INPUT_DEBOUNCE_MS_POS;
@@ -194,7 +194,21 @@ static int gpio_rtl87x2g_pin_configure(const struct device *port, gpio_pin_t pin
         break;
     }
 
-    GPIO_Init(port_base, &gpio_init_struct);
+    /* to avoid trigger gpio interrupt */
+    if (debounce_ms && (flags & GPIO_INT_ENABLE))
+    {
+        GPIO_INTConfig(port_base, gpio_bit, DISABLE);
+        GPIO_Init(port_base, &gpio_init_struct);
+        GPIO_MaskINTConfig(port_base, gpio_bit, ENABLE);
+        GPIO_INTConfig(port_base, gpio_bit, ENABLE);
+        k_busy_wait(data->pin_debounce_ms[pin] * 2 * 1000);
+        GPIO_ClearINTPendingBit(port_base, gpio_bit);
+        GPIO_MaskINTConfig(port_base, gpio_bit, DISABLE);
+    }
+    else
+    {
+        GPIO_Init(port_base, &gpio_init_struct);
+    }
 
     return 0;
 }
@@ -286,7 +300,6 @@ static int gpio_rtl87x2g_pin_interrupt_configure(const struct device *port,
     }
 #endif /* CONFIG_GPIO_ENABLE_DISABLE_INTERRUPT */
 
-    GPIO_MaskINTConfig(port_base, gpio_bit, ENABLE);
     GPIO_INTConfig(port_base, gpio_bit, DISABLE);
 
     GPIO_StructInit(&gpio_init_struct);
@@ -334,8 +347,16 @@ static int gpio_rtl87x2g_pin_interrupt_configure(const struct device *port,
     }
 
     GPIO_Init(port_base, &gpio_init_struct);
-    GPIO_ClearINTPendingBit(port_base, gpio_bit);
+    GPIO_MaskINTConfig(port_base, gpio_bit, ENABLE);
     GPIO_INTConfig(port_base, gpio_bit, ENABLE);
+
+    /* to avoid trigger gpio interrupt */
+    if (data->pin_debounce_ms[pin])
+    {
+        k_busy_wait(data->pin_debounce_ms[pin] * 2 * 1000);
+    }
+
+    GPIO_ClearINTPendingBit(port_base, gpio_bit);
     GPIO_MaskINTConfig(port_base, gpio_bit, DISABLE);
 
     return 0;
