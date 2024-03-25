@@ -58,7 +58,7 @@ static int pwm_rtl87x2g_set_cycles(const struct device *dev, uint32_t channel,
     {
         if (flags & PWM_POLARITY_INVERTED)
         {
-            ENHTIM_CONFIGURE_t enhtim_0x10 = {.d32 = ((ENHTIM_TypeDef *)timer_base)->ENHTIM_CONFIGURE};
+            ENHTIM_CONFIGURE_TypeDef enhtim_0x10 = {.d32 = ((ENHTIM_TypeDef *)timer_base)->ENHTIM_CONFIGURE};
             enhtim_0x10.b.Enhtimer_PWM_polarity = ENHTIM_PWM_START_WITH_HIGH;
             ((ENHTIM_TypeDef *)timer_base)->ENHTIM_CONFIGURE = enhtim_0x10.d32;
         }
