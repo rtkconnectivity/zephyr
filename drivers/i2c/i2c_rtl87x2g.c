@@ -108,8 +108,8 @@ static int i2c_rtl87x2g_msg_handler(const struct device *dev)
     struct i2c_rtl87x2g_data *data = dev->data;
     const struct i2c_rtl87x2g_config *cfg = dev->config;
     I2C_TypeDef *i2c = (I2C_TypeDef *)cfg->reg;
-    bool read_f = data->current->flags & I2C_MSG_RW_MASK == I2C_MSG_READ;
-    bool stop_f = data->current->flags & I2C_MSG_STOP;
+    bool read_f = data->current->flags && I2C_MSG_RW_MASK == I2C_MSG_READ;
+    bool stop_f = data->current->flags && I2C_MSG_STOP;
     data->errs = 0;
 
     k_sem_reset(&data->sync_sem);
@@ -356,7 +356,6 @@ static int i2c_rtl87x2g_init(const struct device *dev)
     LOG_DBG("i2c_rtl87x2g_init line%d\n", __LINE__);
     struct i2c_rtl87x2g_data *data = dev->data;
     const struct i2c_rtl87x2g_config *cfg = dev->config;
-    I2C_TypeDef *i2c = (I2C_TypeDef *)cfg->reg;
     uint32_t bitrate_cfg;
     int err = 0;
 
