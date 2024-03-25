@@ -7,7 +7,8 @@ config ADC_RTL87X2G
 	bool "RTL87X2G MCU adc driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_ADC_ENABLED
-	select REALTEK_ADC
+	select REALTEK_ADC_ADC
+    select REALTEK_USING_SDK_LIB
 	help
 	  This option enables the adc driver for RTL87X2G family of
 	  processors.
