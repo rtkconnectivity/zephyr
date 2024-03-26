@@ -10,5 +10,4 @@ menuconfig COUNTER_RTC_RTL87X2G
 	select USE_RTL87X2G_RTC
 	select REALTEK_RTC
 	help
-	  This option enables the counter rtc driver for RTL87X2G family of
-	  processors.
+	  Enable the RTL87X2G counter rtc driver.

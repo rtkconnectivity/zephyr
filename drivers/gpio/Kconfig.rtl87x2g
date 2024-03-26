@@ -9,5 +9,5 @@ config GPIO_RTL87X2G
 	select REALTEK_GPIO
 	depends on DT_HAS_REALTEK_RTL87X2G_GPIO_ENABLED
 	help
-	  This option enables the gpio driver for RTL87X2G family of
-	  processors.
+	  Enable the RTL87X2G gpio driver.
+

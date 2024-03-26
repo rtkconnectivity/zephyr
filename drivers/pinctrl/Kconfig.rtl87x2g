@@ -8,4 +8,4 @@ config PINCTRL_RTL87X2G
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_PINCTRL_ENABLED
 	help
-	  RTL87X2G pin controller driver
+	  Enable the RTL87X2G pin controller driver.

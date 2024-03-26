@@ -16,6 +16,4 @@ config UART_RTL87X2G
 	select DMA if UART_ASYNC_API
 
 	help
-	  This option enables the uart driver for RTL87X2G family of
-	  processors.
-	  Say y if you wish to use serial port on RTL87X2G MCU.
+	  Enable the RTL87X2G uart driver.

@@ -205,9 +205,7 @@ config USB_DC_RTL87X2G
 	select REALTEK_USB
 
 	help
-	  This option enables the usb driver for RTL87X2G family of
-	  processors.
-	  Say y if you wish to use usb port on RTL87X2G MCU.
+	  Enables the RTL87X2G usb driver.
 
 if USB_DC_RTL87X2G
 config USB_DC_RTL87X2G_DMA
