@@ -453,6 +453,14 @@
 			clocks = <&cctl APB_CLK(I2C3)>;
 			status = "disabled";
 		};
+
+		usb: usb@40100000 {
+			compatible = "realtek,rtl87x2g-usb";
+			reg = <0x40100000 0x40000>;
+			interrupts = <77 0>, <78 0>;
+			num-bidir-endpoints = <0>;
+			status = "disabled";
+		};
 	};
 
 };
