@@ -197,6 +197,36 @@ config USB_DC_IT82XX2
 	help
 	  ITE IT82XX2 USB Device Controller Driver
 
+
+config USB_DC_RTL87X2G
+	bool "RTL87X2G MCU usb dcevice controller driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL87X2G_USB_ENABLED
+	select REALTEK_USB
+
+	help
+	  This option enables the usb driver for RTL87X2G family of
+	  processors.
+	  Say y if you wish to use usb port on RTL87X2G MCU.
+
+if USB_DC_RTL87X2G
+config USB_DC_RTL87X2G_DMA
+	bool "RTL87X2G MCU usb dcevice controller use internal dma"
+	default n
+
+	help
+	  This option enables the internal dma for usb device.
+
+if USB_DC_RTL87X2G_DMA
+config USB_EP_HEAP_SIZE
+    int
+    default 256
+    help
+      Size of the heap for usb ep.
+endif # USB_DC_RTL87X2G_DMA
+
+endif # USB_DC_RTL87X2G
+
 config USB_NATIVE_POSIX
 	bool "Native Posix USB Device Controller Driver"
 	depends on ARCH_POSIX && EXTERNAL_LIBC
