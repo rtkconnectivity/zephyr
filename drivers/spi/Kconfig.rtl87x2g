@@ -9,7 +9,7 @@ config SPI_RTL87X2G
 	depends on DT_HAS_REALTEK_RTL87X2G_SPI_ENABLED
 	select REALTEK_SPI
 	help
-	  Enables RTL87X2G spi driver.
+	  Enables the RTL87X2G spi driver.
 
 if SPI_RTL87X2G
 

@@ -11,5 +11,4 @@ config COUNTER_TIMER_RTL87X2G
 	select REALTEK_TIM_TIM
 	select REALTEK_TIM_ENHTIM
 	help
-	  This option enables the counter timer driver for RTL87X2G family of
-	  processors.
+	  Enable the RTL87X2G counter timer driver.

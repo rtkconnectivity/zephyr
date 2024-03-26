@@ -1,4 +1,4 @@
-# RTL87X2G ic configuration
+# RTL87X2G i2c configuration
 
 # Copyright(c) 2020, Realtek Semiconductor Corporation.
 # SPDX-License-Identifier: Apache-2.0
@@ -9,4 +9,4 @@ config I2C_RTL87X2G
 	depends on DT_HAS_REALTEK_RTL87X2G_I2C_ENABLED
 	select REALTEK_I2C
 	help
-	  Enables RTL87X2G i2c driver
+	  Enable the RTL87X2G i2c driver.

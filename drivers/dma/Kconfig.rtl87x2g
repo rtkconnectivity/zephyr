@@ -10,5 +10,4 @@ config DMA_RTL87X2G
 	select USE_RTL87X2G_DMA
 	select REALTEK_DMA
 	help
-	  This option enables the dma driver for RTL87X2G family of
-	  processors.
+	  Enable the RTL87X2G dma driver.

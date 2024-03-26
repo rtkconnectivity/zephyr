@@ -9,9 +9,7 @@ config KSCAN_RTL87X2G
 	depends on DT_HAS_REALTEK_RTL87X2G_KSCAN_ENABLED
 	select REALTEK_KEYSCAN
 	help
-	  This option enables the kscan driver for RTL87X2G family of
-	  processors.
-	  Say y if you wish to use kscan port on RTL87X2G MCU.
+	  Enable the RTL87X2G kscan driver.
 
 if KSCAN_RTL87X2G
 config RTL87X2G_KEYSCAN_MAX_ROW_SIZE
