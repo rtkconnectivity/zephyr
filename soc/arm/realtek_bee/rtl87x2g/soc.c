@@ -16,9 +16,7 @@
 #include "flash_nor_device.h"
 #include "mem_config.h"
 #include "utils.h"
-
-/* from ROMExport*/
-#include "rtl876x_aon_reg.h"
+#include "aon_reg.h"
 
 extern void z_arm_pendsv(void);
 extern void sys_clock_isr(void);
@@ -79,7 +77,7 @@ static int rtk_platform_init(void)
 
     RamVectorTableUpdate(PendSV_VECTORn, (IRQ_Fun)z_arm_pendsv);
     RamVectorTableUpdate(SysTick_VECTORn, (IRQ_Fun)sys_clock_isr);
-    RamVectorTableUpdate(MemMang_VECTORn, (IRQ_Fun)HardFault_Handler_Rom);
+    RamVectorTableUpdate(MemManageFault_VECTORn, (IRQ_Fun)HardFault_Handler_Rom);
     RamVectorTableUpdate(BusFault_VECTORn, (IRQ_Fun)HardFault_Handler_Rom);
     RamVectorTableUpdate(UsageFault_VECTORn, (IRQ_Fun)HardFault_Handler_Rom);
 
