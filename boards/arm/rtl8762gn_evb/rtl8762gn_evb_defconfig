@@ -42,3 +42,7 @@ CONFIG_LINKER_USE_BOOT_SECTION=y
 # Resolve stack overflow issues
 CONFIG_MAIN_STACK_SIZE=2048
 
+CONFIG_OUTPUT_DISASSEMBLY=y
+
+# speed up the code execution
+CONFIG_SPEED_OPTIMIZATIONS=y
