@@ -1,0 +1,12 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: RTL87X2G TRNG
+
+compatible: "realtek,rtl87x2g-trng"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
