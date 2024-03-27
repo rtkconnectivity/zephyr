@@ -1,0 +1,9 @@
+/*
+ * Copyright(c) 2024, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&aonwdt {
+	status = "okay";
+};

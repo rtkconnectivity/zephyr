@@ -1,0 +1,15 @@
+description: RealTek aon watchdog timer
+
+compatible: "realtek,rtl87x2g-aon-wdt"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  initial-timeout-ms:
+    type: int
+    default: 4000
+    description: |
+      Set timeout value in milliseconds.

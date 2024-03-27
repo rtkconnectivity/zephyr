@@ -96,6 +96,14 @@
 #define WDT_NODE DT_INST(0, gd_gd32_wwdgt)
 #elif DT_HAS_COMPAT_STATUS_OKAY(gd_gd32_fwdgt)
 #define WDT_NODE DT_INST(0, gd_gd32_fwdgt)
+#elif DT_HAS_COMPAT_STATUS_OKAY(realtek_rtl87x2g_aon_wdt)
+#define WDT_NODE DT_INST(0, realtek_rtl87x2g_aon_wdt)
+#define TIMEOUTS 0
+#define WDT_TEST_MAX_WINDOW                10000U
+#elif DT_HAS_COMPAT_STATUS_OKAY(realtek_rtl87x2g_core_wdt)
+#define WDT_NODE DT_INST(0, realtek_rtl87x2g_core_wdt)
+#define TIMEOUTS 0
+#define WDT_TEST_MAX_WINDOW                10000U
 #elif DT_HAS_COMPAT_STATUS_OKAY(zephyr_counter_watchdog)
 #define WDT_NODE DT_COMPAT_GET_ANY_STATUS_OKAY(zephyr_counter_watchdog)
 #elif DT_HAS_COMPAT_STATUS_OKAY(andestech_atcwdt200)
