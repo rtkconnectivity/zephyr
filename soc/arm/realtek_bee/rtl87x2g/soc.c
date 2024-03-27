@@ -20,9 +20,6 @@
 /* from ROMExport*/
 #include "rtl876x_aon_reg.h"
 
-void random_seed_init(void);
-uint32_t random_seed_value;
-
 extern void z_arm_pendsv(void);
 extern void sys_clock_isr(void);
 extern void os_zephyr_patch_init(void);
@@ -50,10 +47,23 @@ void rtk_rom_irq_connect(void)
     IRQ_CONNECT(PF_RTC_IRQn, 0, PF_RTC_Handler, NULL, 0);
 }
 
-void random_seed_init(void)
+
+#define RTK_LOGGING_THREAD_STACK_SIZE 400
+#define RTK_LOGGING_THREAD_PRIORITY K_LOWEST_APPLICATION_THREAD_PRIO
+
+void rtk_logging_thread(void *, void *, void *)
 {
-    random_seed_value = platform_random(0xFFFFFFFF);
+    while (1)
+    {
+        extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
+        log_buffer_trigger_schedule_in_km4_idle_task();
+        k_msleep(50);
+    }
 }
+
+K_THREAD_DEFINE(rtk_logging_thread_tid, RTK_LOGGING_THREAD_STACK_SIZE,
+                rtk_logging_thread, NULL, NULL, NULL,
+                RTK_LOGGING_THREAD_PRIORITY, 0, 0);
 
 static int rtk_platform_init(void)
 {
@@ -168,13 +178,10 @@ static int rtk_task_init(void)
     setup_non_secure_nvic();
 #endif
 
-    random_seed_init();
-
     /* SCB->VTOR points to zephyr's vector table which is placed in flash.
     However, vector table place in flash will trigger hardfault when flash erasing.
     So we need copy the zephyr's vector table to Ram*/
     uint32_t key = arch_irq_lock();
-
     size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
 #if (CONFIG_TRUSTED_EXECUTION_NONSECURE==1)
     //tz enabled
@@ -186,21 +193,24 @@ static int rtk_task_init(void)
 
     /* connect rtk-rom-irq to zephyr's vector table */
     rtk_rom_irq_connect();
-
     arch_irq_unlock(key);
 
     return 0;
 }
 
-static int rtk_sys_clock_driver_init(void)
+static int rtk_register_update(void)
 {
     NVIC_SetPriority(SysTick_IRQn, 0xff);
 #ifdef CONFIG_SYSTICK_USE_EXTERNAL_CLOCK //use external clock
     SysTick->CTRL &= ~SysTick_CTRL_CLKSOURCE_Msk;
 #endif
+    /* Unset this bit to avoid usagefault when dividing by zero.
+    If set this bit, function ll_iso_generate_cis_unframed_parameters_from_host_info (rom code) will trigger usage fault.
+    In freeRtos, this bit will not be set. */
+    SCB->CCR &= ~SCB_CCR_DIV_0_TRP_Msk;
     return 0;
 }
 
 SYS_INIT(rtk_platform_init, EARLY, 0);
-SYS_INIT(rtk_sys_clock_driver_init, PRE_KERNEL_2, 1);
+SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
 SYS_INIT(rtk_task_init, APPLICATION, 0);

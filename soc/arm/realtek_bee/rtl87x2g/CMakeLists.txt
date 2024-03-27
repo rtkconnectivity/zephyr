@@ -1,8 +1,7 @@
 zephyr_compile_definitions(STACK_ROM_ADDRESS=0x36000)
 
 zephyr_library_sources(soc.c)
+zephyr_library_sources_ifdef(CONFIG_REALTEK_IMAGE_HEADER image_header.c)
 
 zephyr_linker_sources(SECTIONS boot_section.ld)
-zephyr_linker_sources(SECTIONS trace_section.ld)
 zephyr_linker_sources(ROM_START SORT_KEY 0x0header realtek_image_header.ld)
-zephyr_library_sources_ifdef(CONFIG_REALTEK_IMAGE_HEADER image_header.c)
