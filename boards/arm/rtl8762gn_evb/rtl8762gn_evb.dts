@@ -13,6 +13,7 @@
 		zephyr,console = &uart2;
 		zephyr,shell-uart = &uart2;
 		zephyr,flash-controller = &fmc;
+		zephyr,entropy = &trng;
 	};
 
 	/* These aliases are provided for compatibility with samples */
@@ -32,11 +33,11 @@
 		#size-cells = <1>;
 		app_partition: partition@0 {
 			label = "app-image";
-			reg = <0x0 DT_SIZE_K(512)>;
+			reg = <0x0 DT_SIZE_K(628)>;
 		};
-		storage_partition: partition@80000 {
+		storage_partition: partition@9d000 {
 			label = "storage";
-			reg = <0x80000 DT_SIZE_K(16)>;
+			reg = <0x9d000 DT_SIZE_K(16)>;
 		};
 	};
 };
@@ -48,8 +49,12 @@
 	pinctrl-0 = <&uart2_default>;
 	pinctrl-names = "default";
 	status = "okay";
-	current-speed = <115200>;
+	current-speed = <2000000>;
 	parity = "none";
 	stop-bits = "1";
 	data-bits = <8>;
+};
+
+&trng {
+	status = "okay";
 };
