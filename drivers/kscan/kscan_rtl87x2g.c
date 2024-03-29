@@ -256,8 +256,11 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     KEYSCAN_InitTypeDef kscan_init_struct;
     KeyScan_StructInit(&kscan_init_struct);
 
-    kscan_init_struct.clockdiv = 49;
-    kscan_init_struct.delayclk = 49;
+    /* default scan clk is 312.5 kHz */
+    kscan_init_struct.clockdiv = 15;
+
+    /* default delay clk is 4 kHz */
+    kscan_init_struct.delayclk = 77;
 
     kscan_init_struct.rowSize = config->row_size;
     kscan_init_struct.colSize = config->col_size;
@@ -265,9 +268,9 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     kscan_init_struct.scantimerEn = config->scan_ms ? ENABLE : DISABLE;
     kscan_init_struct.detecttimerEn = config->rel_ms ? ENABLE : DISABLE;
 
-    kscan_init_struct.debouncecnt = config->deb_ms * 2;
-    kscan_init_struct.scanInterval = config->scan_ms * 2;
-    kscan_init_struct.releasecnt = config->rel_ms * 2;
+    kscan_init_struct.debouncecnt = config->deb_ms * 4;
+    kscan_init_struct.scanInterval = config->scan_ms * 4;
+    kscan_init_struct.releasecnt = config->rel_ms * 4;
 
     kscan_init_struct.scanmode = KeyScan_Auto_Scan_Mode;
     kscan_init_struct.keylimit = 26;
