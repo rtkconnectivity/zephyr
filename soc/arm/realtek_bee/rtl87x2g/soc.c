@@ -75,11 +75,9 @@ static int rtk_platform_init(void)
     SCB->VTOR = (uint32_t)S_RAM_VECTOR_ADDR;
 #endif
 
+    //make sure before copying zephyr vector to ram, the vector table has zephyr's pendsv&sys_clock_isr.
     RamVectorTableUpdate(PendSV_VECTORn, (IRQ_Fun)z_arm_pendsv);
     RamVectorTableUpdate(SysTick_VECTORn, (IRQ_Fun)sys_clock_isr);
-    RamVectorTableUpdate(MemManageFault_VECTORn, (IRQ_Fun)HardFault_Handler_Rom);
-    RamVectorTableUpdate(BusFault_VECTORn, (IRQ_Fun)HardFault_Handler_Rom);
-    RamVectorTableUpdate(UsageFault_VECTORn, (IRQ_Fun)HardFault_Handler_Rom);
 
     os_init();
 
@@ -189,7 +187,7 @@ static int rtk_task_init(void)
     (void)memcpy((void *)S_RAM_VECTOR_ADDR, _vector_start, vector_size);
 #endif
 
-    /* connect rtk-rom-irq to zephyr's vector table */
+    /* connect rtk-rom-irq to zephyr's vector table, also will reset priority here!*/
     rtk_rom_irq_connect();
     arch_irq_unlock(key);
 
