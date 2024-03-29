@@ -53,7 +53,7 @@ description: |
 
        #include "rtl8762gn_evb-pinctrl.dtsi"
 
-       &uart1 {
+       &uart2 {
              pinctrl-0 = <&uart2_default>;
              pinctrl-names = "default";
        };
