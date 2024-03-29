@@ -4,3 +4,11 @@ config BOARD
 	default "rtl8762gn_evb"
 
 endif #BOARD_RTL8762GN_EVB
+
+if BT
+
+choice BT_HCI_BUS_TYPE
+	default BT_RTL87X2G
+endchoice
+
+endif # BT

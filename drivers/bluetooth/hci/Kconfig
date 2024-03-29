@@ -102,6 +102,13 @@ config BT_NO_DRIVER
 	  This is intended for unit tests where no internal driver
 	  should be selected.
 
+config BT_RTL87X2G
+	bool "RTL87X2G BT HCI driver"
+	depends on SOC_SERIES_RTL87X2G
+	help
+	  This option enables the bt hci driver for RTL87X2G family of
+	  processors.
+
 endchoice
 
 if BT_SPI
