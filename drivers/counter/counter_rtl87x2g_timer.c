@@ -13,6 +13,7 @@
 #include <zephyr/irq.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
+#include <soc.h>
 
 #include <rtl_tim.h>
 #include <rtl_enh_tim.h>
@@ -42,7 +43,6 @@ struct counter_rtl87x2g_config
     bool enhanced;
     uint8_t prescaler;
     void (*irq_config)(const struct device *dev);
-    void (*set_irq_pending)(void);
     uint32_t (*get_irq_pending)(void);
 };
 
@@ -421,10 +421,6 @@ static const struct counter_driver_api counter_rtl87x2g_timer_driver_api =
                     0);                         \
         irq_enable(DT_INST_IRQN(index));                \
     }                                                                      \
-    static void set_irq_pending_##index(void)                                  \
-    {                                                                      \
-        (NVIC_SetPendingIRQ(DT_INST_IRQN(index)));     \
-    }                                                                      \
     static uint32_t get_irq_pending_##index(void)                              \
     {                                                                      \
         return NVIC_GetPendingIRQ(DT_INST_IRQN(index));                  \
@@ -447,7 +443,6 @@ static const struct counter_driver_api counter_rtl87x2g_timer_driver_api =
                                         .enhanced = DT_INST_PROP(index, is_enhanced),                      \
                                                     .prescaler = DT_INST_PROP(index, prescaler),                       \
                                                                  .irq_config = irq_config_##index,                                  \
-                                                                               .set_irq_pending = set_irq_pending_##index,                        \
                                                                                        .get_irq_pending = get_irq_pending_##index,                        \
     };                                                                     \
     \
