@@ -46,3 +46,6 @@ CONFIG_OUTPUT_DISASSEMBLY=y
 
 # speed up the code execution
 CONFIG_SPEED_OPTIMIZATIONS=y
+
+# link application into the the flash partition selected by the zephyr,code-partition property in /chosen in devicetree
+CONFIG_USE_DT_CODE_PARTITION=y

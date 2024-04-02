@@ -39,7 +39,7 @@
 			device_type = "secure rom code region";
 			reg = <0x0 DT_SIZE_K(116)>;
 		};
-        rom_ns: memory@1D000 {
+        rom_ns: memory@1d000 {
 			device_type = "non-secure rom code region";
 			reg = <0x1D000 0x19000>;
 		};
@@ -75,12 +75,13 @@
 			reg = <0x40022000 0x400>;
 			#address-cells = <1>;
 			#size-cells = <1>;
+			status = "okay";
 
-			flash: flash@405f000 {
+			flash: flash@4000000 {
 				compatible = "soc-nv-flash";
 				write-block-size = <1>;
 				erase-block-size = <4096>;
-				reg = <0x405f000 DT_SIZE_K(644)>;
+				reg = <0x4000000 DT_SIZE_K(1024)>;
 			};
 		};
 
@@ -456,6 +457,7 @@
 		trng: trng@400c2400 {
 			compatible = "realtek,rtl87x2g-trng";
 			reg = <0x400c2400 0x68>;
+			status = "okay";
         };
 
 		usb: usb@40100000 {
