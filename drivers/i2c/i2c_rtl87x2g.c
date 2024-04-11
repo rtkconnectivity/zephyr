@@ -15,7 +15,8 @@
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/reset.h>
 #include <zephyr/drivers/i2c.h>
-
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
@@ -45,6 +46,9 @@ struct i2c_rtl87x2g_data
     struct i2c_msg *current;
     uint8_t errs;
     bool is_restart;
+#ifdef CONFIG_PM_DEVICE
+    I2CStoreReg_Typedef store_buf;
+#endif
 };
 
 static void i2c_rtl87x2g_log_err(struct i2c_rtl87x2g_data *data)
@@ -345,6 +349,50 @@ error:
     return err;
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int i2c_rtl87x2g_pm_action(const struct device *dev,
+                                  enum pm_device_action action)
+{
+    struct i2c_rtl87x2g_data *data = dev->data;
+    const struct i2c_rtl87x2g_config *cfg = dev->config;
+    I2C_TypeDef *i2c = (I2C_TypeDef *)cfg->reg;
+    int err;
+    extern void I2C_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void I2C_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        I2C_DLPSEnter(i2c, &data->store_buf);
+
+        /* Move pins to sleep state */
+        err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+        if ((err < 0) && (err != -ENOENT))
+        {
+            return err;
+        }
+
+        break;
+    case PM_DEVICE_ACTION_RESUME:
+        /* Set pins to active state */
+        err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        I2C_DLPSExit(i2c, &data->store_buf);
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static struct i2c_driver_api i2c_rtl87x2g_driver_api =
 {
     .configure = i2c_rtl87x2g_configure,
@@ -403,8 +451,9 @@ static int i2c_rtl87x2g_init(const struct device *dev)
                                    .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),          \
                                            .irq_cfg_func = i2c_rtl87x2g_irq_cfg_func_##index,          \
     };                                  \
-    I2C_DEVICE_DT_INST_DEFINE(index,                        \
-                              i2c_rtl87x2g_init, NULL,              \
+     PM_DEVICE_DT_INST_DEFINE(index, i2c_rtl87x2g_pm_action);    \
+     I2C_DEVICE_DT_INST_DEFINE(index,                        \
+                              i2c_rtl87x2g_init, PM_DEVICE_DT_INST_GET(index),              \
                               &i2c_rtl87x2g_data_##index, &i2c_rtl87x2g_cfg_##index,    \
                               POST_KERNEL, CONFIG_I2C_INIT_PRIORITY,    \
                               &i2c_rtl87x2g_driver_api);            \

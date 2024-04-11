@@ -50,6 +50,9 @@ struct gpio_rtl87x2g_data
     const struct device *dev;
     sys_slist_t cb;
     uint8_t pin_debounce_ms[32];
+#ifdef CONFIG_PM_DEVICE
+    GPIOStoreReg_Typedef store_buf;
+#endif
 };
 
 /**

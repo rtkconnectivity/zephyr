@@ -14,6 +14,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <soc.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <rtl_tim.h>
 #include <rtl_enh_tim.h>
@@ -32,6 +34,13 @@ struct counter_rtl87x2g_data
     void *top_user_data;
     uint32_t guard_period;
     uint32_t freq;
+ #ifdef CONFIG_PM_DEVICE
+    union
+    {
+        TIMStoreReg_Typedef tim_store_buf;
+        ENHTIMStoreReg_Typedef enhtim_store_buf;
+    } store_buf;
+#endif
     struct counter_rtl87x2g_ch_data alarm[];
 };
 
@@ -308,6 +317,51 @@ static void alarm_irq_handle(const struct device *dev, uint32_t chan)
     }
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int counter_rtl87x2g_timer_pm_action(const struct device *dev,
+                                            enum pm_device_action action)
+{
+    const struct counter_rtl87x2g_config *cfg = dev->config;
+    struct counter_rtl87x2g_data *data = dev->data;
+    void *timer_base = (void *)cfg->reg;
+    int err;
+    extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
+    extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        if (cfg->enhanced)
+        {
+            ENHTIM_DLPSEnter(timer_base, &data->store_buf);
+        }
+        else
+        {
+            TIM_DLPSEnter(timer_base, &data->store_buf);
+        }
+
+    case PM_DEVICE_ACTION_RESUME:
+        if (cfg->enhanced)
+        {
+            ENHTIM_DLPSExit(timer_base, &data->store_buf);
+        }
+        else
+        {
+            TIM_DLPSExit(timer_base, &data->store_buf);
+        }
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static void irq_handler(const struct device *dev)
 {
     const struct counter_rtl87x2g_config *cfg = dev->config;
@@ -446,7 +500,8 @@ static const struct counter_driver_api counter_rtl87x2g_timer_driver_api =
                                                                                        .get_irq_pending = get_irq_pending_##index,                        \
     };                                                                     \
     \
-    DEVICE_DT_INST_DEFINE(index, counter_rtl87x2g_timer_init, NULL,                \
+     PM_DEVICE_DT_INST_DEFINE(index, counter_rtl87x2g_timer_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index, counter_rtl87x2g_timer_init, PM_DEVICE_DT_INST_GET(index),                \
                           &counter_rtl87x2g_data_##index, &counter_rtl87x2g_config_##index,              \
                           PRE_KERNEL_1, CONFIG_COUNTER_INIT_PRIORITY,      \
                           &counter_rtl87x2g_timer_driver_api);    \

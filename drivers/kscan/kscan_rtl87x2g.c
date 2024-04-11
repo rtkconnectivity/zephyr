@@ -22,6 +22,8 @@
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/irq.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include "rtl_keyscan.h"
 #include <zephyr/logging/log.h>
@@ -54,6 +56,9 @@ struct kscan_rtl87x2g_data
     uint8_t press_num;
     kscan_callback_t callback;
     bool cb_en;
+#ifdef CONFIG_PM_DEVICE
+    KEYSCANStoreReg_Typedef store_buf;
+#endif
 };
 
 static int kscan_rtl87x2g_configure(const struct device *dev,
@@ -225,6 +230,48 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int kscan_rtl87x2g_pm_action(const struct device *dev,
+                                    enum pm_device_action action)
+{
+    const struct kscan_rtl87x2g_config *config = dev->config;
+    struct kscan_rtl87x2g_data *data = dev->data;
+    KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
+    int err;
+    extern void KEYSCAN_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void KEYSCAN_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        KEYSCAN_DLPSEnter(keyscan, &data->store_buf);
+
+        /* Move pins to sleep state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+        if ((err < 0) && (err != -ENOENT))
+        {
+            return err;
+        }
+        break;
+    case PM_DEVICE_ACTION_RESUME:
+        /* Set pins to active state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        KEYSCAN_DLPSExit(keyscan, &data->store_buf);
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
 
 static const struct kscan_driver_api kscan_rtl87x2g_driver_api =
 {
@@ -327,9 +374,10 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     static struct kscan_rtl87x2g_data kscan_rtl87x2g_data_##index = {                \
         .callback = NULL,             \
     };        \
-    DEVICE_DT_INST_DEFINE(index,                                              \
+     PM_DEVICE_DT_INST_DEFINE(index, kscan_rtl87x2g_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index,                                              \
                           &kscan_rtl87x2g_init,                                  \
-                          NULL,                           \
+                          PM_DEVICE_DT_INST_GET(index),                           \
                           &kscan_rtl87x2g_data_##index, &kscan_rtl87x2g_cfg_##index,    \
                           POST_KERNEL, CONFIG_KSCAN_INIT_PRIORITY,                    \
                           &kscan_rtl87x2g_driver_api);                                  \

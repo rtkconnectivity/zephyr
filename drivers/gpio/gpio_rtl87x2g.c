@@ -18,6 +18,8 @@
 #include <zephyr/drivers/clock_control/rtl87x2g_clock_control.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/irq.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <zephyr/dt-bindings/gpio/realtek-rtl87x2g-gpio.h>
 #include "gpio_rtl87x2g.h"
@@ -400,6 +402,37 @@ int gpio_rtl87x2g_port_get_direction(const struct device *port, gpio_port_pins_t
 }
 #endif
 
+#ifdef CONFIG_PM_DEVICE
+static int gpio_rtl87x2g_pm_action(const struct device *port,
+                                   enum pm_device_action action)
+{
+    const struct gpio_rtl87x2g_config *config = port->config;
+    struct gpio_rtl87x2g_data *data = port->data;
+    GPIO_TypeDef *port_base = config->port_base;
+    int err;
+    extern void GPIO_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void GPIO_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        GPIO_DLPSEnter(port_base, &data->store_buf);
+
+        break;
+    case PM_DEVICE_ACTION_RESUME:
+
+        GPIO_DLPSExit(port_base, &data->store_buf);
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static const struct gpio_driver_api gpio_rtl87x2g_driver_api =
 {
     .pin_configure = gpio_rtl87x2g_pin_configure,
@@ -504,8 +537,9 @@ static int gpio_rtl87x2g_init(const struct device *dev)
     \
     static struct gpio_rtl87x2g_data gpio_rtl87x2g_port##index##_data;               \
     \
-    DEVICE_DT_INST_DEFINE(index, gpio_rtl87x2g_init,                                  \
-                          NULL,                                                                 \
+     PM_DEVICE_DT_INST_DEFINE(index, gpio_rtl87x2g_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index, gpio_rtl87x2g_init,                                  \
+                          PM_DEVICE_DT_INST_GET(index),                                                                 \
                           &gpio_rtl87x2g_port##index##_data,                                    \
                           &gpio_rtl87x2g_port##index##_cfg,                                    \
                           PRE_KERNEL_1,                                                        \

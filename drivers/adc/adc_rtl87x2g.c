@@ -15,6 +15,8 @@
 #include <zephyr/drivers/reset.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/irq.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <rtl_adc.h>
 #include <adc_lib.h>
@@ -43,6 +45,9 @@ struct adc_rtl87x2g_data
     uint8_t seq_map;
     int32_t *buffer;
     int32_t *repeat_buffer;
+#ifdef CONFIG_PM_DEVICE
+    ADCStoreReg_TypeDef store_buf;
+#endif
 };
 
 static int adc_rtl87x2g_start_read(const struct device *dev,
@@ -205,6 +210,49 @@ static void adc_rtl87x2g_isr(const struct device *dev)
     }
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int adc_rtl87x2g_pm_action(const struct device *dev,
+                                  enum pm_device_action action)
+{
+    struct adc_rtl87x2g_data *data = dev->data;
+    const struct adc_rtl87x2g_config *cfg = dev->config;
+    ADC_TypeDef *adc = (ADC_TypeDef *)cfg->reg;
+    int err;
+    extern void ADC_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void ADC_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        ADC_DLPSEnter(adc, &data->store_buf);
+
+        /* Move pins to sleep state */
+        err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+        if ((err < 0) && (err != -ENOENT))
+        {
+            return err;
+        }
+        break;
+    case PM_DEVICE_ACTION_RESUME:
+        /* Set pins to active state */
+        err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        ADC_DLPSExit(adc, &data->store_buf);
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static const struct adc_driver_api adc_rtl87x2g_driver_api =
 {
     .channel_setup = adc_rtl87x2g_channel_setup,
@@ -281,8 +329,9 @@ static int adc_rtl87x2g_init(const struct device *dev)
         .irq_num = DT_INST_IRQN(index),                         \
         .irq_config_func = adc_rtl87x2g_irq_config_func,                   \
     };                                          \
-    DEVICE_DT_INST_DEFINE(index,                                \
-                          &adc_rtl87x2g_init, NULL,                     \
+     PM_DEVICE_DT_INST_DEFINE(index, adc_rtl87x2g_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index,                                \
+                          &adc_rtl87x2g_init, PM_DEVICE_DT_INST_GET(index),                     \
                           &adc_rtl87x2g_data_##index, &adc_rtl87x2g_config_##index,             \
                           POST_KERNEL, CONFIG_ADC_INIT_PRIORITY,                \
                           &adc_rtl87x2g_driver_api);                        \
