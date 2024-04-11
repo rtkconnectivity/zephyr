@@ -199,7 +199,7 @@ config USB_DC_IT82XX2
 
 
 config USB_DC_RTL87X2G
-	bool "RTL87X2G MCU usb dcevice controller driver"
+	bool "RTL87X2G MCU usb device controller driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_USB_ENABLED
 	select REALTEK_USB
@@ -209,7 +209,7 @@ config USB_DC_RTL87X2G
 
 if USB_DC_RTL87X2G
 config USB_DC_RTL87X2G_DMA
-	bool "RTL87X2G MCU usb dcevice controller use internal dma"
+	bool "RTL87X2G MCU usb device controller use internal dma"
 	default n
 
 	help

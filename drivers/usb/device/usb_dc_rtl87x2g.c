@@ -128,6 +128,7 @@ static void usb_dw_isr_handler(const void *unused);
 static void usb_dw_resume_isr_handler(const void *unused);
 static void usb_isr_suspend_enable(void);
 extern int hal_usb_phy_power_on(void);
+extern int32_t usb_rtk_resume_sequence(void);
 
 #define USB_DW_DEVICE_DEFINE(n)                         \
     \
@@ -1379,6 +1380,8 @@ static void usb_dw_isr_handler(const void *unused)
             base->gintsts = USB_DW_GINTSTS_USB_SUSP;
             extern int hal_usb_suspend_enter(void);
 
+            hal_usb_suspend_enter();
+
             if (usb_dw_ctrl.status_cb)
             {
                 usb_dw_ctrl.status_cb(USB_DC_SUSPEND, NULL);
@@ -1444,9 +1447,13 @@ static void usb_dw_resume_isr_handler(const void *unused)
 #endif
     SoC_VENDOR->u_004.REG_LOW_PRI_INT_STATUS |= BIT31;
     /* prevent false alarm */
-    extern int32_t usb_rtk_resume_sequence(void);
     usb_rtk_resume_sequence();
 
+    if (usb_dw_ctrl.status_cb)
+    {
+        usb_dw_ctrl.status_cb(USB_DC_RESUME, NULL);
+    }
+    return ;
 }
 
 int usb_dc_attach(void)
@@ -2150,6 +2157,29 @@ int usb_dc_ep_mps(const uint8_t ep)
     {
         return usb_dw_ctrl.in_ep_ctrl[ep_idx].mps;
     }
+}
+
+int usb_dc_wakeup_request(void)
+{
+    usb_rtk_resume_sequence();
+    SoC_VENDOR->u_004.REG_LOW_PRI_INT_STATUS |= BIT31;
+    struct usb_dw_reg *const base = usb_dw_cfg.base;
+
+    if (!(base->dsts & USB_DW_DSTS_SUSPSTS_MASK))
+    {
+        LOG_ERR("Remote wakeup while is not in suspend state, or while is not allowed by host.");
+		return -EAGAIN;
+    }
+
+    base->dctl |= USB_DW_DCTL_RMTWKUPSIG_MASK;
+
+    k_sleep(K_MSEC(2));
+
+    base->dctl &= ~USB_DW_DCTL_RMTWKUPSIG_MASK;
+
+    LOG_DBG("Remote wakeup from suspend.");
+
+    return 0;
 }
 
 static void usb_isr_suspend_enable(void)
