@@ -13,6 +13,8 @@
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/sys/util_macro.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <rtl_tim.h>
 #include <rtl_enh_tim.h>
@@ -26,6 +28,13 @@ struct pwm_rtl87x2g_data
 {
     /** Timer clock (Hz). */
     uint32_t tim_clk;
+#ifdef CONFIG_PM_DEVICE
+    union
+    {
+        TIMStoreReg_Typedef tim_store_buf;
+        ENHTIMStoreReg_Typedef enhtim_store_buf;
+    } store_buf;
+#endif
 };
 
 /** PWM configuration. */
@@ -144,6 +153,66 @@ static int pwm_rtl87x2g_get_cycles_per_sec(const struct device *dev,
     return 0;
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int pwm_rtl87x2g_pm_action(const struct device *dev,
+                                  enum pm_device_action action)
+{
+    const struct pwm_rtl87x2g_config *config = dev->config;
+    struct pwm_rtl87x2g_data *data = dev->data;
+    void *timer_base = (void *)config->reg;
+    int err;
+
+    extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
+    extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        if (config->is_enhanced)
+        {
+            ENHTIM_DLPSEnter(timer_base, &data->store_buf);
+        }
+        else
+        {
+            TIM_DLPSEnter(timer_base, &data->store_buf);
+        }
+
+        /* Move pins to sleep state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+        if ((err < 0) && (err != -ENOENT))
+        {
+            return err;
+        }
+
+    case PM_DEVICE_ACTION_RESUME:
+        /* Set pins to active state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        if (config->is_enhanced)
+        {
+            ENHTIM_DLPSExit(timer_base, &data->store_buf);
+        }
+        else
+        {
+            TIM_DLPSExit(timer_base, &data->store_buf);
+        }
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static const struct pwm_driver_api pwm_rtl87x2g_driver_api =
 {
     .set_cycles = pwm_rtl87x2g_set_cycles,
@@ -245,7 +314,8 @@ static int pwm_rtl87x2g_init(const struct device *dev)
                                                                 .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),             \
     };                                     \
     \
-    DEVICE_DT_INST_DEFINE(index, &pwm_rtl87x2g_init, NULL, &pwm_rtl87x2g_data_##index,     \
+     PM_DEVICE_DT_INST_DEFINE(index, pwm_rtl87x2g_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index, &pwm_rtl87x2g_init, PM_DEVICE_DT_INST_GET(index), &pwm_rtl87x2g_data_##index,     \
                           &pwm_rtl87x2g_config_##index, POST_KERNEL,           \
                           CONFIG_PWM_INIT_PRIORITY,                \
                           &pwm_rtl87x2g_driver_api);
