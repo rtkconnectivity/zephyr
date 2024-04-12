@@ -348,8 +348,7 @@ static int bt_rtl87x2g_open(void)
     tid = k_thread_create(&rx_thread_data, rx_thread_stack,
                           K_KERNEL_STACK_SIZEOF(rx_thread_stack),
                           rtl_rx_thread, NULL, NULL, NULL,
-                          K_PRIO_COOP(CONFIG_BT_RX_PRIO),
-                          0, K_NO_WAIT);
+                          0, 0, K_NO_WAIT);
     k_thread_name_set(tid, "rtl_rx_thread");
 
     if (rtl_bt_hci_h2c_pool_init(F_RTK_BT_HCI_H2C_POOL_SIZE))
