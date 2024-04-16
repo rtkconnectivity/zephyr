@@ -211,9 +211,8 @@ static int pwm_rtl87x2g_init(const struct device *dev)
         enh_tim_init_struct.ENHTIM_PWMOutputEn = ENABLE;
         enh_tim_init_struct.ENHTIM_PWMStartPolarity = ENHTIM_PWM_START_WITH_LOW;
         enh_tim_init_struct.ENHTIM_MaxCount = UINT32_MAX;
-        enh_tim_init_struct.ENHTIM_CCValue = 0X0;
+        enh_tim_init_struct.ENHTIM_CCValue = UINT32_MAX;
         ENHTIM_Init((ENHTIM_TypeDef *)timer_base, &enh_tim_init_struct);
-        ENHTIM_Cmd((ENHTIM_TypeDef *)timer_base, ENABLE);
     }
     else
     {
@@ -227,7 +226,6 @@ static int pwm_rtl87x2g_init(const struct device *dev)
         timer_init_struct.TIM_PWM_High_Count = 0;
         timer_init_struct.TIM_PWM_Low_Count = UINT32_MAX;
         TIM_TimeBaseInit((TIM_TypeDef *)timer_base, &timer_init_struct);
-        TIM_Cmd((TIM_TypeDef *)timer_base, ENABLE);
     }
 
     return 0;
