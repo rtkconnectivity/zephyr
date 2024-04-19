@@ -331,7 +331,7 @@ static int kscan_rtl87x2g_init(const struct device *dev)
                           &kscan_rtl87x2g_init,                                  \
                           NULL,                           \
                           &kscan_rtl87x2g_data_##index, &kscan_rtl87x2g_cfg_##index,    \
-                          POST_KERNEL, CONFIG_KSCAN_INIT_PRIORITY,                    \
+                          APPLICATION, CONFIG_KSCAN_INIT_PRIORITY,                    \
                           &kscan_rtl87x2g_driver_api);                                  \
     \
     RTL87X2G_KSCAN_IRQ_HANDLER(index)
