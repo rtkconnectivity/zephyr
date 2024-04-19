@@ -1827,7 +1827,7 @@ int usb_dc_ep_disable(const uint8_t ep)
     DBG_DIRECT("usb_dc_ep_disable ep%x", ep_idx);
 #endif
 
-    if (!usb_dw_ctrl.attached || !usb_dw_ep_is_valid(ep))
+    if (!usb_dw_ep_is_valid(ep))
     {
         LOG_ERR("Not attached / Invalid endpoint: EP 0x%x", ep);
         return -EINVAL;
