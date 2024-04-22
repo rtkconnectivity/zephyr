@@ -41,6 +41,8 @@ void idle(void *unused1, void *unused2, void *unused3)
 
 	__ASSERT_NO_MSG(_current->base.prio >= 0);
 
+	__enable_irq();//sync with realtek pm flow
+
 	while (true) {
 		/* SMP systems without a working IPI can't actual
 		 * enter an idle state, because they can't be notified
@@ -64,27 +66,17 @@ void idle(void *unused1, void *unused2, void *unused3)
 		 */
 		(void) arch_irq_lock();
 
-#ifdef CONFIG_PM
-		_kernel.idle = z_get_next_timeout_expiry();
+		extern void (*thermal_meter_read)(void);
+		thermal_meter_read();
 
-		/*
-		 * Call the suspend hook function of the soc interface
-		 * to allow entry into a low power state. The function
-		 * returns false if low power state was not entered, in
-		 * which case, kernel does normal idle processing.
-		 *
-		 * This function is entered with interrupts disabled.
-		 * If a low power state was entered, then the hook
-		 * function should enable inerrupts before exiting.
-		 * This is because the kernel does not do its own idle
-		 * processing in those cases i.e. skips k_cpu_idle().
-		 * The kernel's idle processing re-enables interrupts
-		 * which is essential for the kernel's scheduling
-		 * logic.
-		 */
-		if (k_is_pre_kernel() || !pm_system_suspend(_kernel.idle)) {
-			k_cpu_idle();
-		}
+		extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
+		log_buffer_trigger_schedule_in_km4_idle_task();
+
+#ifdef CONFIG_PM
+        arch_irq_unlock(0);// unlock irq to make sure realtek pmu flow work normally.
+
+		extern void (*power_manager_slave_inact_action_handler)(void);
+		power_manager_slave_inact_action_handler();
 #else
 		k_cpu_idle();
 #endif

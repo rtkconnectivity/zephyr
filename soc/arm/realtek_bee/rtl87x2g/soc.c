@@ -6,9 +6,7 @@
 #include <zephyr/sys/barrier.h>
 #include <soc.h>
 
-/* from bee-sdk*/
 #include "rom_api_for_zephyr.h"
-
 #include "trace.h"
 #include "os_sched.h"
 #include "patch_header_check.h"
@@ -17,6 +15,12 @@
 #include "mem_config.h"
 #include "utils.h"
 #include "aon_reg.h"
+#include "os_pm.h"
+
+#include <zephyr/logging/log.h>
+
+#define LOG_LEVEL CONFIG_SOC_LOG_LEVEL
+LOG_MODULE_REGISTER(soc);
 
 extern void z_arm_pendsv(void);
 extern void sys_clock_isr(void);
@@ -45,24 +49,6 @@ void rtk_rom_irq_connect(void)
     IRQ_CONNECT(PF_RTC_IRQn, 0, PF_RTC_Handler, NULL, 0);
 }
 
-
-#define RTK_LOGGING_THREAD_STACK_SIZE 400
-#define RTK_LOGGING_THREAD_PRIORITY K_LOWEST_APPLICATION_THREAD_PRIO
-
-void rtk_logging_thread(void *, void *, void *)
-{
-    while (1)
-    {
-        extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
-        log_buffer_trigger_schedule_in_km4_idle_task();
-        k_msleep(50);
-    }
-}
-
-K_THREAD_DEFINE(rtk_logging_thread_tid, RTK_LOGGING_THREAD_STACK_SIZE,
-                rtk_logging_thread, NULL, NULL, NULL,
-                RTK_LOGGING_THREAD_PRIORITY, 0, 0);
-
 static int rtk_platform_init(void)
 {
     os_zephyr_patch_init();
@@ -81,7 +67,7 @@ static int rtk_platform_init(void)
 
     os_init();
 
-    //os_pm_init();//power manager porting has not been realized yet.
+    os_pm_init();
 
     secure_os_func_ptr_init();
 
