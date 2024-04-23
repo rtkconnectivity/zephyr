@@ -6,7 +6,7 @@
 
 /**
  * @file
- * nRF SoC specific helpers for pinctrl driver
+ * rtl87x2g SoC specific helpers for pinctrl driver
  */
 
 #ifndef ZEPHYR_SOC_ARM_REALTEK_RTL_COMMON_PINCTRL_SOC_H_
@@ -22,8 +22,16 @@ extern "C" {
 
 /** @cond INTERNAL_HIDDEN */
 
-/** Type for RTL pin. */
-typedef uint32_t pinctrl_soc_pin_t;
+typedef struct {
+        uint32_t pin : 11;
+        uint32_t pull : 2;
+        uint32_t drive : 1;
+        uint32_t dir : 1;
+        uint32_t pull_strength : 1;
+        uint32_t fun : 16;
+} pinctrl_soc_pin;
+
+typedef pinctrl_soc_pin pinctrl_soc_pin_t;
 
 /**
  * @brief Utility macro to initialize each pin.
@@ -33,7 +41,14 @@ typedef uint32_t pinctrl_soc_pin_t;
  * @param idx Property entry index.
  */
 #define Z_PINCTRL_STATE_PIN_INIT(node_id, prop, idx)                   \
-    (DT_PROP_BY_IDX(node_id, prop, idx)),
+	{								\
+		.pin = RTL87X2G_GET_PIN(DT_PROP_BY_IDX(node_id, prop, idx)),		\
+		.pull = RTL87X2G_GET_PULL(DT_PROP_BY_IDX(node_id, prop, idx)),		\
+		.drive = RTL87X2G_GET_DRIVE(DT_PROP_BY_IDX(node_id, prop, idx)),		\
+		.dir = RTL87X2G_GET_DIR(DT_PROP_BY_IDX(node_id, prop, idx)),		\
+		.pull_strength = DT_PROP(node_id, bias_pull_strong),		\
+		.fun = RTL87X2G_GET_FUN(DT_PROP_BY_IDX(node_id, prop, idx)),		\
+	},
 
 /**
  * @brief Utility macro to initialize state pins contained in a given property.

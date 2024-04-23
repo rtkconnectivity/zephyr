@@ -368,12 +368,12 @@
       (((RTL87X2G_ ## pull) & RTL87X2G_PULL_MSK) << RTL87X2G_PULL_POS)))
 
 /**
- * @brief Utility macro to build nRF psels property entry when a pin is disconnected.
+ * @brief Utility macro to build rtl87x2g psels property entry when a pin is disconnected.
  *
  * This can be useful in situations where code running before Zephyr, e.g. a bootloader
  * configures pins that later needs to be disconnected.
  *
- * @param fun Pin function configuration (see NRF_FUN_{name} macros).
+ * @param fun Pin function configuration (see RTL87X2G_FUNC_{name} macros).
  */
 #define RTL87X2G_PSEL_DISCONNECTED(fun)                            \
     (RTL87X2G_PIN_DISCONNECTED << RTL87X2G_PIN_POS |                                   \

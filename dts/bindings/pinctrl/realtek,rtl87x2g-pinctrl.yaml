@@ -76,4 +76,7 @@ child-binding:
         description: |
           Pinmux function number and pad configurations.
 
+      bias-pull-strong:
+        type: boolean
+        description: enable pull-strong resistor
 
