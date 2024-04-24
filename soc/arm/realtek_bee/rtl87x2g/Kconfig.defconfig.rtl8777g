@@ -1,0 +1,6 @@
+if SOC_RTL8777G
+
+config SOC
+	default "rtl8777g"
+
+endif # SOC_RTL8777G

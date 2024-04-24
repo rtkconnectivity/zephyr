@@ -1,0 +1,6 @@
+if SOC_RTL8772GWP
+
+config SOC
+	default "rtl8772gwp"
+
+endif # SOC_RTL8772GWP

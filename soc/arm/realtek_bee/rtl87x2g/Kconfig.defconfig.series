@@ -4,12 +4,22 @@ config SOC_SERIES
 	default "rtl87x2g"
 
 config SOC_PART_NUMBER
-	default "rtl8772gwp" if SOC_PART_NUMBER_RTL8772GWP
+	default "rtl8762gku" if SOC_PART_NUMBER_RTL8762GKU
 	default "rtl8762gn" if SOC_PART_NUMBER_RTL8762GN
+	default "rtl8762gtp" if SOC_PART_NUMBER_RTL8762GTP
+	default "rtl8762gtu" if SOC_PART_NUMBER_RTL8762GTU
+	default "rtl8772gwf" if SOC_PART_NUMBER_RTL8772GWF
+	default "rtl8772gwp" if SOC_PART_NUMBER_RTL8772GWP
+	default "rtl8777g" if SOC_PART_NUMBER_RTL8777G
 
 config NUM_IRQS
 	int
 	default 109
+
+config SYS_CLOCK_HW_CYCLES_PER_SEC
+	int
+	default 32000 if SYSTICK_USE_EXTERNAL_CLOCK
+    default 40000000 if SYSTICK_USE_CPU_CLOCK
 
 config SYS_CLOCK_TICKS_PER_SEC
 	int
@@ -19,6 +29,6 @@ config SYS_CLOCK_TICKS_PER_SEC
 config IDLE_STACK_SIZE
     default 1024
 
-rsource "Kconfig.defconfig.rtl8762gn"
+rsource "Kconfig.defconfig.rtl87*"
 
 endif # SOC_SERIES_RTL87X2G

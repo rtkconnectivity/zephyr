@@ -1,4 +1,6 @@
-config SYS_CLOCK_HW_CYCLES_PER_SEC
-	int
-	default 32000 if SYSTICK_USE_EXTERNAL_CLOCK
-    default 40000000 if SYSTICK_USE_CPU_CLOCK
+if SOC_RTL8762GN
+
+config SOC
+	default "rtl8762gn"
+
+endif # SOC_RTL8762GN
