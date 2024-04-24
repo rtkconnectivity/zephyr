@@ -1,0 +1,6 @@
+if SOC_RTL8762GTP
+
+config SOC
+	default "rtl8762gtp"
+
+endif # SOC_RTL8762GTP
