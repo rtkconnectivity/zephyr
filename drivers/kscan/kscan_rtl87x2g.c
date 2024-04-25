@@ -131,6 +131,30 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 
             if (press_cnt >= scan_debounce_cnt)
             {
+#if CONFIG_RTL87X2G_KEYSCAN_GHOST_KEY_FILTER
+                /* filter ghost key */
+                if (new_press_num >= 4)
+                {
+                    for (uint8_t i = 0; i < new_press_num - 2; i++)
+                    {
+                        /* two keys in the same column */
+                        if (new_keys[i].column == new_keys[i+1].column)
+                        {
+                            for (uint8_t j = i + 2; j < new_press_num; j++)
+                            {
+                                /* another key in the same row, which is ghost key */
+                                if (new_keys[i].row == new_keys[j].row)
+                                {
+                                    LOG_ERR("ghost key detected!\n");
+                                    KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
+                                    KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+#endif
                 memset(new_key_map, 0, sizeof(new_key_map));
 
                 /* update press keys */
@@ -260,7 +284,7 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     kscan_init_struct.clockdiv = 15;
 
     /* default delay clk is 4 kHz */
-    kscan_init_struct.delayclk = 77;
+    kscan_init_struct.delayclk = 38;
 
     kscan_init_struct.rowSize = config->row_size;
     kscan_init_struct.colSize = config->col_size;
@@ -268,9 +292,9 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     kscan_init_struct.scantimerEn = config->scan_ms ? ENABLE : DISABLE;
     kscan_init_struct.detecttimerEn = config->rel_ms ? ENABLE : DISABLE;
 
-    kscan_init_struct.debouncecnt = config->deb_ms * 4;
-    kscan_init_struct.scanInterval = config->scan_ms * 4;
-    kscan_init_struct.releasecnt = config->rel_ms * 4;
+    kscan_init_struct.debouncecnt = config->deb_ms * 8;
+    kscan_init_struct.scanInterval = config->scan_ms * 8;
+    kscan_init_struct.releasecnt = config->rel_ms * 8;
 
     kscan_init_struct.scanmode = KeyScan_Auto_Scan_Mode;
     kscan_init_struct.keylimit = 26;
