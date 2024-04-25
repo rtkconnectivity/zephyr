@@ -7,6 +7,12 @@ endif #BOARD_RTL8762GN_EVB
 
 if BT
 
+config MAIN_STACK_SIZE
+	default 2048
+
+config COMMON_LIBC_MALLOC_ARENA_SIZE
+	default 1024
+
 choice BT_HCI_BUS_TYPE
 	default BT_RTL87X2G
 endchoice

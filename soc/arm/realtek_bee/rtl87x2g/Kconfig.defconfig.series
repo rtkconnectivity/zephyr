@@ -29,6 +29,9 @@ config SYS_CLOCK_TICKS_PER_SEC
 config IDLE_STACK_SIZE
     default 1024
 
+config NUM_METAIRQ_PRIORITIES
+	default 1
+
 rsource "Kconfig.defconfig.rtl87*"
 
 endif # SOC_SERIES_RTL87X2G

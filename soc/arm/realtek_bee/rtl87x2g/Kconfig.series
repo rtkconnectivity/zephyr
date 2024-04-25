@@ -5,6 +5,9 @@ config SOC_SERIES_RTL87X2G
 	select CPU_HAS_ARM_SAU
 	select CPU_HAS_FPU
 	select CPU_HAS_ARM_MPU
+	select CLOCK_CONTROL
+	select PINCTRL
+	select DYNAMIC_INTERRUPTS
 	select ARMV8_M_DSP
 	select ARMV8_1_M_MVEI
 	select ARMV8_1_M_MVEF
@@ -12,5 +15,6 @@ config SOC_SERIES_RTL87X2G
 	select ARM_TRUSTZONE_M
 	select SHARED_MULTI_HEAP
 	select SYSTICK_USE_EXTERNAL_CLOCK
+
 
 
