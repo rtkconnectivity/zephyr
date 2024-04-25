@@ -24,4 +24,10 @@ config RTL87X2G_KEYSCAN_MAX_COL_SIZE
 	help
 	  Max column size for rtl8762g kscan.
 
+config RTL87X2G_KEYSCAN_GHOST_KEY_FILTER
+	bool "Ghost key filter for rtl8762g kscan"
+	default y
+	help
+	  Ghost key filter for rtl8762g kscan.
+
 endif # KSCAN_RTL87X2G
