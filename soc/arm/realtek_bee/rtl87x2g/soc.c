@@ -18,8 +18,6 @@
 #include "utils.h"
 #include "aon_reg.h"
 
-extern void z_arm_pendsv(void);
-extern void sys_clock_isr(void);
 extern void os_zephyr_patch_init(void);
 extern void BTMAC_Handler(void);
 extern void GDMA0_Channel9_Handler(void);
@@ -28,21 +26,21 @@ extern void PF_RTC_Handler(void);
 #define VECTOR_ADDRESS ((uintptr_t)_vector_start)
 
 /*
-    rtk_rom_irq_connect() calls IRQ_CONNECT/IRQ_DIRECT_CONNECT to register isr to zephyr's vector table/sw isr table.
-    In zephyr based app, we discard rtk's RamVectorTable, but use zephyr's build-time-generated vector table instead.
-    These ISRs have been registered in rtk boot routine, so we need to redo this procedure using zephyr's ISR register APIs.
-
-    Note: IRQ_CONNECT/IRQ_DIRECT_CONNECT will set the interrupt's priority again.
-    IRQ priority-1
+    rtk_rom_irq_connect() calls IRQ_CONNECT to register isr to zephyr's vector table/sw isr table.
+    In zephyr app, we discard rtk's RamVectorTable, but use zephyr's build-time-generated vector table instead.
+    
+    Note: IRQ_CONNECT will set the interrupt's priority again.
 */
 void rtk_rom_irq_connect(void)
 {
     IRQ_CONNECT(WDT_IRQn, 2, HardFault_Handler_Rom, NULL, 0);
     IRQ_CONNECT(RXI300_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
     IRQ_CONNECT(RXI300_SEC_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
-    IRQ_CONNECT(BTMAC_IRQn, 1, BTMAC_Handler, NULL, 0);
     IRQ_CONNECT(GDMA0_Channel9_IRQn, 6, GDMA0_Channel9_Handler, NULL, 0);
     IRQ_CONNECT(PF_RTC_IRQn, 0, PF_RTC_Handler, NULL, 0);
+    IRQ_CONNECT(BTMAC_IRQn, 1, BTMAC_Handler, NULL, 0);
+    IRQ_CONNECT(BTMAC_WRAP_AROUND_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
+    // IRQ_CONNECT(Flash_SEC_IRQn, 5, Flash_SEC_Handler, NULL, 0);//secure ISR register, have not found solution yet
 }
 
 
@@ -65,19 +63,26 @@ K_THREAD_DEFINE(rtk_logging_thread_tid, RTK_LOGGING_THREAD_STACK_SIZE,
 
 static int rtk_platform_init(void)
 {
-    os_zephyr_patch_init();
-
+/*
+* SCB->VTOR points to zephyr's vector table which is placed in flash.
+* However, vector table place in flash will trigger hardfault when flash erasing.
+* So we need  point SCB->VTOR to RAM vector table, and copy zephyr's vector table to RAM.
+*/ 
+    size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
 #if (CONFIG_TRUSTED_EXECUTION_NONSECURE==1)
     //tz enabled
     SCB->VTOR = (uint32_t)NS_RAM_VECTOR_ADDR;
+    (void)memcpy((void *)NS_RAM_VECTOR_ADDR, _vector_start, vector_size);
 #else
     //tz disabled
     SCB->VTOR = (uint32_t)S_RAM_VECTOR_ADDR;
+    (void)memcpy((void *)S_RAM_VECTOR_ADDR, _vector_start, vector_size);
 #endif
+    
+    /* connect rtk-rom-irq to zephyr's vector table, also will reset priority here!*/
+    rtk_rom_irq_connect();
 
-    //make sure before copying zephyr vector to ram, the vector table has zephyr's pendsv&sys_clock_isr.
-    RamVectorTableUpdate(PendSV_VECTORn, (IRQ_Fun)z_arm_pendsv);
-    RamVectorTableUpdate(SysTick_VECTORn, (IRQ_Fun)sys_clock_isr);
+    os_zephyr_patch_init();
 
     os_init();
 
@@ -94,6 +99,7 @@ static int rtk_platform_init(void)
     log_module_trace_init(NULL);
     log_buffer_init();
     log_gdma_init();
+    RamVectorTableUpdate(GDMA0_Channel9_VECTORn, (IRQ_Fun)_isr_wrapper);
 
     si_flow_data_init();
 
@@ -132,6 +138,7 @@ static int rtk_platform_init(void)
     power_manager_master_init();
     power_manager_slave_init();
     platform_pm_init();
+    RamVectorTableUpdate(PF_RTC_VECTORn, (IRQ_Fun)_isr_wrapper);
 
     init_osc_sdm_timer();//use os timer api
 
@@ -141,6 +148,17 @@ static int rtk_platform_init(void)
     phy_init(false);//use os timer api
 
     thermal_tracking_timer_init();
+
+    if (flash_nor_get_exist_nsc(FLASH_NOR_IDX_SPIC0))
+    {
+        flash_nor_dump_main_info();
+        flash_nor_cmd_list_init_nsc();
+        flash_nor_init_bp_lv_nsc();
+    }
+
+#if (CONFIG_TRUSTED_EXECUTION_NONSECURE == 1)
+    setup_non_secure_nvic();
+#endif
 
     return 0;
 }
@@ -155,41 +173,15 @@ static int rtk_task_init(void)
         BOOL_PATCH_FUNC lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
         DBG_DIRECT("LOAD STACK ROM success!");
         lowerstack_entry();
+        RamVectorTableUpdate(BTMAC_VECTORn, (IRQ_Fun)_isr_wrapper);
+        RamVectorTableUpdate(BTMAC_WRAP_AROUND_VECTORn, (IRQ_Fun)_isr_wrapper);
     }
     else
     {
         DBG_DIRECT("LOAD STACK ROM fail!");
     }
 
-    if (flash_nor_get_exist_nsc(FLASH_NOR_IDX_SPIC0))
-    {
-        flash_nor_dump_main_info();
-        flash_nor_cmd_list_init_nsc();
-        flash_nor_init_bp_lv_nsc();
-    }
-
     AON_REG_WRITE_BITFIELD(AON_NS_REG0X_FW_GENERAL_NS, km4_pon_boot_done, 1);
-
-#if (CONFIG_TRUSTED_EXECUTION_NONSECURE == 1)
-    setup_non_secure_nvic();
-#endif
-
-    /* SCB->VTOR points to zephyr's vector table which is placed in flash.
-    However, vector table place in flash will trigger hardfault when flash erasing.
-    So we need copy the zephyr's vector table to Ram*/
-    uint32_t key = arch_irq_lock();
-    size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
-#if (CONFIG_TRUSTED_EXECUTION_NONSECURE==1)
-    //tz enabled
-    (void)memcpy((void *)NS_RAM_VECTOR_ADDR, _vector_start, vector_size);
-#else
-    //tz disabled
-    (void)memcpy((void *)S_RAM_VECTOR_ADDR, _vector_start, vector_size);
-#endif
-
-    /* connect rtk-rom-irq to zephyr's vector table, also will reset priority here!*/
-    rtk_rom_irq_connect();
-    arch_irq_unlock(key);
 
     return 0;
 }
@@ -209,4 +201,4 @@ static int rtk_register_update(void)
 
 SYS_INIT(rtk_platform_init, EARLY, 0);
 SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
-SYS_INIT(rtk_task_init, APPLICATION, 0);
+SYS_INIT(rtk_task_init, POST_KERNEL, 0);
