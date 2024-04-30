@@ -16,7 +16,7 @@
 &timer8 {
 	status = "okay";
 	prescaler = <1>;
-	pwm8: pwm {
+	pwm8: pwm8 {
 		status = "okay";
 		pinctrl-0 = <&pwm8_default>;
 		pinctrl-names = "default";

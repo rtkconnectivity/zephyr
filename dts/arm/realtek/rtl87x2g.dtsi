@@ -215,7 +215,7 @@
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm2 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				#pwm-cells = <3>;
@@ -230,7 +230,7 @@
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm3 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				#pwm-cells = <3>;
@@ -245,7 +245,7 @@
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm4 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				#pwm-cells = <3>;
@@ -260,7 +260,7 @@
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm5 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				#pwm-cells = <3>;
@@ -275,7 +275,7 @@
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm6 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				#pwm-cells = <3>;
@@ -290,7 +290,7 @@
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm7 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				#pwm-cells = <3>;
@@ -306,7 +306,7 @@
 			clocks = <&cctl APB_CLK(ENHTIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm8 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				clocks = <&cctl APB_CLK(ENHTIMER_PWM0)>;
@@ -323,7 +323,7 @@
 			clocks = <&cctl APB_CLK(ENHTIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm9 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				clocks = <&cctl APB_CLK(ENHTIMER_PWM1)>;
@@ -340,7 +340,7 @@
 			clocks = <&cctl APB_CLK(ENHTIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm10 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				clocks = <&cctl APB_CLK(ENHTIMER_PWM2)>;
@@ -357,7 +357,7 @@
 			clocks = <&cctl APB_CLK(ENHTIMER)>;
 			status = "disabled";
 
-			pwm {
+			pwm11 {
 				compatible = "realtek,rtl87x2g-pwm";
 				status = "disabled";
 				clocks = <&cctl APB_CLK(ENHTIMER_PWM3)>;
