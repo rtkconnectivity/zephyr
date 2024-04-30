@@ -25,10 +25,13 @@ description: |
     &pinctrl {
         kscan_default: kscan_default {
             group1 {
-                psels = <RTL87X2G_PSEL(KEY_COL_0, P0_6, DIR_OUT, DRV_LOW, PULL_NONE)>,
-                <RTL87X2G_PSEL(KEY_COL_1, P0_7, DIR_OUT, DRV_LOW, PULL_NONE)>,
-                <RTL87X2G_PSEL(KEY_ROW_0, P2_4, DIR_IN, DRV_LOW, PULL_UP)>,
-                <RTL87X2G_PSEL(KEY_ROW_1, P2_5, DIR_IN, DRV_LOW, PULL_UP)>;
+              psels = <RTL87X2G_PSEL(KEY_COL_0, P0_6, DIR_OUT, DRV_LOW, PULL_NONE)>,
+              <RTL87X2G_PSEL(KEY_COL_1, P0_7, DIR_OUT, DRV_LOW, PULL_NONE)>;
+            };
+            group2 {
+              psels = <RTL87X2G_PSEL(KEY_ROW_0, P2_4, DIR_IN, DRV_LOW, PULL_UP)>,
+              <RTL87X2G_PSEL(KEY_ROW_1, P2_5, DIR_IN, DRV_LOW, PULL_UP)>;
+              bias-pull-strong;
             };
         };
     };
@@ -75,17 +78,20 @@ properties:
     required: true
     description: Actual column size of external kscan matrix.
 
-  debounce-time-ms:
+  debounce-time-us:
     type: int
-    description: Debounce time for hardware debounce first time, unit is ms.
+    description: Debounce time for hardware debounce first time, range from 0 to 10240, unit is us.
+                 The resolution is 20us.
 
-  scan-time-ms:
+  scan-time-us:
     type: int
-    description: Scan interval time, uint is ms.
+    description: Scan interval time, range from 0 to 10240, unit is us.
+                 The resolution is 20us.
 
-  release-time-ms:
+  release-time-us:
     type: int
-    description: All release detect time, unit is ms.
+    description: All release detect time, range from 0 to 10240, unit is us.
+                 The resolution is 20us.
 
   scan-debounce-cnt:
     type: int
