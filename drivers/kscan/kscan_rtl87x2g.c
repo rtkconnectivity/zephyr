@@ -34,9 +34,9 @@ struct kscan_rtl87x2g_config
     const struct pinctrl_dev_config *pcfg;
     uint8_t row_size;
     uint8_t col_size;
-    uint16_t deb_ms;
-    uint16_t scan_ms;
-    uint16_t rel_ms;
+    uint16_t deb_us;
+    uint16_t scan_us;
+    uint16_t rel_us;
     uint8_t scan_debounce_cnt;
     void (*irq_config_func)();
 };
@@ -280,21 +280,19 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     KEYSCAN_InitTypeDef kscan_init_struct;
     KeyScan_StructInit(&kscan_init_struct);
 
-    /* default scan clk is 312.5 kHz */
-    kscan_init_struct.clockdiv = 15;
+    /* default scan clk is 2.5 MHz */
+    kscan_init_struct.clockdiv = 1;
 
-    /* default delay clk is 4 kHz */
-    kscan_init_struct.delayclk = 38;
+    /* default delay clk is 50 kHz */
+    kscan_init_struct.delayclk = 49;
 
-    kscan_init_struct.rowSize = config->row_size;
-    kscan_init_struct.colSize = config->col_size;
-    kscan_init_struct.debounceEn = config->deb_ms ? ENABLE : DISABLE;
-    kscan_init_struct.scantimerEn = config->scan_ms ? ENABLE : DISABLE;
-    kscan_init_struct.detecttimerEn = config->rel_ms ? ENABLE : DISABLE;
+    kscan_init_struct.debouncecnt = (config->deb_us + 10) / 20;
+    kscan_init_struct.scanInterval = (config->scan_us + 10) / 20;
+    kscan_init_struct.releasecnt = (config->rel_us + 10) / 20;
 
-    kscan_init_struct.debouncecnt = config->deb_ms * 8;
-    kscan_init_struct.scanInterval = config->scan_ms * 8;
-    kscan_init_struct.releasecnt = config->rel_ms * 8;
+    kscan_init_struct.debounceEn = kscan_init_struct.debouncecnt ? ENABLE : DISABLE;
+    kscan_init_struct.scantimerEn = kscan_init_struct.scanInterval ? ENABLE : DISABLE;
+    kscan_init_struct.detecttimerEn = kscan_init_struct.releasecnt ? ENABLE : DISABLE;
 
     kscan_init_struct.scanmode = KeyScan_Auto_Scan_Mode;
     kscan_init_struct.keylimit = 26;
@@ -341,9 +339,9 @@ static int kscan_rtl87x2g_init(const struct device *dev)
         .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index), \
         .row_size = DT_INST_PROP(index, row_size), \
         .col_size = DT_INST_PROP(index, col_size), \
-        .deb_ms = DT_INST_PROP_OR(index, debounce_time_ms, 0), \
-        .scan_ms = DT_INST_PROP_OR(index, scan_time_ms, 0), \
-        .rel_ms = DT_INST_PROP_OR(index, release_time_ms, 0), \
+        .deb_us = DT_INST_PROP_OR(index, debounce_time_us, 0), \
+        .scan_us = DT_INST_PROP_OR(index, scan_time_us, 0), \
+        .rel_us = DT_INST_PROP_OR(index, release_time_us, 0), \
         .scan_debounce_cnt = DT_INST_PROP(index, scan_debounce_cnt), \
         RTL87X2G_KSCAN_IRQ_HANDLER_FUNC(index) \
     }; \
