@@ -300,9 +300,9 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     KeyScan_Init(keyscan, &kscan_init_struct);
     
     /* set pre guard time */
-    KEYSCAN_CLK_DIV_TypeDef keyscan_0x00 = {.d32 = KeyScan->KEYSCAN_CLK_DIV};
+    KEYSCAN_CLK_DIV_TypeDef keyscan_0x00 = {.d32 = keyscan->KEYSCAN_CLK_DIV};
     keyscan_0x00.b.keyscan_gt_pre_sel = 6;
-    KeyScan->KEYSCAN_CLK_DIV = keyscan_0x00.d32;
+    keyscan->KEYSCAN_CLK_DIV = keyscan_0x00.d32;
 
     KeyScan_INTConfig(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
     KeyScan_INTConfig(keyscan, KEYSCAN_INT_ALL_RELEASE, ENABLE);
