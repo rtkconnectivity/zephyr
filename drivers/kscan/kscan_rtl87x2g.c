@@ -280,6 +280,9 @@ static int kscan_rtl87x2g_init(const struct device *dev)
     KEYSCAN_InitTypeDef kscan_init_struct;
     KeyScan_StructInit(&kscan_init_struct);
 
+    kscan_init_struct.rowSize = config->row_size;
+    kscan_init_struct.colSize = config->col_size;
+
     /* default scan clk is 2.5 MHz */
     kscan_init_struct.clockdiv = 1;
 
