@@ -641,7 +641,7 @@ static inline void uart_rtl87x2g_dma_tx_enable(const struct device *dev)
 #endif
     const struct uart_rtl87x2g_config *config = dev->config;
     UART_TypeDef *uart = config->uart;
-    UART_MISCR_t uart_0x28 = {.d32 = uart->UART_MISCR};
+    UART_MISCR_TypeDef uart_0x28 = {.d32 = uart->UART_MISCR};
     uart_0x28.b.txdma_en = ENABLE;
     uart_0x28.b.txdma_burstsize = 15;
     uart->UART_MISCR = uart_0x28.d32;
@@ -654,7 +654,7 @@ static inline void uart_rtl87x2g_dma_tx_disable(const struct device *dev)
 #endif
     const struct uart_rtl87x2g_config *config = dev->config;
     UART_TypeDef *uart = config->uart;
-    UART_MISCR_t uart_0x28 = {.d32 = uart->UART_MISCR};
+    UART_MISCR_TypeDef uart_0x28 = {.d32 = uart->UART_MISCR};
     uart_0x28.b.txdma_en = DISABLE;
     uart->UART_MISCR = uart_0x28.d32;
 }
@@ -667,7 +667,7 @@ static inline void uart_rtl87x2g_dma_rx_enable(const struct device *dev)
     const struct uart_rtl87x2g_config *config = dev->config;
     struct uart_rtl87x2g_data *data = dev->data;
     UART_TypeDef *uart = config->uart;
-    UART_MISCR_t uart_0x28 = {.d32 = uart->UART_MISCR};
+    UART_MISCR_TypeDef uart_0x28 = {.d32 = uart->UART_MISCR};
     uart_0x28.b.rxdma_en = ENABLE;
     uart_0x28.b.rxdma_burstsize = 1;
     uart->UART_MISCR = uart_0x28.d32;
@@ -683,7 +683,7 @@ static inline void uart_rtl87x2g_dma_rx_disable(const struct device *dev)
     const struct uart_rtl87x2g_config *config = dev->config;
     struct uart_rtl87x2g_data *data = dev->data;
     UART_TypeDef *uart = config->uart;
-    UART_MISCR_t uart_0x28 = {.d32 = uart->UART_MISCR};
+    UART_MISCR_TypeDef uart_0x28 = {.d32 = uart->UART_MISCR};
     uart_0x28.b.rxdma_en = DISABLE;
     uart_0x28.b.rxdma_burstsize = 1;
     uart->UART_MISCR = uart_0x28.d32;
