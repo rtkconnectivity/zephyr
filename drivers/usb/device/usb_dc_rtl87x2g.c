@@ -1509,6 +1509,11 @@ int usb_dc_detach(void)
 
     usb_dw_ctrl.attached = 0U;
 
+    if (usb_dw_ctrl.status_cb)
+    {
+        usb_dw_ctrl.status_cb(USB_DC_DISCONNECTED, NULL);
+    }
+
     return 0;
 }
 
