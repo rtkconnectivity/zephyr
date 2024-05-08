@@ -64,16 +64,16 @@ void idle(void *unused1, void *unused2, void *unused3)
 		 * unmasked.  It does not take a spinlock or other
 		 * higher level construct.
 		 */
-		(void) arch_irq_lock();
+		// (void) arch_irq_lock();
+
+    	extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
+		log_buffer_trigger_schedule_in_km4_idle_task();
 
 		extern void (*thermal_meter_read)(void);
 		thermal_meter_read();
 
-		extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
-		log_buffer_trigger_schedule_in_km4_idle_task();
-
 #ifdef CONFIG_PM
-        arch_irq_unlock(0);// unlock irq to make sure realtek pmu flow work normally.
+        // arch_irq_unlock(0);// unlock irq to make sure realtek pmu flow work normally.
 
 		extern void (*power_manager_slave_inact_action_handler)(void);
 		power_manager_slave_inact_action_handler();
