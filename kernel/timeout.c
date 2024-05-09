@@ -338,7 +338,7 @@ void z_vrfy_sys_clock_tick_set(uint64_t tick)
 }
 #endif
 
-/* to realize the exclude timer mechanism of realtek power manager, we have to export these two APIs */
+/* to realize the exclude timer mechanism of realtek power manager, we have to export these three APIs */
 struct _timeout *get_first_timeout(void)
 {
     sys_dnode_t *t = sys_dlist_peek_head(&timeout_list);
@@ -351,4 +351,55 @@ struct _timeout *get_next_timeout(struct _timeout *t)
     sys_dnode_t *n = sys_dlist_peek_next(&timeout_list, &t->node);
 
     return n == NULL ? NULL : CONTAINER_OF(n, struct _timeout, node);
+}
+
+void sys_clock_announce_bypass_timeout_function(int32_t ticks)
+{
+	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
+
+	/* We release the lock around the callbacks below, so on SMP
+	 * systems someone might be already running the loop.  Don't
+	 * race (which will cause paralllel execution of "sequential"
+	 * timeouts and confuse apps), just increment the tick count
+	 * and return.
+	 */
+	if (IS_ENABLED(CONFIG_SMP) && (announce_remaining != 0)) {
+		announce_remaining += ticks;
+		k_spin_unlock(&timeout_lock, key);
+		return;
+	}
+
+	announce_remaining = ticks;
+
+	struct _timeout *t;
+
+	for (t = first();
+	     (t != NULL) && (t->dticks <= announce_remaining);
+	     t = next(t)) {
+		int dt = t->dticks;
+
+		curr_tick += dt;
+		t->dticks = 0;
+		// remove_timeout(t);
+
+		k_spin_unlock(&timeout_lock, key);
+		// t->fn(t);
+		key = k_spin_lock(&timeout_lock);
+		announce_remaining -= dt;
+	}
+
+	if (t != NULL) {
+		t->dticks -= announce_remaining;
+	}
+
+	curr_tick += announce_remaining;
+	announce_remaining = 0;
+
+	sys_clock_set_timeout(next_timeout(), false);
+
+	k_spin_unlock(&timeout_lock, key);
+
+#ifdef CONFIG_TIMESLICING
+	z_time_slice();
+#endif
 }
