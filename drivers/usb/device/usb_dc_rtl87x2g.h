@@ -66,7 +66,7 @@ extern "C" {
 #define USB_DW_GINTSTS_SOFINTR_POS          (3)
 #define USB_DW_GINTSTS_SOFINTR_MASK         (1 << USB_DW_GINTSTS_SOFINTR_POS)
 
-#define USB_DW_GINTMSK_NPTXEMPTY            BIT(4)
+#define USB_DW_GINTMSK_NPTXEMPTY            BIT(5)
 
 #define USB_DW_DCFG_DESCDMA_POS             (23)
 #define USB_DW_DCFG_DESCDMA_MASK            (1 << USB_DW_DCFG_DESCDMA_POS)
