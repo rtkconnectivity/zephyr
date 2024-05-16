@@ -41,6 +41,15 @@ struct gpio_rtl87x2g_config
     struct gpio_rtl87x2g_irq_info *irq_info;
 };
 
+#ifdef CONFIG_PM_DEVICE
+struct pm_pad_node
+{
+    uint8_t pad_num;
+    uint8_t gpio_num;
+    struct pm_pad_node* next;
+};
+#endif
+
 /**
  * @brief driver data
  */
@@ -52,6 +61,8 @@ struct gpio_rtl87x2g_data
     uint8_t pin_debounce_ms[32];
 #ifdef CONFIG_PM_DEVICE
     GPIOStoreReg_Typedef store_buf;
+    struct pm_pad_node* pm_pad_node_head;
+    struct k_heap *heap;
 #endif
 };
 
