@@ -467,6 +467,12 @@
 			num-bidir-endpoints = <0>;
 			status = "disabled";
 		};
+
+		ppt: ppt {
+			compatible = "realtek,rtl87x2g-ppt";
+			enh-timers = <&timer8 &timer9>;
+			status = "disabled";
+		};
 	};
 
 };

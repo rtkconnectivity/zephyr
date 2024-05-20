@@ -1,0 +1,9 @@
+# PPT configuration options
+
+# Copyright (c) 2019 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig PPT
+	bool "PPT drivers"
+	help
+	  Include PPT drivers in system config.
