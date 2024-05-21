@@ -7,7 +7,7 @@ config SPI_RTL87X2G
 	bool "RTL87X2G SPI driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_SPI_ENABLED
-	select REALTEK_SPI
+	select USE_HAL_REALTEK_SPI
 	help
 	  Enables the RTL87X2G spi driver.
 
@@ -24,7 +24,7 @@ config SPI_RTL87X2G_DMA
 	bool "RTL87X2G MCU SPI DMA Support"
 	select DMA
 	select SPI_RTL87X2G_INTERRUPT
-	select REALTEK_DMA
+	select USE_HAL_REALTEK_DMA
 	help
 	  Use the DMA for SPI transfer
 	  that enable dma channels in their device tree node.

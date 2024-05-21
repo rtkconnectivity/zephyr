@@ -7,7 +7,6 @@ config DMA_RTL87X2G
 	bool "RTL87X2G MCU DMA driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_DMA_ENABLED
-	select USE_RTL87X2G_DMA
-	select REALTEK_DMA
+	select USE_HAL_REALTEK_DMA
 	help
 	  Enable the RTL87X2G dma driver.

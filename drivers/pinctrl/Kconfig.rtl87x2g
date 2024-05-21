@@ -7,5 +7,6 @@ config PINCTRL_RTL87X2G
 	bool "RTL87X2G pin controller driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_PINCTRL_ENABLED
+	select USE_HAL_REALTEK_PINMUX
 	help
 	  Enable the RTL87X2G pin controller driver.
