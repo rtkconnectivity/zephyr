@@ -45,6 +45,7 @@ static int aon_wdt_rtl87x2g_install_timeout(const struct device *dev,
 
     if (config->window.min != 0U || config->window.max == 0U)
     {
+        AON_WDT_Disable(AON_WDT);
         return -EINVAL;
     }
 

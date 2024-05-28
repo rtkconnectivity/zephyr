@@ -88,7 +88,7 @@
 		aonwdt: watchdog@40001b60 {
 			compatible = "realtek,rtl87x2g-aon-wdt";
 			reg = <0x40001B60 0x10>;
-			status = "disabled";
+			status = "okay";
 		};
 		corewdt: watchdog@40006000 {
 			compatible = "realtek,rtl87x2g-core-wdt";

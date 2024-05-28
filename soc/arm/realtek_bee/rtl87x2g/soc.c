@@ -22,6 +22,10 @@
 #define LOG_LEVEL CONFIG_SOC_LOG_LEVEL
 LOG_MODULE_REGISTER(soc);
 
+extern void _isr_wrapper(void);
+extern void z_arm_nmi(void);
+extern void z_arm_svc(void);
+
 extern void os_zephyr_patch_init(void);
 extern void BTMAC_Handler(void);
 extern void GDMA0_Channel9_Handler(void);
@@ -43,7 +47,7 @@ void rtk_rom_irq_connect(void)
     IRQ_CONNECT(WDT_IRQn, 2, HardFault_Handler_Rom, NULL, 0);
     IRQ_CONNECT(RXI300_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
     IRQ_CONNECT(RXI300_SEC_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
-    IRQ_CONNECT(GDMA0_Channel9_IRQn, 6, GDMA0_Channel9_Handler, NULL, 0);
+    IRQ_CONNECT(GDMA0_Channel9_IRQn, 4, GDMA0_Channel9_Handler, NULL, 0);
     IRQ_CONNECT(PF_RTC_IRQn, 0, PF_RTC_Handler, NULL, 0);
     IRQ_CONNECT(BTMAC_IRQn, 1, BTMAC_Handler, NULL, 0);
     IRQ_CONNECT(BTMAC_WRAP_AROUND_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
@@ -78,6 +82,7 @@ static int rtk_platform_init(void)
     os_pm_init();
 
     secure_os_func_ptr_init();
+    RamVectorTableUpdate(SVC_VECTORn, (IRQ_Fun)z_arm_svc);
 
     secure_platform_func_ptr_init();
 
@@ -88,7 +93,7 @@ static int rtk_platform_init(void)
     log_module_trace_init(NULL);
     log_buffer_init();
     log_gdma_init();
-    RamVectorTableUpdate(GDMA0_Channel9_VECTORn, (IRQ_Fun)_isr_wrapper);
+    //RamVectorTableUpdate(GDMA0_Channel9_VECTORn, (IRQ_Fun)_isr_wrapper);
 
     si_flow_data_init();
 
@@ -155,21 +160,21 @@ static int rtk_platform_init(void)
 
 static int rtk_task_init(void)
 {
-    extern const T_ROM_HEADER_FORMAT nonsecure_rom_header;
-    T_ROM_HEADER_FORMAT *stack_header = (T_ROM_HEADER_FORMAT *)STACK_ROM_ADDRESS;
+    // extern const T_ROM_HEADER_FORMAT nonsecure_rom_header;
+    // T_ROM_HEADER_FORMAT *stack_header = (T_ROM_HEADER_FORMAT *)STACK_ROM_ADDRESS;
 
-    if (memcmp(stack_header->uuid, nonsecure_rom_header.uuid, UUID_SIZE) == 0)
-    {
-        BOOL_PATCH_FUNC lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
-        DBG_DIRECT("LOAD STACK ROM success!");
-        lowerstack_entry();
-        RamVectorTableUpdate(BTMAC_VECTORn, (IRQ_Fun)_isr_wrapper);
-        RamVectorTableUpdate(BTMAC_WRAP_AROUND_VECTORn, (IRQ_Fun)_isr_wrapper);
-    }
-    else
-    {
-        DBG_DIRECT("LOAD STACK ROM fail!");
-    }
+    // if (memcmp(stack_header->uuid, nonsecure_rom_header.uuid, UUID_SIZE) == 0)
+    // {
+    //     BOOL_PATCH_FUNC lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
+    //     DBG_DIRECT("LOAD STACK ROM success!");
+    //     lowerstack_entry();
+    //     RamVectorTableUpdate(BTMAC_VECTORn, (IRQ_Fun)_isr_wrapper);
+    //     RamVectorTableUpdate(BTMAC_WRAP_AROUND_VECTORn, (IRQ_Fun)_isr_wrapper);
+    // }
+    // else
+    // {
+    //     DBG_DIRECT("LOAD STACK ROM fail!");
+    // }
 
     AON_REG_WRITE_BITFIELD(AON_NS_REG0X_FW_GENERAL_NS, km4_pon_boot_done, 1);
 

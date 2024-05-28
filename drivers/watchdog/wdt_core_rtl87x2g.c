@@ -87,12 +87,12 @@ static int core_wdt_rtl87x2g_init(const struct device *dev)
     int ret = 0;
 
 #if !defined(CONFIG_WDT_DISABLE_AT_BOOT)
-    const struct wdt_timeout_cfg config =
-    {
-        .window.max = CORE_WDT_INITIAL_TIMEOUT
-    };
+    // const struct wdt_timeout_cfg config =
+    // {
+    //     .window.max = CORE_WDT_INITIAL_TIMEOUT
+    // };
 
-    ret = core_wdt_rtl87x2g_install_timeout(dev, &config);
+    // ret = core_wdt_rtl87x2g_install_timeout(dev, &config);
 #endif
 
     return ret;

@@ -9,7 +9,7 @@ tests:
       not (CONFIG_WDT_SAM or dt_compat_enabled("st,stm32-window-watchdog")
        or dt_compat_enabled("st,stm32-watchdog") or CONFIG_SOC_FAMILY_LPC or
        CONFIG_SOC_SERIES_IMX_RT6XX or CONFIG_SOC_SERIES_IMX_RT5XX or
-       CONFIG_SOC_FAMILY_GD32 or SOC_SERIES_GD32VF103)
+       CONFIG_SOC_FAMILY_GD32 or SOC_SERIES_GD32VF103 or CONFIG_SOC_SERIES_RTL87X2G)
     platform_exclude:
       - mec15xxevb_assy6853
       - s32z270dc2_rtu0_r52
@@ -122,3 +122,17 @@ tests:
     filter: dt_compat_enabled("ti,tps382x")
     platform_allow: mimxrt1050_evk
     extra_args: DTC_OVERLAY_FILE="boards/mimxrt1050_evk_ti_tps382x.overlay"
+  # drivers.watchdog.rtl87x2g_corewdt:
+  #   filter: dt_compat_enabled("realtek,rtl87x2g-core-wdt")
+  #   extra_args: DTC_OVERLAY_FILE="boards/rtl87x2g_core_wdt.overlay"
+  #   platform_allow:
+  #     - rtl8762gn_evb
+  #   integration_platforms:
+  #     - rtl8762gn_evb
+  drivers.watchdog.rtl87x2g_aonwdt:
+    filter: dt_compat_enabled("realtek,rtl87x2g-aon-wdt")
+    extra_args: DTC_OVERLAY_FILE="boards/rtl87x2g_aon_wdt.overlay"
+    platform_allow:
+      - rtl8762gn_evb
+    integration_platforms:
+      - rtl8762gn_evb
