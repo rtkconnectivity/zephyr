@@ -18,7 +18,7 @@
 	status = "okay";
 	pinctrl-0 = <&spi0_default>;
 	pinctrl-names = "default";
-	cs-gpios = <&gpioa 4 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpiob 8 GPIO_ACTIVE_LOW>;
 /* dma is optional
 	dmas = <&dma0 6 17 0xa>, <&dma0 5 16 0x10021>;
 	dma-names = "rx", "tx";
@@ -44,4 +44,3 @@
 		};
 	};
 };
-
