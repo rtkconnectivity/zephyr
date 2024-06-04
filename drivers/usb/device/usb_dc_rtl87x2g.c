@@ -97,6 +97,8 @@ struct usb_ep_ctrl_prv
     uint16_t mps;         /* Max ep pkt size */
     usb_dc_ep_callback cb;/* Endpoint callback function */
     uint32_t data_len;
+    uint32_t rsvd_tx_len;
+    const uint8_t *rsvd_tx_buf;
 };
 
 static void usb_dw_isr_handler(const void *unused);
@@ -119,7 +121,15 @@ struct usb_dw_ctrl_prv
     uint8_t attached;
 };
 
-static const uint16_t kaTxFifoBytesTable[] = {32 * 4, 512 * 4, 256 * 4, 512 * 4, 96 * 4, 64 * 4};
+static const uint16_t kaTxFifoBytesTable[] = {
+    CONFIG_USB_DC_RTL87X2G_EP0_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP1_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP2_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP3_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP4_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP5_TX_FIFO_SIZE
+};
+
 static  uint32_t kaTxFifoAddrTable[6];
 
 #define TX_FIFO_SIZE(epidx)  (kaTxFifoBytesTable[epidx] / 4)
@@ -828,6 +838,7 @@ static int usb_dw_tx(uint8_t ep, const uint8_t *const data,
     uint32_t ep_mps = usb_dw_ctrl.in_ep_ctrl[ep_idx].mps;
     unsigned int key;
     uint32_t i;
+    uint32_t tx_data_len = data_len;
 
 #if DBG_DIRECT_SHOW
     DBG_DIRECT("base->in_ep_reg[%d].diepctl=0x%x", ep_idx, base->in_ep_reg[ep_idx].diepctl);
@@ -871,12 +882,8 @@ static int usb_dw_tx(uint8_t ep, const uint8_t *const data,
         /* Get max packet size and packet count for ep */
         if (ep_idx == USB_DW_IN_EP_0)
         {
-            max_pkt_cnt =
-                USB_DW_DIEPTSIZ0_PKT_CNT_MASK >>
-                USB_DW_DEPTSIZ_PKT_CNT_OFFSET;
-            max_xfer_size =
-                USB_DW_DEPTSIZ0_XFER_SIZE_MASK >>
-                USB_DW_DEPTSIZ_XFER_SIZE_OFFSET;
+            max_pkt_cnt = 1;
+            max_xfer_size = ep_mps;
         }
         else
         {
@@ -916,6 +923,17 @@ static int usb_dw_tx(uint8_t ep, const uint8_t *const data,
     {
         /* Zero length packet */
         pkt_cnt = 1U;
+    }
+
+    if (tx_data_len > data_len)
+    {
+        usb_dw_ctrl.in_ep_ctrl[ep_idx].rsvd_tx_len = tx_data_len - data_len;
+        usb_dw_ctrl.in_ep_ctrl[ep_idx].rsvd_tx_buf = data + data_len;
+    }
+    else
+    {
+        usb_dw_ctrl.in_ep_ctrl[ep_idx].rsvd_tx_len = 0;
+        usb_dw_ctrl.in_ep_ctrl[ep_idx].rsvd_tx_buf = NULL;
     }
 
     /* Set number of packets and transfer size */
@@ -1195,10 +1213,9 @@ static inline void usb_dw_int_iep_handler(void)
             if (ep_cb &&
                 (ep_int_status & USB_DW_DIEPINT_XFER_COMPL))
             {
-
                 /* Call the registered callback */
                 ep_cb(USB_EP_GET_ADDR(ep_idx, USB_EP_DIR_IN),
-                      USB_DC_EP_DATA_IN);
+                    USB_DC_EP_DATA_IN);
             }
         }
     }
@@ -1450,9 +1467,7 @@ int usb_dc_attach(void)
 
     ret = usb_dw_init();
 
-#if CONFIG_USB_DC_RTL87X2G_DMA
     usb_dw_resize_fifo();
-#endif
 
     if (ret)
     {
