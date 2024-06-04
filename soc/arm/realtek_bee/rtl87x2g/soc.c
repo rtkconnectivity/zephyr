@@ -18,6 +18,10 @@
 #include "utils.h"
 #include "aon_reg.h"
 
+extern void _isr_wrapper(void);
+extern void z_arm_nmi(void);
+extern void z_arm_svc(void);
+
 extern void os_zephyr_patch_init(void);
 extern void BTMAC_Handler(void);
 extern void GDMA0_Channel9_Handler(void);
@@ -88,7 +92,8 @@ static int rtk_platform_init(void)
 
     //os_pm_init();//power manager porting has not been realized yet.
 
-    secure_os_func_ptr_init();
+    secure_os_func_ptr_init();// This function will update svc vector. Ref to sys patch.
+    RamVectorTableUpdate(SVC_VECTORn, (IRQ_Fun)z_arm_svc);
 
     secure_platform_func_ptr_init();
 
