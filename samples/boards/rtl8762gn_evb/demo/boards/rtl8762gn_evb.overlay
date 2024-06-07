@@ -1,0 +1,136 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+ &adc {
+    pinctrl-0 = <&adc_default>;
+    pinctrl-names = "default";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    status = "okay";
+    channel@5 {
+        reg = <5>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+};
+
+&pinctrl {
+    adc_default: adc_default {
+        group1 {
+            psels = <RTL87X2G_PSEL(SW_MODE, P2_5,DIR_IN, DRV_LOW, PULL_DOWN)>;
+        };
+    };
+};
+ 
+&timer2 {
+    status = "okay";
+    prescaler = <1>;
+};
+
+&timer10 {
+    status = "okay";
+    prescaler = <1>;
+};
+
+&rtc {
+    status = "okay";
+    prescaler = <1>;
+};
+
+
+&gpioa {
+    status = "okay";
+};
+
+&gpiob {
+    status = "okay";
+};
+
+/ {
+    resources {
+        compatible = "gpio-output";
+        out-gpios =
+        <&gpioa 0 GPIO_ACTIVE_HIGH>;
+
+        in-gpios =
+        <&gpiob 1 GPIO_ACTIVE_HIGH>;
+    };
+};
+
+&i2c0 {
+    pinctrl-0 = <&i2c0_default>;
+    pinctrl-names = "default";
+    status = "okay";
+};
+
+&pinctrl {
+    i2c0_default: i2c0_default {
+        group1 {
+            psels = <RTL87X2G_PSEL(I2C0_CLK, P1_5, DIR_OUT, DRV_HIGH, PULL_UP)>,
+             <RTL87X2G_PSEL(I2C0_DAT, P1_6, DIR_OUT, DRV_HIGH, PULL_UP)>;
+        };
+    };
+};
+
+&timer3 {
+   status = "okay";
+   prescaler = <1>;
+    pwm3: pwm3 {
+        status = "okay";
+        pinctrl-0 = <&pwm3_default>;
+        pinctrl-names = "default";
+    };
+};
+ 
+&pinctrl {
+    pwm3_default: pwm3_default {
+        group1 {
+            psels = <RTL87X2G_PSEL(TIMER_PWM3, P0_1, DIR_OUT, DRV_LOW, PULL_DOWN)>;
+        };
+    };
+
+};
+ 
+&timer8 {
+    status = "okay";
+    prescaler = <1>;
+    pwm8: pwm8 {
+        status = "okay";
+        pinctrl-0 = <&pwm8_default>;
+        pinctrl-names = "default";
+    };
+};
+
+&pinctrl {
+    pwm8_default: pwm8_default {
+        group1 {
+            psels = <RTL87X2G_PSEL(ENPWM0_P, P0_2, DIR_OUT, DRV_LOW, PULL_DOWN)>;
+        };
+    };
+};
+
+&spi0 {
+    status = "okay";
+    pinctrl-0 = <&spi0_default>;
+    pinctrl-names = "default";
+    cs-gpios = <&gpiob 8 GPIO_ACTIVE_LOW>;
+    slow@0 {
+        compatible = "test-spi-loopback-slow";
+        reg = <0>;
+        spi-max-frequency = <500000>;
+    };
+};
+ 
+&pinctrl {
+    spi0_default: spi0_default {
+        group1 {
+            psels = <RTL87X2G_PSEL(SPI0_CLK_MASTER, P4_0, DIR_OUT, DRV_HIGH, PULL_UP)>,
+            <RTL87X2G_PSEL(SPI0_MI_MASTER, P4_1, DIR_OUT, DRV_HIGH, PULL_UP)>,
+            <RTL87X2G_PSEL(SPI0_MO_MASTER, P4_2, DIR_OUT, DRV_HIGH, PULL_UP)>;
+        };
+    };
+};
+
