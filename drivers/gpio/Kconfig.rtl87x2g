@@ -3,10 +3,38 @@
 # Copyright(c) 2020, Realtek Semiconductor Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-config GPIO_RTL87X2G
+menuconfig GPIO_RTL87X2G
 	bool "RTL87X2G MCU GPIO driver"
 	default y
 	select USE_HAL_REALTEK_GPIO
 	depends on DT_HAS_REALTEK_RTL87X2G_GPIO_ENABLED
 	help
 	  Enable the RTL87X2G gpio driver.
+
+if GPIO_RTL87X2G && (SOC_RTL8762GTU || SOC_RTL8762GTH)
+
+config RTL87X2G_USE_P6_2_AS_GPIOB21
+	bool "Use P6_2 as GPIOB_21 on RTL8762GTU or RTL8762GTH"
+	default n
+	help
+	  If true, use P6_2 as GPIOB_21 on RTL8762GTU or RTL8762GTH, else use P9_0.
+
+config RTL87X2G_USE_P6_3_AS_GPIOB22
+	bool "Use P6_3 as GPIOB_22 on RTL8762GTU or RTL8762GTH"
+	default n
+	help
+	  If true, use P6_3 as GPIOB_22 on RTL8762GTU or RTL8762GTH, else use P9_1.
+
+config RTL87X2G_USE_P6_5_AS_GPIOB24
+	bool "Use P6_5 as GPIOB_24 on RTL8762GTU or RTL8762GTH"
+	default n
+	help
+	  If true, use P6_5 as GPIOB_24 on RTL8762GTU or RTL8762GTH, else use P9_3.
+
+config RTL87X2G_USE_P6_7_AS_GPIOB26
+	bool "Use P6_7 as GPIOB_26 on RTL8762GTU or RTL8762GTH"
+	default n
+	help
+	  If true, use P6_7 as GPIOB_26 on RTL8762GTU or RTL8762GTH, else use P9_5.
+
+endif # GPIO_RTL87X2G && (SOC_RTL8762GTU || SOC_RTL8762GTH)

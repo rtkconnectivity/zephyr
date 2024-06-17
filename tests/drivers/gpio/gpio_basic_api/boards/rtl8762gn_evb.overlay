@@ -10,6 +10,10 @@
     status = "okay";
 };
 
+&gpiob {
+    status = "okay";
+};
+
 / {
     resources {
         compatible = "test-gpio-basic-api";

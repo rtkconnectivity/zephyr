@@ -18,51 +18,51 @@
 
 /* GPIO buses definitions */
 
-struct gpio_rtl87x2g_irq_info
-{
-    const struct device *irq_dev;
-    uint8_t num_irq;
-    struct gpio_irq_info
-    {
-        uint32_t irq;
-        uint32_t priority;
-    } gpio_irqs[];
+struct gpio_rtl87x2g_irq_info {
+	const struct device *irq_dev;
+	uint8_t num_irq;
+	struct gpio_irq_info {
+		uint32_t irq;
+		uint32_t priority;
+	} gpio_irqs[];
 };
 
 /**
  * @brief configuration of GPIO device
  */
-struct gpio_rtl87x2g_config
-{
-    struct gpio_driver_config common;
-    uint16_t clkid;
-    uint8_t port_num;
-    GPIO_TypeDef *port_base;
-    struct gpio_rtl87x2g_irq_info *irq_info;
+struct gpio_rtl87x2g_config {
+	struct gpio_driver_config common;
+	uint16_t clkid;
+	uint8_t port_num;
+	GPIO_TypeDef *port_base;
+	struct gpio_rtl87x2g_irq_info *irq_info;
 };
 
 #ifdef CONFIG_PM_DEVICE
-struct pm_pad_node
-{
-    uint8_t pad_num;
-    uint8_t gpio_num;
-    struct pm_pad_node* next;
+struct pm_pad_node {
+	uint8_t pad_num;
+	uint8_t next_gpio_num;
 };
+
+struct pm_pad_node_list {
+	struct pm_pad_node *output_head;
+	struct pm_pad_node *wakeup_head;
+	struct pm_pad_node *array;
+};
+
 #endif
 
 /**
  * @brief driver data
  */
-struct gpio_rtl87x2g_data
-{
-    struct gpio_driver_data common;
-    const struct device *dev;
-    sys_slist_t cb;
-    uint8_t pin_debounce_ms[32];
+struct gpio_rtl87x2g_data {
+	struct gpio_driver_data common;
+	const struct device *dev;
+	sys_slist_t cb;
+	uint8_t pin_debounce_ms[32];
 #ifdef CONFIG_PM_DEVICE
-    GPIOStoreReg_Typedef store_buf;
-    struct pm_pad_node* pm_pad_node_head;
-    struct k_heap *heap;
+	GPIOStoreReg_Typedef store_buf;
+	struct pm_pad_node_list list;
 #endif
 };
 
