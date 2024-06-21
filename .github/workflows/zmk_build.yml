@@ -1,0 +1,117 @@
+name: Build ZMK
+run-name: Build ZMK
+on: 
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
+jobs:
+  Build-ZMK:
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
+      options: '--entrypoint /bin/bash'
+
+    steps:
+      - name: set_env
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "pull_request_target" ];then
+            echo "This is pull request"
+            echo "EVENT_TRIGER_REF=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+          fi
+
+          if [ "${{ github.event_name }}" = "push" ];then
+            echo "This is push"
+            echo "EVENT_TRIGER_REF=${{ github.ref }}" >> $GITHUB_ENV
+          fi
+
+      - name: print_env
+        run: |
+          echo "sdk-version -> ${ZSDK_VERSION}"
+          echo "event_triger_ref: ${EVENT_TRIGER_REF}"
+          echo "${{ github.event.pull_request.head.sha || github.ref }}"
+      
+      - name: setup sdk
+        shell: bash
+        run: |
+            echo "zephyr sdk -> zephyr-sdk-${ZSDK_VERSION}"
+            ls /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}
+            /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}/setup.sh -c
+      
+      - name: checkout manifest
+        uses: actions/checkout@v4
+        with:
+            repository: "rtkconnectivity/zmk.git"
+            path: "zmk"
+            ref: "zmk_rtk"
+            fetch-depth: 0
+            persist-credentials: false
+      
+      - name: west update
+        shell: bash
+        run: |
+            cd zmk
+            west init -l app
+            west update
+      
+      - name: check hal_realtek path and manifest_rev
+        shell: bash
+        run: |
+            echo "GITHUB_REPOSITORY -> $GITHUB_REPOSITORY"
+            cd zmk
+            readarray -t project_list <<< "$(west list)"
+
+            EVENT_PROJECT_PATH=""
+            for i in "${project_list[@]}"
+              do
+                  project_detail=($i)
+                  project_url=`echo ${project_detail[3]}`
+                  repository_name=`echo "$GITHUB_REPOSITORY" | awk -F/ '{print $NF}'`
+                  if [[ $project_url == *"${repository_name}" ]]
+                  then
+                      EVENT_PROJECT_PATH=`echo ${project_detail[1]}`
+                      echo "EVENT_PROJECT_PATH=$EVENT_PROJECT_PATH" >> $GITHUB_ENV
+                      echo "EVENT_PROJECT_PATH -> $EVENT_PROJECT_PATH"
+                      echo "GITHUB_ENV -> $GITHUB_ENV"
+                      break
+                  fi
+              done
+
+              if [ -z "$EVENT_PROJECT_PATH" ]
+              then 
+                  echo "logic error, can not find local path for ${GITHB_REPOSITY}"
+                  exit 1
+              fi
+
+              cd $EVENT_PROJECT_PATH
+              git remote add origin ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}
+              echo "need to checkout ${GITHUB_REPOSITORY} in zmk/$EVENT_PROJECT_PATH"
+              echo "${manifest-rev}"
+              echo "manifest_rev=$( git rev-parse manifest-rev )" >> $GITHUB_ENV
+      
+      - name: checkout event triggered ref
+        uses: actions/checkout@v4
+        with:
+            repository: ${{ github.repository }}
+            path: ${{ format('{0}/{1}','zmk',env.EVENT_PROJECT_PATH) }}
+            ref: ${{ github.event.pull_request.head.sha || github.ref }}
+            fetch-depth: 0
+            persist-credentials: false
+            clean: false
+
+
+      - name: after check temp module
+        shell: bash
+        run: |
+          cd zmk/$EVENT_PROJECT_PATH
+          git log
+          echo "manifest_rev -> ${manifest_rev}"
+          git branch manifest-rev $manifest_rev
+
+
+      - name: do build
+        shell: bash
+        run: |
+          cd zmk/app
+          west build -p -b rtl8762gn_evb -- -DSHIELD=rtk_keyboard
