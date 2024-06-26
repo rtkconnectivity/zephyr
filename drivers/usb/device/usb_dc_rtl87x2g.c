@@ -27,6 +27,10 @@
 
 #include "usb_dc_rtl87x2g.h"
 
+#ifdef CONFIG_PM
+#include "power_manager_unit_platform.h"
+#endif
+
 #include "trace.h"
 
 #include <zephyr/logging/log.h>
@@ -97,6 +101,8 @@ struct usb_ep_ctrl_prv
     uint16_t mps;         /* Max ep pkt size */
     usb_dc_ep_callback cb;/* Endpoint callback function */
     uint32_t data_len;
+    uint32_t rsvd_tx_len;
+    const uint8_t *rsvd_tx_buf;
 };
 
 static void usb_dw_isr_handler(const void *unused);
@@ -114,12 +120,21 @@ struct usb_dw_ctrl_prv
     uint8_t *ep_rx_buf[USB_DW_OUT_EP_NUM];
 #endif
     usb_dc_status_callback status_cb;
+    enum usb_dc_status_code current_status;
     struct usb_ep_ctrl_prv in_ep_ctrl[USB_DW_IN_EP_NUM];
     struct usb_ep_ctrl_prv out_ep_ctrl[USB_DW_OUT_EP_NUM];
     uint8_t attached;
 };
 
-static const uint16_t kaTxFifoBytesTable[] = {32 * 4, 512 * 4, 256 * 4, 512 * 4, 96 * 4, 64 * 4};
+static const uint16_t kaTxFifoBytesTable[] = {
+    CONFIG_USB_DC_RTL87X2G_EP0_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP1_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP2_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP3_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP4_TX_FIFO_SIZE,
+    CONFIG_USB_DC_RTL87X2G_EP5_TX_FIFO_SIZE
+};
+
 static  uint32_t kaTxFifoAddrTable[6];
 
 #define TX_FIFO_SIZE(epidx)  (kaTxFifoBytesTable[epidx] / 4)
@@ -508,123 +523,15 @@ static void usb_dw_resize_fifo(void)
     }
 }
 
-static int usb_dw_init(void)
+static int usb_rtk_init(void)
 {
 #if CONFIG_USB_DC_RTL87X2G_DMA
-    struct usb_dw_reg *const base = usb_dw_cfg.base;
-    uint8_t ep;
-
-    /* Init Controller */
-    /* step 2 */
-    base->gahbcfg |= USB_DW_GAHBCFG_DMA_EN;
-    base->gahbcfg &= ~USB_DW_GAHBCFG_HBSTLEN_MASK;
-    base->gahbcfg |= DWC_GAHBCFG_INT_DMA_BURST_INCR << USB_DW_GAHBCFG_HBSTLEN_POS;
-    base->gahbcfg |= USB_DW_GAHBCFG_GLB_INTR_MASK;
-
-    /* step 3 */
-    base->gintmsk &= ~USB_DW_GINTMSK_RXFLVMSK_MASK;
-
-    /* step 5 */
-    base->gusbcfg &= ~USB_DW_GUSBCFG_ULPI_UTMI_SEL_MASK;
-    base->gusbcfg = (base->gusbcfg & ~USB_DW_GUSBCFG_PHY_IF_MASK) |
-                    USB_DW_GUSBCFG_PHY_IF_16_BIT;
-    base->gusbcfg = (base->gusbcfg & ~USB_DW_GUSBCFG_TOUTCAL_MASK) |
-                    USB_DW_GUSBCFG_TOUTCAL_ZERO;
-    base->gusbcfg = (base->gusbcfg & ~USB_DW_GUSBCFG_USBTRDTIM_MASK) |
-                    USB_DW_GUSBCFG_USBTRDTIM_16BIT;
-    base->gusbcfg |= USB_DW_GUSBCFG_FORCEDEVMODE;
-
-    /* step 6 */
-    base->gintmsk |= USB_DW_GINTSTS_OTG_INT;
-    base->gintmsk |= USB_DW_GINTMSK_MODEMISMATCH;
-
-    /* step note */
-    base->gintsts |= USB_DW_GINTSTS_SOFINTR_MASK;
-
-    /* Init Device Mode */
-    base->gintmsk &= ~(USB_DW_GINTMSK_NPTXEMPTY | USB_DW_GINTSTS_RX_FLVL);
-
-    /* step 1 */
-    base->dcfg |= USB_DW_DCFG_DESCDMA_MASK;
-    base->dcfg |= USB_DW_DCFG_DEV_SPD_USB2_HS;
-    base->dcfg |= USB_DW_DCFG_NZSTSOUTHSHK_MASK;
-    base->dcfg |= USB_DW_DCFG_NZSTSOUTHSHK_MASK;
-    base->dcfg = (base->dcfg & ~USB_DW_DCFG_PERFRINT_MASK) |
-                 DWC_DCFG_FRAME_INTERVAL_80;
-
-    /* step 3 */
-    base->dctl |= USB_DW_DCTL_IGNRFRMNUM_MASK;
-    base->dctl &= ~USB_DW_DCTL_SFT_DISCON;
-
-    /* step 5 */
-    base->gintmsk = USB_DW_GINTSTS_OEP_INT |
-                    USB_DW_GINTSTS_IEP_INT |
-                    USB_DW_GINTSTS_ENUM_DONE |
-                    USB_DW_GINTSTS_USB_RST |
-                    USB_DW_GINTSTS_WK_UP_INT |
-                    USB_DW_GINTSTS_USB_SUSP;
-
-    /* init on reset */
-    /* step 1 */
-    for (ep = 0U; ep < USB_DW_OUT_EP_NUM; ep++)
-    {
-        base->out_ep_reg[ep].doepctl = USB_DW_DEPCTL_SNAK;
-    }
-
-    /* step 2 */
-    base->daintmsk |= USB_DW_DAINTMSK_INEPMSK0_MASK | USB_DW_DAINTMSK_ONEPMSK0_MASK;
-    base->doepmsk |= USB_DW_DOEPMSK_XFERCOMPLMSK_MSAK |
-                     USB_DW_DOEPMSK_AHBERRMSK_MASK |
-                     USB_DW_DOEPMSK_SETUPMSK_MASK |
-                     USB_DW_DOEPMSK_STSPHSERCVDMSK_MASK |
-                     USB_DW_DOEPMSK_BNAOUTINTRMSK_MASK;
-    base->diepmsk |= USB_DW_DIEPMSK_XFERCOMPLMSK_MASK |
-                     USB_DW_DIEPMSK_AHBERRMSK_MASK |
-                     USB_DW_DIEPMSK_BNAININTRMSK_MASK;
-
-    /* step 5 */
-    base->dcfg &= ~USB_DW_DCFG_DEV_ADDR_MASK;
-
+    extern void hal_rtk_usb_init_dma(void);
+    hal_rtk_usb_init_dma();
 #else
-    struct usb_dw_reg *const base = usb_dw_cfg.base;
-    uint8_t ep;
-    base->dcfg &= ~USB_DW_DCFG_DEV_ADDR_MASK;
-
-    /*
-     * Force device mode as we do no support other roles or role changes.
-     * Wait 25ms for the change to take effect.
-     */
-    base->gusbcfg |= USB_DW_GUSBCFG_FORCEDEVMODE;
-    k_msleep(25);
-
-    /* set the PHY interface to be 16-bit UTMI */
-    base->gusbcfg = (base->gusbcfg & ~USB_DW_GUSBCFG_PHY_IF_MASK) |
-                    USB_DW_GUSBCFG_PHY_IF_16_BIT;
-
-    /* Set USB2.0 High Speed */
-    base->dcfg |= USB_DW_DCFG_DEV_SPD_USB2_HS;
-
-    /* Set NAK for all OUT EPs */
-    for (ep = 0U; ep < USB_DW_OUT_EP_NUM; ep++)
-    {
-        base->out_ep_reg[ep].doepctl = USB_DW_DEPCTL_SNAK;
-    }
-
-    /* Enable global interrupts */
-    base->gintmsk = USB_DW_GINTSTS_OEP_INT |
-                    USB_DW_GINTSTS_IEP_INT |
-                    USB_DW_GINTSTS_ENUM_DONE |
-                    USB_DW_GINTSTS_USB_RST |
-                    USB_DW_GINTSTS_WK_UP_INT |
-                    USB_DW_GINTSTS_USB_SUSP;
-
-    /* Enable global interrupt */
-    base->gahbcfg |= USB_DW_GAHBCFG_GLB_INTR_MASK;
-
-    /* Disable soft disconnect */
-    base->dctl &= ~USB_DW_DCTL_SFT_DISCON;
+    extern void hal_rtk_usb_init(void);
+    hal_rtk_usb_init();
 #endif
-
     return 0;
 }
 
@@ -633,6 +540,7 @@ static void usb_dw_handle_reset(void)
 #if CONFIG_USB_DC_RTL87X2G_DMA
     struct usb_dw_reg *const base = usb_dw_cfg.base;
 
+    usb_dw_ctrl.current_status = USB_DC_RESET;
     /* Inform upper layers */
     if (usb_dw_ctrl.status_cb)
     {
@@ -640,12 +548,13 @@ static void usb_dw_handle_reset(void)
     }
 
     usb_dw_reset();
-    usb_dw_init();
+    usb_rtk_init();
     usb_dw_resize_fifo();
 
 #else
     struct usb_dw_reg *const base = usb_dw_cfg.base;
 
+    usb_dw_ctrl.current_status = USB_DC_RESET;
     /* Inform upper layers */
     if (usb_dw_ctrl.status_cb)
     {
@@ -828,6 +737,7 @@ static int usb_dw_tx(uint8_t ep, const uint8_t *const data,
     uint32_t ep_mps = usb_dw_ctrl.in_ep_ctrl[ep_idx].mps;
     unsigned int key;
     uint32_t i;
+    uint32_t tx_data_len = data_len;
 
 #if DBG_DIRECT_SHOW
     DBG_DIRECT("base->in_ep_reg[%d].diepctl=0x%x", ep_idx, base->in_ep_reg[ep_idx].diepctl);
@@ -871,12 +781,8 @@ static int usb_dw_tx(uint8_t ep, const uint8_t *const data,
         /* Get max packet size and packet count for ep */
         if (ep_idx == USB_DW_IN_EP_0)
         {
-            max_pkt_cnt =
-                USB_DW_DIEPTSIZ0_PKT_CNT_MASK >>
-                USB_DW_DEPTSIZ_PKT_CNT_OFFSET;
-            max_xfer_size =
-                USB_DW_DEPTSIZ0_XFER_SIZE_MASK >>
-                USB_DW_DEPTSIZ_XFER_SIZE_OFFSET;
+            max_pkt_cnt = 1;
+            max_xfer_size = ep_mps;
         }
         else
         {
@@ -916,6 +822,17 @@ static int usb_dw_tx(uint8_t ep, const uint8_t *const data,
     {
         /* Zero length packet */
         pkt_cnt = 1U;
+    }
+
+    if (tx_data_len > data_len)
+    {
+        usb_dw_ctrl.in_ep_ctrl[ep_idx].rsvd_tx_len = tx_data_len - data_len;
+        usb_dw_ctrl.in_ep_ctrl[ep_idx].rsvd_tx_buf = data + data_len;
+    }
+    else
+    {
+        usb_dw_ctrl.in_ep_ctrl[ep_idx].rsvd_tx_len = 0;
+        usb_dw_ctrl.in_ep_ctrl[ep_idx].rsvd_tx_buf = NULL;
     }
 
     /* Set number of packets and transfer size */
@@ -1012,6 +929,7 @@ void usb_dw_handle_enum_done(void)
     speed = (base->dsts & ~USB_DW_DSTS_ENUM_SPD_MASK) >>
             USB_DW_DSTS_ENUM_SPD_OFFSET;
 
+    usb_dw_ctrl.current_status = USB_DC_CONNECTED;
     /* Inform upper layers */
     if (usb_dw_ctrl.status_cb)
     {
@@ -1029,9 +947,18 @@ void usb_dw_handle_enum_done(void)
     struct usb_dw_reg *const base = usb_dw_cfg.base;
     uint8_t speed;
 
-    speed = (base->dsts & ~USB_DW_DSTS_ENUM_SPD_MASK) >>
+    speed = (base->dsts & USB_DW_DSTS_ENUM_SPD_MASK) >>
             USB_DW_DSTS_ENUM_SPD_OFFSET;
 
+    LOG_DBG("USB ENUM DONE event, %s speed detected",
+        speed == 0 ? "High" : "Full");
+#if DBG_DIRECT_SHOW
+    DBG_DIRECT("USB ENUM DONE event, %s speed detected",
+        speed == 0 ? "High" : "Full");
+#endif
+
+
+    usb_dw_ctrl.current_status = USB_DC_CONNECTED;
     /* Inform upper layers */
     if (usb_dw_ctrl.status_cb)
     {
@@ -1195,10 +1122,9 @@ static inline void usb_dw_int_iep_handler(void)
             if (ep_cb &&
                 (ep_int_status & USB_DW_DIEPINT_XFER_COMPL))
             {
-
                 /* Call the registered callback */
                 ep_cb(USB_EP_GET_ADDR(ep_idx, USB_EP_DIR_IN),
-                      USB_DC_EP_DATA_IN);
+                    USB_DC_EP_DATA_IN);
             }
         }
     }
@@ -1348,6 +1274,7 @@ static void usb_dw_isr_handler(const void *unused)
 
             usb_power_is_on = false;
 
+            usb_dw_ctrl.current_status = USB_DC_SUSPEND;
             if (usb_dw_ctrl.status_cb)
             {
                 usb_dw_ctrl.status_cb(USB_DC_SUSPEND, NULL);
@@ -1364,6 +1291,7 @@ static void usb_dw_isr_handler(const void *unused)
             /* Clear interrupt. */
             base->gintsts = USB_DW_GINTSTS_WK_UP_INT;
 
+            usb_dw_ctrl.current_status = USB_DC_RESUME;
             if (usb_dw_ctrl.status_cb)
             {
                 usb_dw_ctrl.status_cb(USB_DC_RESUME, NULL);
@@ -1417,12 +1345,17 @@ static void usb_dw_resume_isr_handler(const void *unused)
 
     usb_power_is_on = true;
 
+    usb_dw_ctrl.current_status = USB_DC_RESUME;
     if (usb_dw_ctrl.status_cb)
     {
         usb_dw_ctrl.status_cb(USB_DC_RESUME, NULL);
     }
     return ;
 }
+
+#if CONFIG_PM
+static void usb_register_dlps_cb(void);
+#endif
 
 int usb_dc_attach(void)
 {
@@ -1448,17 +1381,19 @@ int usb_dc_attach(void)
         usb_power_is_on = true;
     }
 
-    ret = usb_dw_init();
+    ret = usb_rtk_init();
 
-#if CONFIG_USB_DC_RTL87X2G_DMA
     usb_dw_resize_fifo();
-#endif
 
     if (ret)
     {
         LOG_ERR("usb dw init fials");
         return ret;
     }
+
+#if CONFIG_PM
+    usb_register_dlps_cb();
+#endif
 
     usb_dw_cfg.irq_enable_func(NULL);
 
@@ -1487,6 +1422,7 @@ int usb_dc_detach(void)
 
     usb_dw_ctrl.attached = 0U;
 
+    usb_dw_ctrl.current_status = USB_DC_DISCONNECTED;
     if (usb_dw_ctrl.status_cb)
     {
         usb_dw_ctrl.status_cb(USB_DC_DISCONNECTED, NULL);
@@ -2173,6 +2109,15 @@ int usb_dc_wakeup_request(void)
 
 static void usb_isr_suspend_enable(void)
 {
+#ifdef CONFIG_PM
+    AON_REG7X_SYS_TYPE reg7x;
+    reg7x.d32 = HAL_READ32(SYSTEM_REG_BASE, AON_REG7X_SYS);
+    reg7x.usb_wakeup_sel = 1;
+    reg7x.USB_WKPOL = 0;
+    reg7x.USB_WKEN = 1;
+    HAL_WRITE32(SYSTEM_REG_BASE, AON_REG7X_SYS, reg7x.d32);
+#endif
+
     /* edge trigger */
     SoC_VENDOR->u_008.REG_LOW_PRI_INT_MODE |= BIT31;
 
@@ -2182,3 +2127,71 @@ static void usb_isr_suspend_enable(void)
     /* Note: must disable at disable flow */
     SoC_VENDOR->u_00C.REG_LOW_PRI_INT_EN |= BIT31;
 }
+
+
+#ifdef CONFIG_PM
+extern int hal_usb_wakeup_status_clear(void);
+extern int hal_usb_wakeup_status_get(void);
+extern void usb_set_pon_domain(void);
+extern void usb_dm_start_from_dlps(void);
+extern void usb_rtk_disable_power_seq(void);
+
+void usb_start_from_dlps(void)
+{
+    if (usb_rtk_resume_sequence() != 0)
+    {
+        usb_rtk_disable_power_seq();
+        return ;
+    }
+
+    usb_dw_cfg.irq_enable_func(NULL);
+
+    return ;
+}
+
+static PMCheckResult usb_pm_check(void)
+{
+    volatile enum usb_dc_status_code usb_state = usb_dw_ctrl.current_status;
+    if (usb_state == USB_DC_SUSPEND || usb_state == USB_DC_DISCONNECTED)
+    {
+        return PM_CHECK_PASS;
+    }
+    else
+    {
+        return PM_CHECK_FAIL;
+    }
+}
+
+static void usb_pm_store(void)
+{
+#if DBG_DIRECT_SHOW
+    DBG_DIRECT("======================usb_pm_store======================");
+#endif
+    hal_usb_wakeup_status_clear();
+    AON_REG8X_SYS_TYPE reg8x;
+    reg8x.d32 = AON_REG_READ(AON_REG8X_SYS);
+}
+
+static void usb_pm_restore(void)
+{
+#if DBG_DIRECT_SHOW
+    DBG_DIRECT("======================usb_pm_restore======================");
+#endif
+    if (hal_usb_wakeup_status_get() == 0)
+    {
+    }
+    else
+    {
+        usb_start_from_dlps();
+    }
+}
+
+static void usb_register_dlps_cb(void)
+{
+    usb_set_pon_domain();
+
+    platform_pm_register_callback_func_with_priority((void *)usb_pm_check, PLATFORM_PM_CHECK, 1);
+    platform_pm_register_callback_func_with_priority((void *)usb_pm_store, PLATFORM_PM_STORE, 1);
+    platform_pm_register_callback_func_with_priority((void *)usb_pm_restore, PLATFORM_PM_RESTORE, 1);
+}
+#endif

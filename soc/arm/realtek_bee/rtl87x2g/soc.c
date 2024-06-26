@@ -6,9 +6,7 @@
 #include <zephyr/sys/barrier.h>
 #include <soc.h>
 
-/* from bee-sdk*/
 #include "rom_api_for_zephyr.h"
-
 #include "trace.h"
 #include "os_sched.h"
 #include "patch_header_check.h"
@@ -17,11 +15,20 @@
 #include "mem_config.h"
 #include "utils.h"
 #include "aon_reg.h"
+#include "os_pm.h"
+
+#include <zephyr/logging/log.h>
+
+#define LOG_LEVEL CONFIG_SOC_LOG_LEVEL
+LOG_MODULE_REGISTER(soc);
 
 extern void os_zephyr_patch_init(void);
 extern void BTMAC_Handler(void);
 extern void GDMA0_Channel9_Handler(void);
 extern void PF_RTC_Handler(void);
+
+extern void z_arm_nmi(void);
+extern void _isr_wrapper(void);
 
 #define VECTOR_ADDRESS ((uintptr_t)_vector_start)
 
@@ -42,24 +49,6 @@ void rtk_rom_irq_connect(void)
     IRQ_CONNECT(BTMAC_WRAP_AROUND_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
     // IRQ_CONNECT(Flash_SEC_IRQn, 5, Flash_SEC_Handler, NULL, 0);//secure ISR register, have not found solution yet
 }
-
-
-#define RTK_LOGGING_THREAD_STACK_SIZE 400
-#define RTK_LOGGING_THREAD_PRIORITY K_LOWEST_APPLICATION_THREAD_PRIO
-
-void rtk_logging_thread(void *, void *, void *)
-{
-    while (1)
-    {
-        extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
-        log_buffer_trigger_schedule_in_km4_idle_task();
-        k_msleep(50);
-    }
-}
-
-K_THREAD_DEFINE(rtk_logging_thread_tid, RTK_LOGGING_THREAD_STACK_SIZE,
-                rtk_logging_thread, NULL, NULL, NULL,
-                RTK_LOGGING_THREAD_PRIORITY, 0, 0);
 
 static int rtk_platform_init(void)
 {
@@ -86,7 +75,7 @@ static int rtk_platform_init(void)
 
     os_init();
 
-    //os_pm_init();//power manager porting has not been realized yet.
+    os_pm_init();
 
     secure_os_func_ptr_init();
 
@@ -139,6 +128,7 @@ static int rtk_platform_init(void)
     power_manager_slave_init();
     platform_pm_init();
     RamVectorTableUpdate(PF_RTC_VECTORn, (IRQ_Fun)_isr_wrapper);
+    RamVectorTableUpdate(NMI_VECTORn, (IRQ_Fun)z_arm_nmi);
 
     init_osc_sdm_timer();//use os timer api
 

@@ -21,6 +21,8 @@
 #include <zephyr/drivers/clock_control/rtl87x2g_clock_control.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/irq.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #ifdef CONFIG_UART_ASYNC_API
 #include <zephyr/drivers/dma/dma_rtl87x2g.h>
@@ -1212,6 +1214,49 @@ static void uart_rtl87x2g_isr(const struct device *dev)
 }
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN || CONFIG_UART_ASYNC_API */
 
+#ifdef CONFIG_PM_DEVICE
+static int uart_rtl87x2g_pm_action(const struct device *dev,
+                                   enum pm_device_action action)
+{
+    const struct uart_rtl87x2g_config *config = dev->config;
+    struct uart_rtl87x2g_data *data = dev->data;
+    UART_TypeDef *uart = config->uart;
+    int err;
+    extern void UART_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void UART_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        UART_DLPSEnter(uart, &data->store_buf);
+
+        /* Move pins to sleep state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+        if ((err < 0) && (err != -ENOENT))
+        {
+            return err;
+        }
+        break;
+    case PM_DEVICE_ACTION_RESUME:
+        /* Set pins to active state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        UART_DLPSExit(uart, &data->store_buf);
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static const struct uart_driver_api uart_rtl87x2g_driver_api =
 {
     .poll_in = uart_rtl87x2g_poll_in,
@@ -1399,9 +1444,10 @@ static int uart_rtl87x2g_init(const struct device *dev)
                        UART_DMA_CHANNEL(index, tx)                    \
     };                                                                       \
     \
-    DEVICE_DT_INST_DEFINE(index,                                              \
+     PM_DEVICE_DT_INST_DEFINE(index, uart_rtl87x2g_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index,                                              \
                           &uart_rtl87x2g_init,                                  \
-                          NULL,                           \
+                          PM_DEVICE_DT_INST_GET(index),                           \
                           &uart_rtl87x2g_data_##index, &uart_rtl87x2g_cfg_##index,    \
                           PRE_KERNEL_1, CONFIG_SERIAL_INIT_PRIORITY,                    \
                           &uart_rtl87x2g_driver_api);                                  \

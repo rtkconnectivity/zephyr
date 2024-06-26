@@ -7,6 +7,6 @@ config I2C_RTL87X2G
 	bool "RTL87X2G I2C driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_I2C_ENABLED
-	select REALTEK_I2C
+	select USE_HAL_REALTEK_I2C
 	help
 	  Enable the RTL87X2G i2c driver.

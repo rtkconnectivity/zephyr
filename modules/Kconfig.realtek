@@ -1,0 +1,90 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config ZEPHYR_HAL_REALTEK_MODULE
+	bool
+
+config USE_HAL_REALTEK_ADC
+	bool
+	help
+	  Enable HAL REALTEK ADC driver
+
+config USE_HAL_REALTEK_TIM
+	bool
+	help
+	  Enable HAL REALTEK TIM driver
+
+config USE_HAL_REALTEK_ENHTIM
+	bool
+	help
+	  Enable HAL REALTEK ENHTIM driver
+
+config USE_HAL_REALTEK_RTC
+	bool
+	help
+	  Enable HAL REALTEK RTC driver
+
+config USE_HAL_REALTEK_DMA
+	bool
+	help
+	  Enable HAL REALTEK DMA driver
+
+config USE_HAL_REALTEK_GPIO
+	bool
+	help
+	  Enable HAL REALTEK GPIO driver
+
+config USE_HAL_REALTEK_I2C
+	bool
+	help
+	  Enable HAL REALTEK I2C driver
+
+config USE_HAL_REALTEK_KEYSCAN
+	bool
+	help
+	  Enable HAL REALTEK KEYSCAN driver
+
+config USE_HAL_REALTEK_AON_QDEC
+	bool
+	help
+	  Enable HAL REALTEK AON QDEC driver
+
+config USE_HAL_REALTEK_UART
+	bool
+	help
+	  Enable HAL REALTEK UART driver
+
+config USE_HAL_REALTEK_SPI
+	bool
+	help
+	  Enable HAL REALTEK SPI driver
+
+config USE_HAL_REALTEK_USB
+	bool
+	help
+	  Enable HAL REALTEK USB driver
+
+config USE_HAL_REALTEK_AON_WDT
+	bool
+	help
+	  Enable HAL REALTEK AON WDT driver
+
+config USE_HAL_REALTEK_CORE_WDT
+	bool
+	help
+	  Enable HAL REALTEK CORE WDT driver
+
+config USE_HAL_REALTEK_RCC
+	bool
+	help
+	  Enable HAL REALTEK RCC driver
+
+config USE_HAL_REALTEK_NVIC
+	bool
+	help
+	  Enable HAL REALTEK NVIC driver
+
+config USE_HAL_REALTEK_PINMUX
+	bool
+	help
+	  Enable HAL REALTEK PINMUX driver
