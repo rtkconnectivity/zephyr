@@ -31,3 +31,10 @@ CONFIG_OUTPUT_DISASSEMBLY=y
 # flashing
 # link application into the the flash partition selected by the zephyr,code-partition property in /chosen in devicetree
 CONFIG_USE_DT_CODE_PARTITION=y
+
+# power manager settings (default disabled)
+# CONFIG_PM=y
+# CONFIG_PM_DEVICE=y
+# CONFIG_PM_POLICY_CUSTOM=n # use zephyr pm flow, enable this config; use realtek pm flow, disable this config.
+# CONFIG_RUNTIME_NMI=y # customize NMI for Power Manager
+# CONFIG_REALTEK_USING_SDK_LIB=y

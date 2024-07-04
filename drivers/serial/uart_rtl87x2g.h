@@ -67,6 +67,9 @@ struct uart_rtl87x2g_data
     uint8_t *rx_next_buffer;
     size_t rx_next_buffer_len;
 #endif
+#ifdef CONFIG_PM_DEVICE
+    UARTStoreReg_Typedef store_buf;
+#endif
 };
 
 #endif  /* ZEPHYR_DRIVERS_SERIAL_UART_RTL87X2G_H_ */

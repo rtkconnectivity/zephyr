@@ -6,8 +6,7 @@
 config GPIO_RTL87X2G
 	bool "RTL87X2G MCU GPIO driver"
 	default y
-	select REALTEK_GPIO
+	select USE_HAL_REALTEK_GPIO
 	depends on DT_HAS_REALTEK_RTL87X2G_GPIO_ENABLED
 	help
 	  Enable the RTL87X2G gpio driver.
-

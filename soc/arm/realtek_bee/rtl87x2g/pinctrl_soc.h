@@ -29,6 +29,8 @@ typedef struct {
         uint32_t dir : 1;
         uint32_t pull_strength : 1;
         uint32_t fun : 16;
+        uint32_t wakeup_high : 1;
+        uint32_t wakeup_low : 1;
 } pinctrl_soc_pin;
 
 typedef pinctrl_soc_pin pinctrl_soc_pin_t;
@@ -48,6 +50,8 @@ typedef pinctrl_soc_pin pinctrl_soc_pin_t;
 		.dir = RTL87X2G_GET_DIR(DT_PROP_BY_IDX(node_id, prop, idx)),		\
 		.pull_strength = DT_PROP(node_id, bias_pull_strong),		\
 		.fun = RTL87X2G_GET_FUN(DT_PROP_BY_IDX(node_id, prop, idx)),		\
+		.wakeup_high = DT_PROP(node_id, wakeup_high),		\
+		.wakeup_low = DT_PROP(node_id, wakeup_low),		\
 	},
 
 /**

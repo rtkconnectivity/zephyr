@@ -13,10 +13,15 @@
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/sys/util_macro.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <rtl_tim.h>
 #include <rtl_enh_tim.h>
 #include <rtl_rcc.h>
+#ifdef CONFIG_PM_DEVICE
+#include <rtl_pinmux.h>
+#endif
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(pwm_rtl87x2g, CONFIG_PWM_LOG_LEVEL);
@@ -26,6 +31,14 @@ struct pwm_rtl87x2g_data
 {
     /** Timer clock (Hz). */
     uint32_t tim_clk;
+#ifdef CONFIG_PM_DEVICE
+    union
+    {
+        TIMStoreReg_Typedef tim_store_buf;
+        ENHTIMStoreReg_Typedef enhtim_store_buf;
+    } store_buf;
+    bool is_high_duty;
+#endif
 };
 
 /** PWM configuration. */
@@ -46,6 +59,9 @@ static int pwm_rtl87x2g_set_cycles(const struct device *dev, uint32_t channel,
     LOG_DBG("channel=%d, period_cycles=%x, pulse_cycles=%x, flags=%x\n", \
             channel, period_cycles, pulse_cycles, flags);
     const struct pwm_rtl87x2g_config *config = dev->config;
+#ifdef CONFIG_PM_DEVICE
+    struct pwm_rtl87x2g_data *data = dev->data;
+#endif
     void *timer_base = (void *)config->reg;
 
     if (channel > config->channels)
@@ -58,26 +74,43 @@ static int pwm_rtl87x2g_set_cycles(const struct device *dev, uint32_t channel,
     {
         if (flags & PWM_POLARITY_INVERTED)
         {
-            ENHTIM_CONFIGURE_TypeDef enhtim_0x10 = {.d32 = ((ENHTIM_TypeDef *)timer_base)->ENHTIM_CONFIGURE};
-            enhtim_0x10.b.Enhtimer_PWM_polarity = ENHTIM_PWM_START_WITH_HIGH;
-            ((ENHTIM_TypeDef *)timer_base)->ENHTIM_CONFIGURE = enhtim_0x10.d32;
+            if (period_cycles == 0U || pulse_cycles == 0U)
+            {
+                /* duty = 0 */
+                ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, 0);
+            }
+            else if (period_cycles == pulse_cycles)
+            {
+                /* duty = 100 */
+                ENHTIM_SetMaxCount((ENHTIM_TypeDef *)timer_base, UINT32_MAX - 1);
+                ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, UINT32_MAX);
+            }
+            else
+            {
+                ENHTIM_SetMaxCount((ENHTIM_TypeDef *)timer_base, period_cycles);
+                ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, period_cycles - pulse_cycles);
+            }
+
         }
 
-        if (period_cycles == 0U || pulse_cycles == 0U)
-        {
-            /* duty = 0 */
-            ENHTIM_SetMaxCount((ENHTIM_TypeDef *)timer_base, UINT32_MAX - 1);
-            ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, UINT32_MAX);
-        }
-        else if (period_cycles == pulse_cycles)
-        {
-            /* duty = 100 */
-            ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, 0);
-        }
         else
         {
-            ENHTIM_SetMaxCount((ENHTIM_TypeDef *)timer_base, period_cycles);
-            ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, pulse_cycles);
+            if (period_cycles == 0U || pulse_cycles == 0U)
+            {
+                /* duty = 0 */
+                ENHTIM_SetMaxCount((ENHTIM_TypeDef *)timer_base, UINT32_MAX - 1);
+                ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, UINT32_MAX);
+            }
+            else if (period_cycles == pulse_cycles)
+            {
+                /* duty = 100 */
+                ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, 0);
+            }
+            else
+            {
+                ENHTIM_SetMaxCount((ENHTIM_TypeDef *)timer_base, period_cycles);
+                ENHTIM_SetCCValue((ENHTIM_TypeDef *)timer_base, pulse_cycles);
+            }
         }
 
         ENHTIM_Cmd((ENHTIM_TypeDef *)timer_base, DISABLE);
@@ -129,6 +162,14 @@ static int pwm_rtl87x2g_set_cycles(const struct device *dev, uint32_t channel,
         TIM_Cmd((TIM_TypeDef *)timer_base, ENABLE);
     }
 
+#ifdef CONFIG_PM_DEVICE
+            data->is_high_duty = (pulse_cycles > (period_cycles >> 1));
+            if ((flags & PWM_POLARITY_INVERTED))
+            {
+                data->is_high_duty = !data->is_high_duty;
+            }
+#endif
+
     return 0;
 }
 
@@ -143,6 +184,78 @@ static int pwm_rtl87x2g_get_cycles_per_sec(const struct device *dev,
     LOG_DBG("channel=%d, cycles=%d\n", channel, (uint32_t)*cycles);
     return 0;
 }
+
+#ifdef CONFIG_PM_DEVICE
+static int pwm_rtl87x2g_pm_action(const struct device *dev,
+                                  enum pm_device_action action)
+{
+    const struct pwm_rtl87x2g_config *config = dev->config;
+    struct pwm_rtl87x2g_data *data = dev->data;
+    void *timer_base = (void *)config->reg;
+    int err;
+
+    extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
+    extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        if (config->is_enhanced)
+        {
+            ENHTIM_DLPSEnter(timer_base, &data->store_buf);
+        }
+        else
+        {
+            TIM_DLPSEnter(timer_base, &data->store_buf);
+        }
+
+        /* Move pins to sleep state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+        if (err == -ENOENT)
+        {
+            /* sleep status pinctrl is not configured, maintain the level at closest before sleep status */
+            const struct pinctrl_state *state;
+            err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
+            if (err < 0)
+            {
+                return err;
+            }
+            Pad_Config(state->pins[0].pin, PAD_SW_MODE, PAD_IS_PWRON, 0, PAD_OUT_ENABLE, data->is_high_duty);
+        }
+        else if (err < 0)
+        {
+            return err;
+        }
+
+        break;
+    case PM_DEVICE_ACTION_RESUME:
+        /* Set pins to active state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        if (config->is_enhanced)
+        {
+            ENHTIM_DLPSExit(timer_base, &data->store_buf);
+        }
+        else
+        {
+            TIM_DLPSExit(timer_base, &data->store_buf);
+        }
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
 
 static const struct pwm_driver_api pwm_rtl87x2g_driver_api =
 {
@@ -162,6 +275,10 @@ static int pwm_rtl87x2g_init(const struct device *dev)
                            (clock_control_subsys_t)&config->clkid);
 
     data->tim_clk = 40000000;
+
+#ifdef CONFIG_PM_DEVICE
+    data->is_high_duty = false;
+#endif
 
     /* apply pin configuration */
     ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
@@ -245,7 +362,8 @@ static int pwm_rtl87x2g_init(const struct device *dev)
                                                                 .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),             \
     };                                     \
     \
-    DEVICE_DT_INST_DEFINE(index, &pwm_rtl87x2g_init, NULL, &pwm_rtl87x2g_data_##index,     \
+     PM_DEVICE_DT_INST_DEFINE(index, pwm_rtl87x2g_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index, &pwm_rtl87x2g_init, PM_DEVICE_DT_INST_GET(index), &pwm_rtl87x2g_data_##index,     \
                           &pwm_rtl87x2g_config_##index, POST_KERNEL,           \
                           CONFIG_PWM_INIT_PRIORITY,                \
                           &pwm_rtl87x2g_driver_api);

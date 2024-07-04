@@ -7,7 +7,7 @@ config KSCAN_RTL87X2G
 	bool "RTL87X2G MCU kscan driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_KSCAN_ENABLED
-	select REALTEK_KEYSCAN
+	select USE_HAL_REALTEK_KEYSCAN
 	help
 	  Enable the RTL87X2G kscan driver.
 
