@@ -467,6 +467,13 @@
 			num-bidir-endpoints = <0>;
 			status = "disabled";
 		};
+
+		ieee802154: ieee802154@4005c000 {
+			compatible = "realtek,rtl87x2g-ieee802154";
+			reg = <0x4005c000 0x4000>;
+			interrupts = <4 1>;
+			status = "disabled";
+		};
 	};
 
 };

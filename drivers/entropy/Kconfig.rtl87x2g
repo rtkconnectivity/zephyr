@@ -7,6 +7,6 @@ config ENTROPY_RTL87X2G_TRNG
 	bool "RTL87X2G trng driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_TRNG_ENABLED
-
+	select ENTROPY_HAS_DRIVER
 	help
 	  Enable the RTL87X2G trng driver.
