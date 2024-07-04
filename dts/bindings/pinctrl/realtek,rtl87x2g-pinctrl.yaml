@@ -80,3 +80,10 @@ child-binding:
         type: boolean
         description: enable pull-strong resistor
 
+      wakeup-high:
+        type: boolean
+        description: enable wakeup high function
+
+      wakeup-low:
+        type: boolean
+        description: enable wakeup low function
