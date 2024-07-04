@@ -15,6 +15,8 @@
 #include <zephyr/drivers/dma/dma_rtl87x2g.h>
 #endif
 #include <zephyr/irq.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <rtl_spi.h>
 #include <rtl_rcc.h>
@@ -64,6 +66,9 @@ struct spi_rtl87x2g_data
     struct spi_dma_stream dma_tx;
     struct spi_rtl87x2g_dma_data dma_rx_data;
     struct spi_rtl87x2g_dma_data dma_tx_data;
+#endif
+#ifdef CONFIG_PM_DEVICE
+    SPIStoreReg_Typedef store_buf;
 #endif
 };
 
@@ -526,6 +531,49 @@ static int spi_rtl87x2g_release(const struct device *dev,
     return 0;
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int spi_rtl87x2g_pm_action(const struct device *dev,
+                                  enum pm_device_action action)
+{
+    struct spi_rtl87x2g_data *data = dev->data;
+    const struct spi_rtl87x2g_config *config = dev->config;
+    SPI_TypeDef *spi = (SPI_TypeDef *)config->reg;
+    int err;
+    extern void SPI_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void SPI_DLPSExit(void *PeriReg, void *StoreBuf);
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+
+        SPI_DLPSEnter(spi, &data->store_buf);
+
+        /* Move pins to sleep state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+        if ((err < 0) && (err != -ENOENT))
+        {
+            return err;
+        }
+        break;
+    case PM_DEVICE_ACTION_RESUME:
+        /* Set pins to active state */
+        err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+        if (err < 0)
+        {
+            return err;
+        }
+
+        SPI_DLPSExit(spi, &data->store_buf);
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static const struct spi_driver_api spi_rtl87x2g_driver_api =
 {
     .transceive = spi_rtl87x2g_transceive,
@@ -722,7 +770,8 @@ static int spi_rtl87x2g_init(const struct device *dev)
                         .pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),             \
                                 IF_ENABLED(CONFIG_SPI_RTL87X2G_INTERRUPT,                  \
                                            (.irq_configure = spi_rtl87x2g_irq_configure_##index)) }; \
-    DEVICE_DT_INST_DEFINE(index, &spi_rtl87x2g_init, NULL,             \
+     PM_DEVICE_DT_INST_DEFINE(index, spi_rtl87x2g_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index, &spi_rtl87x2g_init, PM_DEVICE_DT_INST_GET(index),             \
                           &spi_rtl87x2g_data_##index, &spi_rtl87x2g_config_##index,    \
                           POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,           \
                           &spi_rtl87x2g_driver_api);

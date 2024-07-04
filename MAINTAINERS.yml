@@ -3192,6 +3192,14 @@ West:
   labels:
     - "platform: Quicklogic"
 
+"West project: hal_realtek":
+  status: maintained
+  maintainers:
+    - zhiyuan_tang
+  files: []
+  labels:
+    - "platform: Realtek"
+
 "West project: hal_renesas":
   status: maintained
   maintainers:

@@ -7,8 +7,7 @@ config COUNTER_TIMER_RTL87X2G
 	bool "RTL87X2G timer counter driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_TIMER_ENABLED
-	select USE_RTL87X2G_TIMER
-	select REALTEK_TIM
-	select REALTEK_ENHTIM
+	select USE_HAL_REALTEK_TIM
+	select USE_HAL_REALTEK_ENHTIM
 	help
 	  Enable the RTL87X2G counter timer driver.

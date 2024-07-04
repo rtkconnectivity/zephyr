@@ -7,5 +7,6 @@ config CLOCK_CONTROL_RTL87X2G
 	bool "RTL87X2G clock control"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_CCTL_ENABLED
+	select USE_HAL_REALTEK_RCC
 	help
 	  Enable driver for RTL87X2G Reset Clock Unit (RCU).

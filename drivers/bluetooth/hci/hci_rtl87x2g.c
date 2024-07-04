@@ -109,6 +109,10 @@ static bool bt_rtl87x2g_recv_cb(T_RTL_BT_HCI_EVT evt, bool status, uint8_t *p_bu
                                 rtl_bt_hci_ack(p_buf);
                                 break;
                             }
+                            else
+                            {
+                                net_buf_unref(z_buf);
+                            }
                         }
                         else
                         {

@@ -18,6 +18,8 @@
 #include <zephyr/drivers/clock_control/rtl87x2g_clock_control.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/irq.h>
+#include <zephyr/pm/device.h>
+#include <zephyr/pm/policy.h>
 
 #include <zephyr/dt-bindings/gpio/realtek-rtl87x2g-gpio.h>
 #include "gpio_rtl87x2g.h"
@@ -101,6 +103,12 @@ static int gpio_rtl87x2g_gpio2pad(uint8_t port_num, uint32_t pin)
     return -EIO;
 }
 
+
+#ifdef CONFIG_PM_DEVICE
+static int gpio_rtl87x2g_pm_pad_list_insert(struct gpio_rtl87x2g_data *data, uint8_t pad_num, uint8_t gpio_num);
+static void gpio_rtl87x2g_pm_pad_list_remove(struct gpio_rtl87x2g_data *data, uint8_t pad_num, uint8_t gpio_num);
+#endif
+
 static int gpio_rtl87x2g_pin_configure(const struct device *port, gpio_pin_t pin,
                                        gpio_flags_t flags)
 {
@@ -129,86 +137,97 @@ static int gpio_rtl87x2g_pin_configure(const struct device *port, gpio_pin_t pin
         Pinmux_Deinit(pad_pin);
         Pad_Config(pad_pin, PAD_SW_MODE, PAD_NOT_PWRON, PAD_PULL_NONE, PAD_OUT_DISABLE,
                    PAD_OUT_HIGH);
-
-        return 0;
-    }
-
-    /* config pad pull status */
-
-    if (flags & GPIO_PULL_UP)
-    {
-        pull_config = PAD_PULL_UP;
-    }
-    else if (flags & GPIO_PULL_DOWN)
-    {
-        pull_config = PAD_PULL_DOWN;
     }
     else
     {
-        pull_config = PAD_PULL_NONE;
+        /* config pad pull status */
+
+        if (flags & GPIO_PULL_UP)
+        {
+            pull_config = PAD_PULL_UP;
+        }
+        else if (flags & GPIO_PULL_DOWN)
+        {
+            pull_config = PAD_PULL_DOWN;
+        }
+        else
+        {
+            pull_config = PAD_PULL_NONE;
+        }
+
+        /* config gpio */
+
+        GPIO_StructInit(&gpio_init_struct);
+
+        if (debounce_ms)
+        {
+            gpio_init_struct.GPIO_DebounceClkSource = GPIO_DEBOUNCE_32K;
+            gpio_init_struct.GPIO_DebounceClkDiv = GPIO_DEBOUNCE_DIVIDER_32;
+            gpio_init_struct.GPIO_DebounceCntLimit = debounce_ms;
+            gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_ENABLE;
+            data->pin_debounce_ms[pin] = debounce_ms;
+        }
+        else
+        {
+            gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_DISABLE;
+            data->pin_debounce_ms[pin] = 0;
+        }
+
+        gpio_init_struct.GPIO_Pin = gpio_bit;
+        gpio_init_struct.GPIO_Mode = flags & GPIO_OUTPUT ? GPIO_Mode_OUT : GPIO_Mode_IN;
+        gpio_init_struct.GPIO_OutPutMode = flags & GPIO_OPEN_DRAIN ? GPIO_OUTPUT_OPENDRAIN :
+                                        GPIO_OUTPUT_PUSHPULL;
+        gpio_init_struct.GPIO_ITCmd = flags & GPIO_INT_ENABLE ? ENABLE : DISABLE;
+        gpio_init_struct.GPIO_ITTrigger = flags & GPIO_INT_LEVELS_LOGICAL ? GPIO_INT_Trigger_LEVEL :
+                                        GPIO_INT_Trigger_EDGE;
+        gpio_init_struct.GPIO_ITPolarity = flags & GPIO_INT_LOW_0 ? GPIO_INT_POLARITY_ACTIVE_LOW :
+                                        GPIO_INT_POLARITY_ACTIVE_HIGH;
+        Pad_Config(pad_pin, PAD_PINMUX_MODE, \
+                PAD_IS_PWRON, \
+                pull_config, \
+                flags & GPIO_OUTPUT ? PAD_OUT_ENABLE : PAD_OUT_DISABLE, \
+                flags & GPIO_OUTPUT_INIT_HIGH ? PAD_OUT_HIGH : PAD_OUT_LOW);
+        Pinmux_Config(pad_pin, DWGPIO);
+
+        switch (flags & (GPIO_OUTPUT | GPIO_OUTPUT_INIT_HIGH | GPIO_OUTPUT_INIT_LOW))
+        {
+        case (GPIO_OUTPUT_HIGH):
+            GPIO_WriteBit(port_base, gpio_bit, 1);
+            break;
+        case (GPIO_OUTPUT_LOW):
+            GPIO_WriteBit(port_base, gpio_bit, 0);
+            break;
+        default:
+            break;
+        }
+
+        /* to avoid trigger gpio interrupt */
+        if (debounce_ms && (flags & GPIO_INT_ENABLE))
+        {
+            GPIO_INTConfig(port_base, gpio_bit, DISABLE);
+            GPIO_Init(port_base, &gpio_init_struct);
+            GPIO_MaskINTConfig(port_base, gpio_bit, ENABLE);
+            GPIO_INTConfig(port_base, gpio_bit, ENABLE);
+            k_busy_wait(data->pin_debounce_ms[pin] * 2 * 1000);
+            GPIO_ClearINTPendingBit(port_base, gpio_bit);
+            GPIO_MaskINTConfig(port_base, gpio_bit, DISABLE);
+        }
+        else
+        {
+            GPIO_Init(port_base, &gpio_init_struct);
+        }
     }
 
-    /* config gpio */
-
-    GPIO_StructInit(&gpio_init_struct);
-
-    if (debounce_ms)
+#ifdef CONFIG_PM_DEVICE
+    if (flags & GPIO_OUTPUT)
     {
-        gpio_init_struct.GPIO_DebounceClkSource = GPIO_DEBOUNCE_32K;
-        gpio_init_struct.GPIO_DebounceClkDiv = GPIO_DEBOUNCE_DIVIDER_32;
-        gpio_init_struct.GPIO_DebounceCntLimit = debounce_ms;
-        gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_ENABLE;
-        data->pin_debounce_ms[pin] = debounce_ms;
+        return gpio_rtl87x2g_pm_pad_list_insert(data, pad_pin, pin);
     }
     else
     {
-        gpio_init_struct.GPIO_ITDebounce = GPIO_INT_DEBOUNCE_DISABLE;
-        data->pin_debounce_ms[pin] = 0;
+        gpio_rtl87x2g_pm_pad_list_remove(data, pad_pin, pin);
     }
-
-    gpio_init_struct.GPIO_Pin = gpio_bit;
-    gpio_init_struct.GPIO_Mode = flags & GPIO_OUTPUT ? GPIO_Mode_OUT : GPIO_Mode_IN;
-    gpio_init_struct.GPIO_OutPutMode = flags & GPIO_OPEN_DRAIN ? GPIO_OUTPUT_OPENDRAIN :
-                                       GPIO_OUTPUT_PUSHPULL;
-    gpio_init_struct.GPIO_ITCmd = flags & GPIO_INT_ENABLE ? ENABLE : DISABLE;
-    gpio_init_struct.GPIO_ITTrigger = flags & GPIO_INT_LEVELS_LOGICAL ? GPIO_INT_Trigger_LEVEL :
-                                      GPIO_INT_Trigger_EDGE;
-    gpio_init_struct.GPIO_ITPolarity = flags & GPIO_INT_LOW_0 ? GPIO_INT_POLARITY_ACTIVE_LOW :
-                                       GPIO_INT_POLARITY_ACTIVE_HIGH;
-    Pad_Config(pad_pin, PAD_PINMUX_MODE, \
-               PAD_IS_PWRON, \
-               pull_config, \
-               flags & GPIO_OUTPUT ? PAD_OUT_ENABLE : PAD_OUT_DISABLE, \
-               flags & GPIO_OUTPUT_INIT_HIGH ? PAD_OUT_HIGH : PAD_OUT_LOW);
-    Pinmux_Config(pad_pin, DWGPIO);
-
-    switch (flags & (GPIO_OUTPUT | GPIO_OUTPUT_INIT_HIGH | GPIO_OUTPUT_INIT_LOW))
-    {
-    case (GPIO_OUTPUT_HIGH):
-        GPIO_WriteBit(port_base, gpio_bit, 1);
-        break;
-    case (GPIO_OUTPUT_LOW):
-        GPIO_WriteBit(port_base, gpio_bit, 0);
-        break;
-    default:
-        break;
-    }
-
-    /* to avoid trigger gpio interrupt */
-    if (debounce_ms && (flags & GPIO_INT_ENABLE))
-    {
-        GPIO_INTConfig(port_base, gpio_bit, DISABLE);
-        GPIO_Init(port_base, &gpio_init_struct);
-        GPIO_MaskINTConfig(port_base, gpio_bit, ENABLE);
-        GPIO_INTConfig(port_base, gpio_bit, ENABLE);
-        k_busy_wait(data->pin_debounce_ms[pin] * 2 * 1000);
-        GPIO_ClearINTPendingBit(port_base, gpio_bit);
-        GPIO_MaskINTConfig(port_base, gpio_bit, DISABLE);
-    }
-    else
-    {
-        GPIO_Init(port_base, &gpio_init_struct);
-    }
+#endif
 
     return 0;
 }
@@ -400,6 +419,152 @@ int gpio_rtl87x2g_port_get_direction(const struct device *port, gpio_port_pins_t
 }
 #endif
 
+#ifdef CONFIG_PM_DEVICE
+static int gpio_rtl87x2g_pm_pad_list_init(struct gpio_rtl87x2g_data *data)
+{
+    data->pm_pad_node_head = k_heap_alloc(data->heap, sizeof(struct pm_pad_node), K_NO_WAIT);
+    if (data->pm_pad_node_head == NULL)
+    {
+            LOG_ERR("Failed to allocate memory");
+            return -ENOMEM;
+    }
+
+    data->pm_pad_node_head->pad_num = 0xff;
+    data->pm_pad_node_head->gpio_num = 0xff;
+    data->pm_pad_node_head->next = NULL;
+    return 0;
+}
+
+static int gpio_rtl87x2g_pm_pad_list_insert(struct gpio_rtl87x2g_data *data, uint8_t pad_num, uint8_t gpio_num)
+{
+    struct pm_pad_node* new_node;
+    struct pm_pad_node* cur_node = data->pm_pad_node_head;
+    while (cur_node->next)
+    {
+        if (cur_node->pad_num > pad_num && cur_node->next->pad_num < pad_num)
+        {
+            new_node = k_heap_alloc(data->heap, sizeof(struct pm_pad_node), K_NO_WAIT);
+            if (new_node == NULL)
+            {
+                LOG_ERR("Failed to allocate memory");
+                return -ENOMEM;
+            }
+
+            new_node->pad_num = pad_num;
+            new_node->gpio_num = gpio_num;
+            new_node->next = cur_node->next;
+            cur_node->next = new_node;
+            return 0;
+        }
+        else if (cur_node->pad_num == pad_num)
+        {
+            return 0;
+        }
+        else
+        {
+            cur_node = cur_node->next;
+            continue;
+        }
+    }
+
+    if (cur_node->pad_num == pad_num)
+    {
+        return 0;
+    }
+    else
+    {
+        new_node = k_heap_alloc(data->heap, sizeof(struct pm_pad_node), K_NO_WAIT);
+        if (new_node == NULL)
+        {
+            LOG_ERR("Failed to allocate memory");
+            return -ENOMEM;
+        }
+
+        new_node->pad_num = pad_num;
+        new_node->gpio_num = gpio_num;
+        new_node->next = NULL;
+        cur_node->next = new_node;
+
+        return 0;
+    }
+}
+
+static void gpio_rtl87x2g_pm_pad_list_remove(struct gpio_rtl87x2g_data *data, uint8_t pad_num, uint8_t gpio_num)
+{
+    struct pm_pad_node* cur_node = data->pm_pad_node_head;
+    struct pm_pad_node* rm_node;
+    while (cur_node->next)
+    {
+        if (cur_node->next->pad_num == pad_num)
+        {
+            rm_node = cur_node->next;
+            if (cur_node->next->next)
+            {
+                cur_node->next = cur_node->next->next;
+            }
+            else
+            {
+                cur_node->next = NULL;
+            }
+            k_heap_free(data->heap, rm_node);
+            return;
+        }
+        else if (cur_node->next->pad_num < pad_num)
+        {
+            return;
+        }
+        else
+        {
+            cur_node = cur_node->next;
+            continue;
+        }
+    }
+
+    return;
+}
+
+static int gpio_rtl87x2g_pm_action(const struct device *port,
+                                   enum pm_device_action action)
+{
+    const struct gpio_rtl87x2g_config *config = port->config;
+    struct gpio_rtl87x2g_data *data = port->data;
+    GPIO_TypeDef *port_base = config->port_base;
+    extern void GPIO_DLPSEnter(void *PeriReg, void *StoreBuf);
+    extern void GPIO_DLPSExit(void *PeriReg, void *StoreBuf);
+    struct pm_pad_node* cur_node = data->pm_pad_node_head->next;
+
+    switch (action)
+    {
+    case PM_DEVICE_ACTION_SUSPEND:
+        while (cur_node)
+        {
+            Pad_SetOutputLevel(cur_node->pad_num, GPIO_ReadOutputDataBit(port_base, BIT(cur_node->gpio_num)));
+            Pad_SetControlMode(cur_node->pad_num, PAD_SW_MODE);
+            cur_node = cur_node->next;
+        }
+
+        GPIO_DLPSEnter(port_base, &data->store_buf);
+
+        break;
+    case PM_DEVICE_ACTION_RESUME:
+
+        while (cur_node)
+        {
+            Pad_SetControlMode(cur_node->pad_num, PAD_PINMUX_MODE);
+            cur_node = cur_node->next;
+        }
+        
+        GPIO_DLPSExit(port_base, &data->store_buf);
+
+        break;
+    default:
+        return -ENOTSUP;
+    }
+
+    return 0;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static const struct gpio_driver_api gpio_rtl87x2g_driver_api =
 {
     .pin_configure = gpio_rtl87x2g_pin_configure,
@@ -467,7 +632,12 @@ static int gpio_rtl87x2g_init(const struct device *dev)
 
     data->dev = dev;
     memset(data->pin_debounce_ms, 0, sizeof(data->pin_debounce_ms));
+
+#ifdef CONFIG_PM_DEVICE
+    return gpio_rtl87x2g_pm_pad_list_init(data);
+#else
     return 0;
+#endif
 }
 
 #define GPIO_RTL87X2G_SET_GPIO_IRQ_INFO(irq_idx, index)                         \
@@ -489,7 +659,21 @@ static int gpio_rtl87x2g_init(const struct device *dev)
 #define GPIO_RTL87X2G_GET_IRQ_INFO(index)                 \
     .irq_info = &gpio_rtl87x2g_irq_info##index ,      \
 
+#ifdef CONFIG_PM_DEVICE
+#define GPIO_RTL87X2G_HEAP_DEFINE(index)                     \
+    K_HEAP_DEFINE(gpio_heap##index, 32 * sizeof(struct pm_pad_node));
+
+#define GPIO_RTL87X2G_DATA_INIT(index)                         \
+    .heap = &gpio_heap##index,                              \
+    .pm_pad_node_head = NULL,                           \
+
+#else
+#define GPIO_RTL87X2G_HEAP_DEFINE(index)
+#define GPIO_RTL87X2G_DATA_INIT(index)
+#endif
+
 #define GPIO_RTL87X2G_DEVICE_INIT(index)                                          \
+    GPIO_RTL87X2G_HEAP_DEFINE(index)                                               \
     GPIO_RTL87X2G_SET_IRQ_INFO(index)                                            \
     static const struct gpio_rtl87x2g_config gpio_rtl87x2g_port##index##_cfg = {   \
         .common = {                                                              \
@@ -502,10 +686,13 @@ static int gpio_rtl87x2g_init(const struct device *dev)
                                                     GPIO_RTL87X2G_GET_IRQ_INFO(index)                                            \
     };                                                                                 \
     \
-    static struct gpio_rtl87x2g_data gpio_rtl87x2g_port##index##_data;               \
+    static struct gpio_rtl87x2g_data gpio_rtl87x2g_port##index##_data = {               \
+        GPIO_RTL87X2G_DATA_INIT(index)                                                  \
+    };               \
     \
-    DEVICE_DT_INST_DEFINE(index, gpio_rtl87x2g_init,                                  \
-                          NULL,                                                                 \
+     PM_DEVICE_DT_INST_DEFINE(index, gpio_rtl87x2g_pm_action);    \
+     DEVICE_DT_INST_DEFINE(index, gpio_rtl87x2g_init,                                  \
+                          PM_DEVICE_DT_INST_GET(index),                                                                 \
                           &gpio_rtl87x2g_port##index##_data,                                    \
                           &gpio_rtl87x2g_port##index##_cfg,                                    \
                           PRE_KERNEL_1,                                                        \

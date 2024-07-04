@@ -7,7 +7,7 @@ config AON_WDT_RTL87X2G
 	bool "RTL87X2G AON Watchdog Timer driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_AON_WDT_ENABLED
-	select REALTEK_AON_WDT
+	select USE_HAL_REALTEK_AON_WDT
 	help
 	  Enable the RTL87X2G aon wdg timer driver.
 
@@ -15,6 +15,6 @@ config CORE_WDT_RTL87X2G
 	bool "RTL87X2G Core Watchdog Timer driver"
 	default y
 	depends on DT_HAS_REALTEK_RTL87X2G_CORE_WDT_ENABLED
-	select REALTEK_CORE_WDT
+	select USE_HAL_REALTEK_CORE_WDT
 	help
 	  Enable the RTL87X2G core wdg timer driver.
