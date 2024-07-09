@@ -85,6 +85,12 @@
 			};
 		};
 
+		trace: memory@18100000 {
+			compatible = "zephyr,memory-region";
+			reg = <0x18100000 0x80000>;
+			zephyr,memory-region = "TRACE";
+		};
+
 		aonwdt: watchdog@40001b60 {
 			compatible = "realtek,rtl87x2g-aon-wdt";
 			reg = <0x40001B60 0x10>;

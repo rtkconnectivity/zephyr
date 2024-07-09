@@ -4,7 +4,10 @@ zephyr_library_sources(soc.c)
 zephyr_library_sources_ifdef(CONFIG_REALTEK_IMAGE_HEADER image_header.c)
 
 zephyr_linker_sources(SECTIONS boot_section.ld)
+zephyr_linker_sources(SECTIONS trace_section.ld)
 zephyr_linker_sources(ROM_START SORT_KEY 0x0header realtek_image_header.ld)
+zephyr_linker_sources(RWDATA app_ram_data.ld)
+zephyr_linker_sources(RAMFUNC_SECTION app_ram_text.ld)
 
 if (CONFIG_CODE_DATA_RELOCATION AND CONFIG_SOC_SERIES_RTL87X2G)
 zephyr_code_relocate(LIBRARY kernel LOCATION ITCM)
@@ -24,5 +27,3 @@ zephyr_code_relocate(FILES ${ZEPHYR_BASE}/lib/os/rb.c LOCATION ITCM)
 endif()
 
 endif()
-
-
