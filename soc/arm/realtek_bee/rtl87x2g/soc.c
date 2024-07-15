@@ -195,6 +195,13 @@ void arch_busy_wait(uint32_t usec_to_wait)
 }
 #endif
 
+/* Overrides the weak ARM implementation */
+void sys_arch_reboot(int type)
+{
+	extern void WDG_SystemReset(int wdt_mode, int reset_reason);
+	WDG_SystemReset(0, type);
+}
+
 SYS_INIT(rtk_platform_init, EARLY, 0);
 SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
 SYS_INIT(rtk_task_init, POST_KERNEL, 0);
