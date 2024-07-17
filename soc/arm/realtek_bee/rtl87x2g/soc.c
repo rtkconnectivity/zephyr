@@ -188,6 +188,13 @@ static int rtk_register_update(void)
 	return 0;
 }
 
+#ifdef CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT
+void arch_busy_wait(uint32_t usec_to_wait)
+{
+	platform_delay_us(usec_to_wait);
+}
+#endif
+
 SYS_INIT(rtk_platform_init, EARLY, 0);
 SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
 SYS_INIT(rtk_task_init, POST_KERNEL, 0);
