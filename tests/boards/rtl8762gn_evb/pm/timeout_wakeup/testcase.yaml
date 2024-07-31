@@ -1,0 +1,6 @@
+tests:
+  boards.rtl87x2g.pm.timeout_wakeup:
+    platform_allow:
+      - rtl8762gn_evb
+    tags:
+      - pm
