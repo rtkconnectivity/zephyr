@@ -422,8 +422,11 @@ static void flag_ipi(void)
 }
 
 #ifdef CONFIG_TIMESLICING
-
+#ifdef CONFIG_TICKS_READS_ITS_FREQUENCY_AT_RUNTIME
+static int slice_ticks;
+#else
 static int slice_ticks = DIV_ROUND_UP(CONFIG_TIMESLICE_SIZE * Z_HZ_ticks, Z_HZ_ms);
+#endif
 static int slice_max_prio = CONFIG_TIMESLICE_PRIORITY;
 static struct _timeout slice_timeouts[CONFIG_MP_MAX_NUM_CPUS];
 static bool slice_expired[CONFIG_MP_MAX_NUM_CPUS];
@@ -439,6 +442,9 @@ static struct k_thread *pending_current;
 
 static inline int slice_time(struct k_thread *thread)
 {
+#ifdef CONFIG_TICKS_READS_ITS_FREQUENCY_AT_RUNTIME
+	slice_ticks = DIV_ROUND_UP(CONFIG_TIMESLICE_SIZE * Z_HZ_ticks, Z_HZ_ms);
+#endif
 	int ret = slice_ticks;
 
 #ifdef CONFIG_TIMESLICE_PER_THREAD

@@ -21,6 +21,11 @@ config TIMER_READS_ITS_FREQUENCY_AT_RUNTIME
 	  The drivers select this option automatically when needed. Do not modify
 	  this unless you have a very good reason for it.
 
+config TICKS_READS_ITS_FREQUENCY_AT_RUNTIME
+	bool "Kernel queries systick frequency at runtime"
+	help
+	  Support to change the systick frequency during runtime.
+
 config SYSTEM_CLOCK_SLOPPY_IDLE
 	bool "Timer allowed to skew uptime clock during idle"
 	help
