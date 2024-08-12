@@ -12,7 +12,7 @@ CONFIG_UART_INTERRUPT_DRIVEN=y
 # CONFIG_UART_ASYNC_API=y
 
 # General Kernel Options
-CONFIG_TICKLESS_KERNEL=n
+CONFIG_TICKLESS_KERNEL=y
 CONFIG_TIMESLICE_SIZE=10
 CONFIG_INIT_STACKS=y
 CONFIG_FPU=y
@@ -33,8 +33,8 @@ CONFIG_OUTPUT_DISASSEMBLY=y
 CONFIG_USE_DT_CODE_PARTITION=y
 
 # power manager settings (default disabled)
-# CONFIG_PM=y
-# CONFIG_PM_DEVICE=y
-# CONFIG_PM_POLICY_CUSTOM=n # use zephyr pm flow, enable this config; use realtek pm flow, disable this config.
-# CONFIG_RUNTIME_NMI=y # customize NMI for Power Manager
-# CONFIG_REALTEK_USING_SDK_LIB=y
+CONFIG_PM=y
+CONFIG_PM_DEVICE=y
+CONFIG_PM_POLICY_CUSTOM=n # use zephyr pm flow, enable this config; use realtek pm flow, disable this config.
+CONFIG_RUNTIME_NMI=y # customize NMI for Power Manager
+CONFIG_REALTEK_USING_SDK_LIB=y

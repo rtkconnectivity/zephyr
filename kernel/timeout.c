@@ -267,10 +267,16 @@ int64_t sys_clock_tick_get(void)
 	return t;
 }
 
+extern bool tick_mode;
+
 uint32_t sys_clock_tick_get_32(void)
 {
 #ifdef CONFIG_TICKLESS_KERNEL
+if (tick_mode) {
 	return (uint32_t)sys_clock_tick_get();
+} else {
+	return (uint32_t)curr_tick;
+}
 #else
 	return (uint32_t)curr_tick;
 #endif
