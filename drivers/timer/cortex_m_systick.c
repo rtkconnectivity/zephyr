@@ -15,7 +15,7 @@
 #define TIMER_STOPPED 0xff000000
 
 #define CYC_PER_TICK (sys_clock_hw_cycles_per_sec()	\
-		      / CONFIG_SYS_CLOCK_TICKS_PER_SEC)
+		      / sys_clock_ticks_per_sec())
 #define MAX_TICKS ((k_ticks_t)(COUNTER_MAX / CYC_PER_TICK) - 1)
 #define MAX_CYCLES (MAX_TICKS * CYC_PER_TICK)
 
@@ -28,7 +28,7 @@
  * masked.  Choosing a fraction of a tick is probably a good enough
  * default, with an absolute minimum of 1k cyc.
  */
-#define MIN_DELAY MAX(1024U, ((uint32_t)CYC_PER_TICK/16U))
+#define MIN_DELAY MAX(4U, ((uint32_t)CYC_PER_TICK/16U))
 
 #define TICKLESS (IS_ENABLED(CONFIG_TICKLESS_KERNEL))
 
@@ -143,6 +143,8 @@ static uint32_t elapsed(void)
 	return (last_load - val2) + overflow_cyc;
 }
 
+extern bool tick_mode;
+
 /* Callout out of platform assembly, not hooked via IRQ_CONNECT... */
 void sys_clock_isr(void *arg)
 {
@@ -159,7 +161,7 @@ void sys_clock_isr(void *arg)
 	cycle_count += overflow_cyc;
 	overflow_cyc = 0;
 
-	if (TICKLESS) {
+	if (TICKLESS && tick_mode) {
 		/* In TICKLESS mode, the SysTick.LOAD is re-programmed
 		 * in sys_clock_set_timeout(), followed by resetting of
 		 * the counter (VAL = 0).
@@ -190,82 +192,84 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 	 * the counter. (Note: we can assume if idle==true that
 	 * interrupts are already disabled)
 	 */
-	if (IS_ENABLED(CONFIG_TICKLESS_KERNEL) && idle && ticks == K_TICKS_FOREVER) {
+	if (IS_ENABLED(CONFIG_TICKLESS_KERNEL) && idle && ticks == K_TICKS_FOREVER && tick_mode) {
 		SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;
 		last_load = TIMER_STOPPED;
 		return;
 	}
 
 #if defined(CONFIG_TICKLESS_KERNEL)
-	uint32_t delay;
-	uint32_t val1, val2;
-	uint32_t last_load_ = last_load;
+	if (tick_mode) {
+		uint32_t delay;
+		uint32_t val1, val2;
+		uint32_t last_load_ = last_load;
 
-	ticks = (ticks == K_TICKS_FOREVER) ? MAX_TICKS : ticks;
-	ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
+		ticks = (ticks == K_TICKS_FOREVER) ? MAX_TICKS : ticks;
+		ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
 
-	k_spinlock_key_t key = k_spin_lock(&lock);
+		k_spinlock_key_t key = k_spin_lock(&lock);
 
-	uint32_t pending = elapsed();
+		uint32_t pending = elapsed();
 
-	val1 = SysTick->VAL;
+		val1 = SysTick->VAL;
 
-	cycle_count += pending;
-	overflow_cyc = 0U;
+		cycle_count += pending;
+		overflow_cyc = 0U;
 
-	uint32_t unannounced = cycle_count - announced_cycles;
+		uint32_t unannounced = cycle_count - announced_cycles;
 
-	if ((int32_t)unannounced < 0) {
-		/* We haven't announced for more than half the 32-bit
-		 * wrap duration, because new timeouts keep being set
-		 * before the existing one fires.  Force an announce
-		 * to avoid loss of a wrap event, making sure the
-		 * delay is at least the minimum delay possible.
-		 */
-		last_load = MIN_DELAY;
-	} else {
-		/* Desired delay in the future */
-		delay = ticks * CYC_PER_TICK;
-
-		/* Round delay up to next tick boundary */
-		delay += unannounced;
-		delay = DIV_ROUND_UP(delay, CYC_PER_TICK) * CYC_PER_TICK;
-		delay -= unannounced;
-		delay = MAX(delay, MIN_DELAY);
-		if (delay > MAX_CYCLES) {
-			last_load = MAX_CYCLES;
+		if ((int32_t)unannounced < 0) {
+		   /* We haven't announced for more than half the 32-bit
+			* wrap duration, because new timeouts keep being set
+			* before the existing one fires.  Force an announce
+			* to avoid loss of a wrap event, making sure the
+			* delay is at least the minimum delay possible.
+			*/
+			last_load = MIN_DELAY;
 		} else {
-			last_load = delay;
+			/* Desired delay in the future */
+			delay = ticks * CYC_PER_TICK;
+
+			/* Round delay up to next tick boundary */
+			delay += unannounced;
+			delay = DIV_ROUND_UP(delay, CYC_PER_TICK) * CYC_PER_TICK;
+			delay -= unannounced;
+			delay = MAX(delay, MIN_DELAY);
+			if (delay > MAX_CYCLES) {
+				last_load = MAX_CYCLES;
+			} else {
+				last_load = delay;
+			}
 		}
+
+		val2 = SysTick->VAL;
+
+		SysTick->LOAD = last_load - 1;
+		SysTick->VAL = 0; /* resets timer to last_load */
+
+	   /*
+		* Add elapsed cycles while computing the new load to cycle_count.
+		*
+		* Note that comparing val1 and val2 is normaly not good enough to
+		* guess if the counter wrapped during this interval. Indeed if val1 is
+		* close to LOAD, then there are little chances to catch val2 between
+		* val1 and LOAD after a wrap. COUNTFLAG should be checked in addition.
+		* But since the load computation is faster than MIN_DELAY, then we
+		* don't need to worry about this case.
+		*/
+		if (val1 < val2) {
+			cycle_count += (val1 + (last_load_ - val2));
+		} else {
+			cycle_count += (val1 - val2);
+		}
+		k_spin_unlock(&lock, key);
 	}
-
-	val2 = SysTick->VAL;
-
-	SysTick->LOAD = last_load - 1;
-	SysTick->VAL = 0; /* resets timer to last_load */
-
-	/*
-	 * Add elapsed cycles while computing the new load to cycle_count.
-	 *
-	 * Note that comparing val1 and val2 is normaly not good enough to
-	 * guess if the counter wrapped during this interval. Indeed if val1 is
-	 * close to LOAD, then there are little chances to catch val2 between
-	 * val1 and LOAD after a wrap. COUNTFLAG should be checked in addition.
-	 * But since the load computation is faster than MIN_DELAY, then we
-	 * don't need to worry about this case.
-	 */
-	if (val1 < val2) {
-		cycle_count += (val1 + (last_load_ - val2));
-	} else {
-		cycle_count += (val1 - val2);
-	}
-	k_spin_unlock(&lock, key);
 #endif
 }
 
 uint32_t sys_clock_elapsed(void)
 {
-	if (!TICKLESS) {
+	if (!TICKLESS && !tick_mode) {
 		return 0;
 	}
 

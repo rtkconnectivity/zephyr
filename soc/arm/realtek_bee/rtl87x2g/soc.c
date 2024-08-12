@@ -5,6 +5,8 @@
 #include <zephyr/linker/linker-defs.h>
 #include <zephyr/sys/barrier.h>
 #include <soc.h>
+#include <rtl_gpio.h>
+
 
 #include "rom_api_for_zephyr.h"
 #include "trace.h"
@@ -172,9 +174,55 @@ static int rtk_task_init(void)
 	return 0;
 }
 
+/*
+ * tick_mode:
+ * True: 125us/tick + tickless
+ * False: 10ms/tick + no tickless
+ */
+bool tick_mode;
+
+#define PPT_MODE_READY_TO_ENTER_DLPS 0x88
+static int rtk_zmk_mode_detect(void)
+{
+	bool ble_mode, ppt_mode;
+
+/**
+ * read ble mode monitor pin status from gpioa(0x40030000,bit 9) register directly
+ * if enter ble mode, the pin status is low, otherwise it's high
+ */
+	ble_mode = GPIO_ReadInputDataBit(((GPIO_TypeDef *)0x40030000), GPIO_Pin_9) ? false : true;
+/**
+ * read ppt mode monitor pin status from gpioa(0x40030000,bit 8) register directly
+ * if enter ppt mode, the pin status is low, otherwise it's high
+ */
+	ppt_mode =  GPIO_ReadInputDataBit(((GPIO_TypeDef *)0x40030000), GPIO_Pin_8) ? false : true;
+/**
+ * check the reset_reason.
+ */
+	AON_NS_REG0X_APP_TYPE aon_0x1ae0 = {.d32 = AON_REG_READ(AON_NS_REG0X_APP)};
+	uint32_t sw_reset_type = aon_0x1ae0.reset_reason;
+/*
+ * ppt mode with DLPS-ready state and ble_mode will switch to
+ * 10ms/tick + no tickless + enable dlps
+ *
+ * ppt mode with working state, usb_mod will switch to
+ * 125us/tick + tickless + disable dlps
+ */
+	if ((ppt_mode && sw_reset_type == PPT_MODE_READY_TO_ENTER_DLPS) || ble_mode) {
+	    tick_mode = false;
+	} else {
+		tick_mode = true;
+	}
+
+	return 0;
+}
+
 static int rtk_register_update(void)
 {
-	NVIC_SetPriority(SysTick_IRQn, 0xff);
+/* If it is "10ms/tick + no ticless", set the priority of systick isr to the lowest.*/
+	if (!tick_mode) {
+		NVIC_SetPriority(SysTick_IRQn, 0xff);
+	}
 #ifdef CONFIG_SYSTICK_USE_EXTERNAL_CLOCK
 	SysTick->CTRL &= ~SysTick_CTRL_CLKSOURCE_Msk;
 #endif
@@ -203,5 +251,6 @@ void sys_arch_reboot(int type)
 }
 
 SYS_INIT(rtk_platform_init, EARLY, 0);
+SYS_INIT(rtk_zmk_mode_detect, PRE_KERNEL_1, 80);/* Run it after gpio init and before systick init */
 SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
 SYS_INIT(rtk_task_init, POST_KERNEL, 0);

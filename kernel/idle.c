@@ -18,6 +18,9 @@
 
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
+extern bool tick_mode;
+extern void (*power_manager_slave_inact_action_handler)(void);
+
 void z_pm_save_idle_exit(void)
 {
 #ifdef CONFIG_PM
@@ -73,9 +76,14 @@ void idle(void *unused1, void *unused2, void *unused3)
 		thermal_meter_read();
 
 #ifdef CONFIG_PM
-		extern void (*power_manager_slave_inact_action_handler)(void);
-		power_manager_slave_inact_action_handler();
+		if (!tick_mode) {
+			power_manager_slave_inact_action_handler();
+		} else {
+			(void) arch_irq_lock();
+			k_cpu_idle();
+		}
 #else
+		(void) arch_irq_lock();
 		k_cpu_idle();
 #endif
 

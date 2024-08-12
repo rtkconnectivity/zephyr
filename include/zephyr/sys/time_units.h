@@ -56,6 +56,22 @@ static inline int z_impl_sys_clock_hw_cycles_per_sec_runtime_get(void)
 }
 #endif /* CONFIG_TIMER_READS_ITS_FREQUENCY_AT_RUNTIME */
 
+
+#if defined(CONFIG_TICKS_READS_ITS_FREQUENCY_AT_RUNTIME)
+static inline int sys_clock_ticks_per_sec_runtime_get(void);
+
+static inline int sys_clock_ticks_per_sec_runtime_get(void)
+{
+	extern bool tick_mode;
+
+	if (tick_mode) {
+		return CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+	} else {
+		return 100;
+	}
+}
+#endif /* CONFIG_TICKS_READS_ITS_FREQUENCY_AT_RUNTIME */
+
 #if defined(__cplusplus) && __cplusplus >= 201402L
   #if defined(CONFIG_TIMER_READS_ITS_FREQUENCY_AT_RUNTIME)
     #define TIME_CONSTEXPR
@@ -75,6 +91,17 @@ static inline int z_impl_sys_clock_hw_cycles_per_sec_runtime_get(void)
 #else
 #define sys_clock_hw_cycles_per_sec() CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC
 #endif
+
+/**
+ * @brief Get the system tick frequency.
+ * @return system tick frequency in Hz
+ */
+#if defined(CONFIG_TICKS_READS_ITS_FREQUENCY_AT_RUNTIME)
+#define sys_clock_ticks_per_sec() sys_clock_ticks_per_sec_runtime_get()
+#else
+#define sys_clock_ticks_per_sec() CONFIG_SYS_CLOCK_TICKS_PER_SEC
+#endif
+
 
 /** @internal
  * Macro determines if fast conversion algorithm can be used. It checks if
@@ -326,7 +353,7 @@ static inline int z_impl_sys_clock_hw_cycles_per_sec_runtime_get(void)
 #define Z_HZ_us 1000000
 #define Z_HZ_ns 1000000000
 #define Z_HZ_cyc sys_clock_hw_cycles_per_sec()
-#define Z_HZ_ticks CONFIG_SYS_CLOCK_TICKS_PER_SEC
+#define Z_HZ_ticks sys_clock_ticks_per_sec()
 #define Z_CCYC (!IS_ENABLED(CONFIG_TIMER_READS_ITS_FREQUENCY_AT_RUNTIME))
 
 /** @brief Convert milliseconds to hardware cycles. 32 bits. Truncates.
