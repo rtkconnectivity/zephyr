@@ -525,7 +525,7 @@ static int gpio_rtl87x2g_pm_action(const struct device *port,
 				System_WakeUpPinEnable(
 				pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num,
 				high_trigger ?
-				PAD_WAKEUP_POL_HIGH : PAD_WAKEUP_POL_LOW, PAD_WAKEUP_DEB_ENABLE);
+				PAD_WAKEUP_POL_HIGH : PAD_WAKEUP_POL_LOW, PAD_WAKEUP_DEB_DISABLE);
 			}
 			cur_wakeup_pad_node =
 			&(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]);
