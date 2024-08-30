@@ -1,0 +1,12 @@
+CONFIG_SOC_SERIES_RTL8752H=y
+CONFIG_SOC_RTL8752HTV=y
+CONFIG_BOARD_RTL8752HTV_EVB=y
+
+# DISASSEMBLY
+CONFIG_OUTPUT_DISASSEMBLY=y
+
+# link application into the the flash partition selected by the zephyr,code-partition property in /chosen in devicetree
+CONFIG_USE_DT_CODE_PARTITION=y
+
+# For Debug
+CONFIG_DEBUG_OPTIMIZATIONS=y
