@@ -15,7 +15,8 @@
 
 #include <cmsis_core.h>
 
-#include <pmu_manager.h>
+/* for platform_pm_register_callback_func_with_priority */
+#include <power_manager_unit_platform.h>
 #include <pm.h>
 #include <rtl_pinmux.h>
 #include <trace.h>
