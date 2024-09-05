@@ -94,4 +94,6 @@ source "drivers/clock_control/Kconfig.nrf_auxpll"
 
 source "drivers/clock_control/Kconfig.rtl87x2g"
 
+source "drivers/clock_control/Kconfig.rtl8752h"
+
 endif # CLOCK_CONTROL

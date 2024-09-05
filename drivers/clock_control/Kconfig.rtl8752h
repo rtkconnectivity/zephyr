@@ -1,0 +1,12 @@
+# RTL8752H clock control configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config CLOCK_CONTROL_RTL8752H
+	bool "RTL8752H clock control"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_CCTL_ENABLED
+	select USE_HAL_REALTEK_RCC
+	help
+	  Enable driver for RTL8752H Reset Clock Unit (RCU).

@@ -1,0 +1,30 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  RTL8752H clock unit for all SoC peripherals in charge of
+  clock control (CCTL). This binding represents the clock controller (CCTL).
+
+  To specify the clocks in a peripheral, the standard clocks property needs
+  to be used, e.g.:
+
+    gpio: gpio@xxx {
+        ...
+        /* cell encodes related clock bit for specified peripheral */
+        clocks = <&cctl APB_CLK(GPIO)>;
+        ...
+    }
+
+  Predefined clock cells are available in
+  include/zephyr/dts-bindings/clock/rtl8752h-clocks.h header files.
+
+compatible: "realtek,rtl8752h-cctl"
+
+include: [clock-controller.yaml, base.yaml]
+
+properties:
+  "#clock-cells":
+    const: 1
+
+clock-cells:
+  - id
