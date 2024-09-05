@@ -1,0 +1,16 @@
+choice
+	prompt "RealTek RTL8752H MCU Selection"
+	depends on SOC_SERIES_RTL8752H
+
+config SOC_RTL8752HTV
+	bool "SOC_RTL8752HTV"
+
+
+endchoice
+
+if SOC_SERIES_RTL8752H
+
+config SOC_PART_NUMBER_RTL8752HTV
+	bool
+
+endif

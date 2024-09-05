@@ -1,0 +1,10 @@
+config SOC_SERIES_RTL8752H
+	bool "RTL8752H Series MCU"
+	select ARM
+	select CPU_CORTEX_M0PLUS
+	select SOC_FAMILY_REALTEK_BEE
+	select PLATFORM_SPECIFIC_INIT
+	select CPU_CORTEX_M_HAS_VTOR
+	select CPU_CORTEX_M_HAS_SYSTICK
+	help
+	  Enable support for RTL8725H MCU series
