@@ -1,0 +1,19 @@
+# RTL8752H uart configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config UART_RTL8752H
+	bool "RTL8752H MCU serial driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_UART_ENABLED
+	select USE_HAL_REALTEK_UART
+	select SERIAL_HAS_DRIVER
+	select SERIAL_SUPPORT_INTERRUPT
+	# the ASYNC implementation requires a DMA controller
+	select SERIAL_SUPPORT_ASYNC \
+		if DT_HAS_REALTEK_RTL8752H_DMA_ENABLED
+	select DMA if UART_ASYNC_API
+
+	help
+	  Enable the RTL8752H uart driver.

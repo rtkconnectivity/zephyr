@@ -1,0 +1,32 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  RTL8752H UART.
+
+compatible: "realtek,rtl8752h-uart"
+
+include: [uart-controller.yaml, base.yaml, pinctrl-device.yaml]
+
+bus: uart
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+  flow-ctrl:
+    type: boolean
+    description: |
+      Enable cts and rts or not.
