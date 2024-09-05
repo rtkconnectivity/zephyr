@@ -59,18 +59,21 @@ void idle(void *unused1, void *unused2, void *unused3)
 			z_swap_unlocked();
 		}
 
-		/* Note weird API: k_cpu_idle() is called with local
-		 * CPU interrupts masked, and returns with them
-		 * unmasked.  It does not take a spinlock or other
-		 * higher level construct.
-		 */
-		// (void) arch_irq_lock(); //sync with realtek pm flow
-
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+		/* sync with realtek pm flow */
     	extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
 		log_buffer_trigger_schedule_in_km4_idle_task();
 
 		extern void (*thermal_meter_read)(void);
 		thermal_meter_read();
+#else
+		/* Note weird API: k_cpu_idle() is called with local
+		 * CPU interrupts masked, and returns with them
+		 * unmasked.  It does not take a spinlock or other
+		 * higher level construct.
+		 */
+		(void) arch_irq_lock();
+#endif
 
 #ifdef CONFIG_PM
 		extern void (*power_manager_slave_inact_action_handler)(void);
