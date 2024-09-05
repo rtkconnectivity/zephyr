@@ -1,0 +1,12 @@
+# RTL8752H PINCTRL configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config PINCTRL_RTL8752H
+	bool "RTL8752H pin controller driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_PINCTRL_ENABLED
+	select USE_HAL_REALTEK_PINMUX
+	help
+	  Enable the RTL8752H pin controller driver.
