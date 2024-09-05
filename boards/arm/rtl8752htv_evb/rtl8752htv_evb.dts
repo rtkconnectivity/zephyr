@@ -1,0 +1,32 @@
+/dts-v1/;
+#include <realtek/rtl8752h.dtsi>
+
+/ {
+	model = "RealTek rtl8752h evb ";
+	compatible = "realtek,rtl8752h_evb";
+
+	chosen {
+		zephyr,code-partition = &app_partition;
+	};
+
+	/* These aliases are provided for compatibility with samples */
+	aliases {
+	};
+
+};
+
+&flash {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		app_partition: partition@36000 {
+			label = "app-image";
+			reg = <0x36000 DT_SIZE_K(136)>;
+		};
+	};
+};
+
+&cpu {
+	clock-frequency = <40000000>;
+};
