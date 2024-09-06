@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
- #include <dt-bindings/pinctrl/rtl8752h-pinctrl.h>
+#include <dt-bindings/pinctrl/rtl8752h-pinctrl.h>
 
 &pinctrl {
 	uart2_default: uart2_default {
