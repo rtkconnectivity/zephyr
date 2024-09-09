@@ -78,4 +78,6 @@ source "drivers/dma/Kconfig.nxp_edma"
 
 source "drivers/dma/Kconfig.rtl87x2g"
 
+source "drivers/dma/Kconfig.rtl8752h"
+
 endif # DMA
