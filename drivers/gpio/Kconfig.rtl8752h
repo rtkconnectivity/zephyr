@@ -1,0 +1,29 @@
+# RTL8752H gpio configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig GPIO_RTL8752H
+	bool "RTL8752H MCU GPIO driver"
+	default y
+	select USE_HAL_REALTEK_GPIO
+	select DYNAMIC_INTERRUPTS
+	depends on DT_HAS_REALTEK_RTL8752H_GPIO_ENABLED
+	help
+	  Enable the RTL8752H gpio driver.
+
+if GPIO_RTL8752H
+
+config RTL8752H_USE_P4_1_AS_GPIO29
+	bool "Use P4_1 as GPIO29 on RTL8752H"
+	default n
+	help
+	  If true, use P4_1 as GPIO29 on RTL8752H, else use P3_5.
+
+config RTL8752H_USE_P4_2_AS_GPIO30
+	bool "Use P4_2 as GPIO30 on RTL8752H"
+	default n
+	help
+	  If true, use P4_2 as GPIO30 on RTL8752H, else use P3_6.
+
+endif # GPIO_RTL8752H
