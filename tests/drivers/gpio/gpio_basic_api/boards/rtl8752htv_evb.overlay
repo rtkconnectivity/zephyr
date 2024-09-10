@@ -1,0 +1,19 @@
+/*
+ * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/gpio/realtek-rtl8752h-gpio.h>
+
+&gpio {
+    status = "okay";
+};
+
+/ {
+    resources {
+        compatible = "test-gpio-basic-api";
+        out-gpios = <&gpio 0 GPIO_ACTIVE_HIGH>;
+        in-gpios = <&gpio 1 (GPIO_ACTIVE_HIGH | RTL8752H_GPIO_INPUT_DEBOUNCE_MS(8))>;
+    };
+};
