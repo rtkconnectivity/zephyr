@@ -240,4 +240,6 @@ source "drivers/flash/Kconfig.numaker_rmc"
 
 source "drivers/flash/Kconfig.rtl87x2g"
 
+source "drivers/flash/Kconfig.rtl8752h"
+
 endif # FLASH

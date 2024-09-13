@@ -1,0 +1,13 @@
+# RTL8752H FLASH configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_FLASH_RTL8752H
+	bool "Realtek RTL8752H flash driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_FLASH_CONTROLLER_ENABLED
+	select FLASH_HAS_DRIVER_ENABLED
+	select FLASH_HAS_PAGE_LAYOUT
+	help
+	  Enable rtl8752h flash driver.
