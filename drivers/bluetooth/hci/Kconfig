@@ -164,6 +164,7 @@ config BT_RTL87X2G
 
 config BT_RTL8752H
 	bool "RTL8752H BT HCI driver"
+	default y
 	depends on SOC_SERIES_RTL8752H
 	help
 	  This option enables the bt hci driver for RTL8752H family of

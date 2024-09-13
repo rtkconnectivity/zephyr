@@ -48,3 +48,7 @@
 	stop-bits = "1";
 	data-bits = <8>;
 };
+
+&bee_bt_hci {
+	status= "okay";
+};

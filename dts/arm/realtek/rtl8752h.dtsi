@@ -14,6 +14,7 @@
 		zephyr,flash-controller = &fmc;
 		zephyr,sram = &app_ram_data;
 		zephyr,entropy = &trng;
+		zephyr,bt-hci = &bee_bt_hci;
 	};
 
 	cpus {
@@ -43,16 +44,20 @@
 				erase-block-size = <4096>;
 			};
 		};
+		bee_bt_hci: bee_bt_hci@0 {
+			compatible = "realtek,bee-bt-hci";
+			status = "disabled";
+		};
 		data_ram {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			app_ram_data: memory@208800 {
+			app_ram_data: memory@209000 {
 				device_type = "ram data region";
-				reg = < 0x208800 DT_SIZE_K(57)>;
+				reg = < 0x209000 DT_SIZE_K(48)>;
 			};
-			heap0: memory@216C00 {
+			heap0: memory@215000 {
 				device_type = "heap region";
-				reg = < 0x216C00 DT_SIZE_K(13)>;
+				reg = < 0x215000 DT_SIZE_K(20)>;
 			};
 		};
 		cache_ram{
