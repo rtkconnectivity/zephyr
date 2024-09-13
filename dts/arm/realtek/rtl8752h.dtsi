@@ -13,6 +13,7 @@
 		zephyr,flash = &flash;
 		zephyr,flash-controller = &fmc;
 		zephyr,sram = &app_ram_data;
+		zephyr,entropy = &trng;
 	};
 
 	cpus {
@@ -138,6 +139,12 @@
 			dma-port = <0>;
 			#dma-cells = <3>;
 			status = "disabled";
+		};
+
+		trng: trng@400c2400 {
+			compatible = "realtek,rtl8752h-trng";
+			reg = <0x400c2400 0x68>;
+			status = "okay";
 		};
 
 	};

@@ -1,0 +1,12 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: RTL8752H TRNG
+
+compatible: "realtek,rtl8752h-trng"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true

@@ -37,6 +37,7 @@ source "drivers/entropy/Kconfig.bt_hci"
 source "drivers/entropy/Kconfig.psa_crypto"
 source "drivers/entropy/Kconfig.npcx"
 source "drivers/entropy/Kconfig.rtl87x2g"
+source "drivers/entropy/Kconfig.rtl8752h"
 
 config ENTROPY_HAS_DRIVER
 	bool
