@@ -616,8 +616,8 @@ static int gpio_rtl87x2g_init(const struct device *dev)
 {
 	struct gpio_rtl87x2g_data *data = dev->data;
 	const struct gpio_rtl87x2g_config *config = dev->config;
-	int ret = 0;
 
+	int ret = 0;
 	(void)clock_control_on(RTL87X2G_CLOCK_CONTROLLER,
 	(clock_control_subsys_t)&config->clkid);
 
