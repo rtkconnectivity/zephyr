@@ -12,11 +12,19 @@
 #include <zephyr/drivers/timer/system_timer.h>
 #include <zephyr/sys_clock.h>
 
+/* To support RTK PM */
+#include <os_queue.h>
+#include <os_pm.h>
+extern T_OS_QUEUE lpm_excluded_handle[PLATFORM_PM_EXCLUDED_TYPE_MAX];
+static int announce_remaining_rtk_pm;
+static sys_dlist_t exclude_timer_pended_list = SYS_DLIST_STATIC_INIT(&exclude_timer_pended_list);
+
 static uint64_t curr_tick;
 
 static sys_dlist_t timeout_list = SYS_DLIST_STATIC_INIT(&timeout_list);
 
 static struct k_spinlock timeout_lock;
+static struct k_spinlock timeout_lock_rtk_pm;
 
 #define MAX_WAIT (IS_ENABLED(CONFIG_SYSTEM_CLOCK_SLOPPY_IDLE) \
 		  ? K_TICKS_FOREVER : INT_MAX)
@@ -355,43 +363,86 @@ struct _timeout *get_next_timeout(struct _timeout *t)
 
 void sys_clock_announce_only_add_ticks(int32_t ticks)
 {
-	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
+	k_spinlock_key_t key = k_spin_lock(&timeout_lock_rtk_pm);
 
-	announce_remaining += ticks;
+	announce_remaining_rtk_pm += ticks;
 	curr_tick += ticks;
 
-	k_spin_unlock(&timeout_lock, key);
+	k_spin_unlock(&timeout_lock_rtk_pm, key);
 }
 
 void sys_clock_announce_process_timeout(void)
 {
-	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
+	k_spinlock_key_t key = k_spin_lock(&timeout_lock_rtk_pm);
 
 	struct _timeout *t;
 
-	for (t = first();
-	     (t != NULL) && (t->dticks <= announce_remaining);
-	     t = first()) {
-		int dt = t->dticks;
+	bool flag;
 
+	for (t = first();
+	     (t != NULL) && (t->dticks <= announce_remaining_rtk_pm);
+	     t = first()) {
+		flag = false;
+		int dt = t->dticks;
 		t->dticks = 0;
 		remove_timeout(t);
 
-		k_spin_unlock(&timeout_lock, key);
-		t->fn(t);
-		key = k_spin_lock(&timeout_lock);
-		announce_remaining -= dt;
+/* To prevent an exclude timer from restarting and executing multiple times,
+ * ensure the exclude timer callback is executed after finishing the processing
+ * of announce_remaining_rtk_pm.
+ */
+		k_spin_unlock(&timeout_lock_rtk_pm, key);
+		if (t->fn == z_timer_expiration_handler) {
+			struct k_timer *timer = CONTAINER_OF(t, struct k_timer, timeout);
+			T_OS_QUEUE_ELEM *p_cur_queue_item = lpm_excluded_handle[0].p_first;
+
+			while (p_cur_queue_item != NULL) {
+				void *cur_excluded_handle =
+				*(((PlatformPMExcludedHandleQueueElem *)p_cur_queue_item)->handle);
+
+				if (cur_excluded_handle != NULL) {
+					if (timer == cur_excluded_handle) {
+						sys_dlist_append(&exclude_timer_pended_list,
+											&t->node);
+						flag = true;
+						break;
+					}
+				}
+				p_cur_queue_item = p_cur_queue_item->p_next;
+			}
+		}
+		key = k_spin_lock(&timeout_lock_rtk_pm);
+
+		if (!flag) {
+			k_spin_unlock(&timeout_lock_rtk_pm, key);
+			t->fn(t);
+			key = k_spin_lock(&timeout_lock_rtk_pm);
+		}
+		announce_remaining_rtk_pm -= dt;
 	}
 
 	if (t != NULL) {
-		t->dticks -= announce_remaining;
+		t->dticks -= announce_remaining_rtk_pm;
 	}
 
-	announce_remaining = 0;
+	announce_remaining_rtk_pm = 0;
 
 	sys_clock_set_timeout(next_timeout(), false);
 
-	k_spin_unlock(&timeout_lock, key);
+	k_spin_unlock(&timeout_lock_rtk_pm, key);
+
+	/* Execute exclude timer callback here. */
+	for (sys_dnode_t *n = sys_dlist_peek_head(&exclude_timer_pended_list);
+		n != NULL;
+		n = sys_dlist_peek_head(&exclude_timer_pended_list)) {
+		struct _timeout *to = CONTAINER_OF(n, struct _timeout, node);
+		/* Remove from dlist before running the timer callback,
+		 * otherwise the callback will not execute due to the logic
+		 * in z_timer_expiration_handler().
+		 */
+		sys_dlist_remove(&to->node);
+		to->fn(to);
+	}
 
 #ifdef CONFIG_TIMESLICING
 	z_time_slice();
