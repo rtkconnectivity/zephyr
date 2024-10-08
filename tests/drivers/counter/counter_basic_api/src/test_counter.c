@@ -118,6 +118,12 @@ static const struct device *const devices[] = {
 #ifdef CONFIG_COUNTER_MCUX_LPTMR
 	DEVS_FOR_DT_COMPAT(nxp_lptmr)
 #endif
+#ifdef CONFIG_COUNTER_TIMER_RTL8752H
+	DEVS_FOR_DT_COMPAT(realtek_rtl8752h_timer)
+#endif
+#ifdef CONFIG_COUNTER_RTC_RTL8752H
+	DEVS_FOR_DT_COMPAT(realtek_rtl8752h_rtc)
+#endif
 };
 
 static const struct device *const period_devs[] = {
@@ -129,6 +135,9 @@ static const struct device *const period_devs[] = {
 #endif
 #ifdef CONFIG_COUNTER_RTC_STM32
 	DEVS_FOR_DT_COMPAT(st_stm32_rtc)
+#endif
+#ifdef CONFIG_COUNTER_RTC_RTL8752H
+	DEVS_FOR_DT_COMPAT(realtek_rtl8752h_rtc)
 #endif
 };
 
@@ -995,6 +1004,16 @@ static bool reliable_cancel_capable(const struct device *dev)
 	}
 #endif
 #ifdef CONFIG_COUNTER_RTC_RTL87X2G
+	if (single_channel_alarm_capable(dev)) {
+		return true;
+	}
+#endif
+#ifdef CONFIG_COUNTER_TIMER_RTL8752H
+	if (single_channel_alarm_capable(dev)) {
+		return true;
+	}
+#endif
+#ifdef CONFIG_COUNTER_RTC_RTL8752H
 	if (single_channel_alarm_capable(dev)) {
 		return true;
 	}
