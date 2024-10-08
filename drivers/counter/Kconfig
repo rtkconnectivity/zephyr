@@ -98,4 +98,8 @@ source "drivers/counter/Kconfig.rtl87x2g_timer"
 
 source "drivers/counter/Kconfig.rtl87x2g_rtc"
 
+source "drivers/counter/Kconfig.rtl8752h_timer"
+
+source "drivers/counter/Kconfig.rtl8752h_rtc"
+
 endif # COUNTER

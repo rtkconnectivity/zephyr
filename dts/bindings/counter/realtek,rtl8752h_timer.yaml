@@ -1,0 +1,60 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+        RTL8752H COUNTER TIMER.
+        Each Timer is part of a Timer Group and the number of available Timers
+        is SoC-dependent. RTL8752H has 12 Timers available, 8 normal timer and
+        4 advanced timer.
+
+        In order to use one of the available timers on your application add
+        a <board>.overlay file with contents as below
+
+          &timer2 {
+                  status = "okay";
+                  prescaler = <1>;
+          };
+
+        From the above, setting 'status' is required while the prescaler is
+        optional. Check below for more information on the prescaler.
+
+compatible: "realtek,rtl8752h-timer"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  clocks:
+    required: true
+
+  channels:
+    required: true
+    type:
+      int
+
+  is-enhanced:
+    type:
+      boolean
+
+  prescaler:
+    description: |
+      The prescaler value defines the factor by which the clock will be
+      divided. The outcome of which serves as clock reference to the Timer
+      itself.
+
+    type: int
+    default: 1
+    enum:
+      - 1
+      - 2
+      - 4
+      - 8
+      - 16
+      - 32
+      - 40
+      - 64

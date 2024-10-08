@@ -151,6 +151,69 @@
 			status = "okay";
 		};
 
+		timer2: timer@40002028 {
+			compatible = "realtek,rtl8752h-timer";
+			reg = <0x40002028 0x10>;
+			interrupts = <4 0>;
+			channels = <0>;
+			clocks = <&cctl APB_CLK(TIMER)>;
+			status = "disabled";
+		};
+
+		timer3: timer@4000203c {
+			compatible = "realtek,rtl8752h-timer";
+			reg = <0x4000203c 0x10>;
+			interrupts = <3 0>;
+			channels = <0>;
+			clocks = <&cctl APB_CLK(TIMER)>;
+			status = "disabled";
+		};
+
+		timer4: timer@40002050 {
+			compatible = "realtek,rtl8752h-timer";
+			reg = <0x40002050 0x10>;
+			interrupts = <8 0>;
+			channels = <0>;
+			clocks = <&cctl APB_CLK(TIMER)>;
+			status = "disabled";
+		};
+
+		timer5: timer@40002064 {
+			compatible = "realtek,rtl8752h-timer";
+			reg = <0x40002064 0x10>;
+			interrupts = <8 0>;
+			channels = <0>;
+			clocks = <&cctl APB_CLK(TIMER)>;
+			status = "disabled";
+		};
+
+		timer6: timer@40003000 {
+			compatible = "realtek,rtl8752h-timer";
+			reg = <0x40003000 0x400>;
+			interrupts = <24 0>;
+			is-enhanced;
+			channels = <0>;
+			clocks = <&cctl APB_CLK(ENHTIMER)>;
+			status = "disabled";
+		};
+
+		timer7: timer@40003024 {
+			compatible = "realtek,rtl8752h-timer";
+			reg = <0x40003024 0x400>;
+			interrupts = <25 0>;
+			is-enhanced;
+			channels = <0>;
+			clocks = <&cctl APB_CLK(ENHTIMER)>;
+			status = "disabled";
+		};
+
+		rtc: rtc@40000100 {
+			compatible = "realtek,rtl8752h-rtc";
+			reg = <0x40000100 0x40>;
+			interrupts = <61 0>;
+			channels = <4>;
+			status = "disabled";
+		};
 	};
 
 };
