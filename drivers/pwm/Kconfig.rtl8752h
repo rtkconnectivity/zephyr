@@ -1,0 +1,13 @@
+# RTL8752H pwm configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config PWM_RTL8752H
+	bool "RTL8752H PWM driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_PWM_ENABLED
+	select USE_HAL_REALTEK_TIM
+	select USE_HAL_REALTEK_ENHTIM
+	help
+	  Enable the RTL8752H pwm driver.

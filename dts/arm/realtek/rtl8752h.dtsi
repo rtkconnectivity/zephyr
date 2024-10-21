@@ -5,7 +5,7 @@
 #include <dt-bindings/clock/rtl8752h-clocks.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>
 // #include <zephyr/dt-bindings/adc/adc.h>
-// #include <zephyr/dt-bindings/pwm/pwm.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
 // #include <zephyr/dt-bindings/i2c/i2c.h>
 
 / {
@@ -158,6 +158,12 @@
 			channels = <0>;
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
+
+			pwm2 {
+				compatible = "realtek,rtl8752h-pwm";
+				status = "disabled";
+				#pwm-cells = <3>;
+			};
 		};
 
 		timer3: timer@4000203c {
@@ -167,6 +173,12 @@
 			channels = <0>;
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
+
+			pwm3 {
+				compatible = "realtek,rtl8752h-pwm";
+				status = "disabled";
+				#pwm-cells = <3>;
+			};
 		};
 
 		timer4: timer@40002050 {
@@ -176,6 +188,12 @@
 			channels = <0>;
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
+
+			pwm4 {
+				compatible = "realtek,rtl8752h-pwm";
+				status = "disabled";
+				#pwm-cells = <3>;
+			};
 		};
 
 		timer5: timer@40002064 {
@@ -185,6 +203,12 @@
 			channels = <0>;
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
+
+			pwm5 {
+				compatible = "realtek,rtl8752h-pwm";
+				status = "disabled";
+				#pwm-cells = <3>;
+			};
 		};
 
 		timer6: timer@40003000 {
@@ -195,6 +219,12 @@
 			channels = <0>;
 			clocks = <&cctl APB_CLK(ENHTIMER)>;
 			status = "disabled";
+
+			pwm6 {
+				compatible = "realtek,rtl8752h-pwm";
+				status = "disabled";
+				#pwm-cells = <3>;
+			};
 		};
 
 		timer7: timer@40003024 {
@@ -205,6 +235,12 @@
 			channels = <0>;
 			clocks = <&cctl APB_CLK(ENHTIMER)>;
 			status = "disabled";
+
+			pwm7 {
+				compatible = "realtek,rtl8752h-pwm";
+				status = "disabled";
+				#pwm-cells = <3>;
+			};
 		};
 
 		rtc: rtc@40000100 {

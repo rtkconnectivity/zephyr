@@ -103,4 +103,6 @@ source "drivers/pwm/Kconfig.nxp_s32_emios"
 
 source "drivers/pwm/Kconfig.rtl87x2g"
 
+source "drivers/pwm/Kconfig.rtl8752h"
+
 endif # PWM
