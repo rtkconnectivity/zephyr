@@ -1,0 +1,3 @@
+if SOC_RTL8752HTV
+
+endif # SOC_RTL8752HTV

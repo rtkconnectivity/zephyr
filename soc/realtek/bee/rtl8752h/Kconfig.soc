@@ -1,0 +1,23 @@
+# ST Microelectronics STM32F0 MCU line
+
+# Copyright (c) 2017 RnDity Sp. z o.o.
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SERIES_RTL8752H
+	bool
+	select SOC_FAMILY_REALTEK_BEE
+
+config SOC_SERIES
+	default "rtl8752h" if SOC_SERIES_RTL8752H
+
+config SOC_RTL8752HTV
+	bool
+	select SOC_SERIES_RTL8752H
+
+# config SOC_RTL8752HXX
+# 	bool
+# 	select SOC_SERIES_RTL8752H
+
+config SOC
+	default "rtl8752htv" if SOC_RTL8752HTV
+	default "rtl8752hxx" if SOC_RTL8752HXX

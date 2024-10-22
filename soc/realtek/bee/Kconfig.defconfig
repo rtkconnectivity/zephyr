@@ -3,6 +3,7 @@
 if SOC_FAMILY_REALTEK_BEE
 
 rsource "*/Kconfig.defconfig.series"
+rsource "*/Kconfig.defconfig"
 
 config PINCTRL
 	default y
@@ -14,5 +15,3 @@ config CLOCK_CONTROL
 	default y
 
 endif
-
-
