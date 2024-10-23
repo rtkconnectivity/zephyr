@@ -57,21 +57,11 @@ extern void flash_nor_dump_flash_info(void);
 extern void os_zephyr_patch_init(void);
 
 /**
- * first stage vector(VECTORn<=47),
- * not include such as FLASH_SEC_VECTORn, WDT_VECTORn
- */
-static const VECTORn_Type vector_restore[] = {
-			HardFault_VECTORn,
-			Timer4_5_VECTORn, ZIGBEE_VECTORn,
-			PF_RTC_VECTORn, Peripheral_VECTORn,
-			GDMA0_Channel1_VECTORn, GDMA0_Channel2_VECTORn,
-			GDMA0_Channel3_VECTORn};
-
-/**
  * first stage vector(IRQn<=31),
  * not include such as FLASH_SEC_IRQn, WDT_IRQn
  */
 static const IRQn_Type irq_restore_num[] = {
+			BTMAC_IRQn, BTMAC_WRAP_AROUND_IRQn,
 			Timer4_5_IRQn, ZIGBEE_IRQn,
 			PF_RTC_IRQn, Peripheral_IRQn,
 			GDMA0_Channel1_IRQn, GDMA0_Channel2_IRQn,
@@ -79,10 +69,25 @@ static const IRQn_Type irq_restore_num[] = {
 
 static uint32_t irq_restore_priority[sizeof(irq_restore_num)/sizeof(IRQn_Type)];
 
-#ifdef CONFIG_PLATFORM_SPECIFIC_INIT
-void z_arm_platform_init(void)
+static void print_vtor_table(uint32_t *addr)
 {
-	DBG_DIRECT("%s...", __func__);
+	VECTORn_Type vector_n = InitialSP_VECTORn;
+	IRQn_Type irqn;
+	uint32_t *RamVectorTable = addr;
+
+	for ( ; vector_n <= WDT_VECTORn; ++vector_n) {
+		irqn = vector_n - 16;
+		if (irqn >= Peripheral_First_IRQn) {
+			irqn = Peripheral_IRQn;
+		}
+		DBG_DIRECT("irqn:%d vector_n:%d isr_addr:%x",
+			irqn, vector_n,
+			RamVectorTable[(uint32_t)vector_n]);
+	}
+}
+
+static void rtk_load_irq_priority(void)
+{
 	uint32_t irqn;
 	/* save selected irq priority from rom */
 	for (int i =  0; i < sizeof(irq_restore_num)/sizeof(IRQn_Type); ++i) {
@@ -94,62 +99,55 @@ void z_arm_platform_init(void)
 		irq_restore_priority[i] = NVIC_GetPriority(irqn);
 	}
 }
+#ifdef CONFIG_PLATFORM_SPECIFIC_INIT
+void z_arm_platform_init(void)
+{
+	DBG_DIRECT("%s...", __func__);
+	/* print_vtor_table((uint32_t*)DATA_RAM_START_ADDR); */
+	rtk_load_irq_priority();
+}
 #endif
-static void rtk_rom_irq_restore(void)
+
+static void rtk_irq_restore_from_rom(void)
 {
 	uint32_t *RamVectorTable = (uint32_t *)DATA_RAM_START_ADDR;
 	uint32_t vector_n;
 	int irqn;
-	/* use stack */
-	/* uint32_t vector_table[80]; */
-	/* use heap */
-	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
-	uint32_t *vector_table = (uint32_t *)sys_multi_heap_alloc(&multi_heap,
-						(void *)RAM_TYPE_DATA_ON, vector_size);
-
-	memcpy((void *)vector_table, _vector_start, vector_size);
-	for (int i =  0; i < sizeof(vector_restore)/sizeof(VECTORn_Type); ++i) {
-		vector_n = vector_restore[i];
-		/* save selected vector from rom RamVectorTable */
-		vector_table[vector_n] = RamVectorTable[vector_n];
-		DBG_DIRECT("restore vector_n:%d isr_addr:%x",
-			vector_n, RamVectorTable[vector_n]);
-	}
-
-	/* recover selected irq priority from rom */
+	/* set external irq from rtk rom project to isq_wrapper */
 	for (int i =  0; i < sizeof(irq_restore_num)/sizeof(IRQn_Type); ++i) {
 		irqn = irq_restore_num[i];
-		/*RTK IRQn multiplexing */
+		/* RTK IRQn multiplexing */
 		if (irqn >= Peripheral_First_IRQn) {
 			irqn = Peripheral_IRQn;
 		}
-		z_arm_irq_priority_set(irqn, irq_restore_priority[i], 0);
-		DBG_DIRECT("restore irqn:%d priority:%x", irqn, irq_restore_priority[i]);
+		vector_n = irqn + 16;
+		/* rtk rom irq places vectors at RamVectorTable */
+		if (RamVectorTable[vector_n] != (uint32_t)_isr_wrapper) {
+			/* update zephyr irq dynamic */
+			irq_connect_dynamic(irqn, irq_restore_priority[i],
+								(void *)RamVectorTable[vector_n],
+								NULL, 0);
+			DBG_DIRECT("restore vector_n:%d isr_addr:%x _isr_wrapper:%x",
+				vector_n, RamVectorTable[vector_n], _isr_wrapper);
+#ifdef REALTEK_VTOR_RELOCATE
+			/* update to rtk ram vector table */
+			RamVectorTableUpdate(vector_n, (IRQ_Fun)_isr_wrapper);
+#endif
+			DBG_DIRECT("restore irqn:%d priority:%x", irqn, irq_restore_priority[i]);
+		}
 	}
+}
 
-	memcpy((void *)DATA_RAM_START_ADDR, vector_table, vector_size);
+static void rtk_irq_restore_and_relocate(void)
+{
+	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
+	/* only recover irq from rtk rom project, system exception not included */
+	rtk_irq_restore_from_rom();
+#ifdef REALTEK_VTOR_RELOCATE
+	/* copy *all* vector(exception + irq) to relocate */
+	memcpy((void *)DATA_RAM_START_ADDR, _vector_start, vector_size);
 	SCB->VTOR = (uint32_t)DATA_RAM_START_ADDR;
-
-	/* use heap */
-	sys_multi_heap_free(&multi_heap, vector_table);
-}
-
-extern void *flash_sem;
-void flash_sem_init(void)
-{
-	if (flash_sem == NULL) {
-		os_sem_create(&flash_sem, "ftl_sem", 1, 1);
-	}
-}
-
-static void print_vtor_table(uint32_t *addr)
-{
-	VECTORn_Type i = InitialSP_VECTORn;
-	uint32_t *RamVectorTable = addr;
-
-	for ( ; i <= WDT_VECTORn; ++i) {
-		DBG_DIRECT("irqn:%d isr_addr:%x", i, RamVectorTable[i]);
-	}
+#endif
 }
 
 static int rtk_task_init(void)
@@ -162,8 +160,8 @@ static int rtk_task_init(void)
 		lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
 		printk("Successfully loaded Realtek Lowerstack ROM!\n");
 		lowerstack_entry();
-		/* RamVectorTableUpdate(BTMAC_VECTORn, (IRQ_Fun)_isr_wrapper); */
-		/* RamVectorTableUpdate(BTMAC_WRAP_AROUND_VECTORn, (IRQ_Fun)_isr_wrapper);*/
+		rtk_load_irq_priority();
+		rtk_irq_restore_from_rom();
 	} else {
 		printk("Failed to load Realtek Lowerstack ROM!\n");
 	}
@@ -173,7 +171,6 @@ static int rtk_task_init(void)
 static int rtk_platform_init(void)
 {
 	DBG_DIRECT("%s...", __func__);
-	/* print_vtor_table((uint32_t*)DATA_RAM_START_ADDR); */
 
 	/* osif */
 	os_zephyr_patch_init();
@@ -184,11 +181,9 @@ static int rtk_platform_init(void)
 	 * However, vector table place in flash will trigger hardfault when flash erasing.
 	 * So point SCB->VTOR to RAM vector table, and copy zephyr's vector table to RAM.
 	 */
-	rtk_rom_irq_restore();
+	rtk_irq_restore_and_relocate();
 
 	if_os_init_done = true;
-
-	flash_sem_init();
 
 	BOOT_STAGE_RECORD(AFTER_LOAD_PATCH);
 
@@ -285,7 +280,6 @@ static int rtk_platform_init(void)
 	phy_hw_control_init(false);
 	phy_init(false);
 
-	rtk_task_init();
 
 	if (flash_nor_get_exist(FLASH_NOR_IDX_SPIC0) != FLASH_NOR_EXIST_NONE) {
 		if (flash_nor_load_query_info(FLASH_NOR_IDX_SPIC0) == FLASH_NOR_RET_SUCCESS) {
@@ -326,11 +320,6 @@ static int rtk_platform_init(void)
 	return 0;
 }
 
-static int do_nothing(void)
-{
-	return 0;
-}
-
 static int rtk_register_update(void)
 {
 	extern uint32_t SystemCpuClock;
@@ -350,7 +339,6 @@ static int rtk_register_update(void)
 	return 0;
 }
 
-SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
-SYS_INIT(do_nothing, APPLICATION, 0);
 SYS_INIT(rtk_platform_init, EARLY, 0);
-/* SYS_INIT(rtk_task_init, POST_KERNEL, 0); */
+SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
+SYS_INIT(rtk_task_init, POST_KERNEL, 0);
