@@ -24,9 +24,9 @@
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
-		app_partition: partition@12000 {
+		app_partition: partition@15000 {
 			label = "app-image";
-			reg = <0x12000 (DT_SIZE_K(424))>;
+			reg = <0x15000 (DT_SIZE_K(412))>;
 		};
 		storage_partition: partition@7C000 {
 			label = "storage";
