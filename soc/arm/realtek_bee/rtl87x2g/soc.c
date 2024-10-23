@@ -44,7 +44,6 @@ extern const T_ROM_HEADER_FORMAT nonsecure_rom_header;
  */
 void rtk_rom_irq_connect(void)
 {
-	IRQ_CONNECT(WDT_IRQn, 2, HardFault_Handler_Rom, NULL, 0);
 	IRQ_CONNECT(RXI300_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
 	IRQ_CONNECT(RXI300_SEC_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
 	IRQ_CONNECT(GDMA0_Channel9_IRQn, 6, GDMA0_Channel9_Handler, NULL, 0);
