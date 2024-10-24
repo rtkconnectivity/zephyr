@@ -118,4 +118,6 @@ source "drivers/adc/Kconfig.max11102_17"
 
 source "drivers/adc/Kconfig.rtl87x2g"
 
+source "drivers/adc/Kconfig.rtl8752h"
+
 endif # ADC
