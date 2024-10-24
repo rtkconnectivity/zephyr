@@ -1,0 +1,46 @@
+/*
+ * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&gpio {
+	status = "okay";
+};
+
+/* dma is optional
+&dma0 {
+    status = "okay";
+};
+ */
+
+&spi0 {
+	status = "okay";
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio 8 GPIO_ACTIVE_LOW>;
+/* dma is optional
+	dmas = <&dma0 0 17 0xa>, <&dma0 1 16 0x10021>;
+	dma-names = "rx", "tx";
+ */
+	slow@0 {
+		compatible = "test-spi-loopback-slow";
+		reg = <0>;
+		spi-max-frequency = <500000>;
+	};
+	fast@0 {
+		compatible = "test-spi-loopback-fast";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+	};
+};
+
+&pinctrl {
+	spi0_default: spi0_default {
+		group1 {
+			psels = <RTL8752H_PSEL(SPI0_CLK_MASTER, P4_0,DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<RTL8752H_PSEL(SPI0_MO_MASTER, P4_1,DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<RTL8752H_PSEL(SPI0_MI_MASTER, P4_2,DIR_OUT, DRV_HIGH, PULL_UP)>;
+		};
+	};
+};
