@@ -1,0 +1,81 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  RTL8752H ADC.
+  The RTL8752H ADC has 8 channels. Pinctrl must be configured as "SW_MODE" while using ADC.
+  P2_0 to P2_5 and P2_7 could be configured as ADC sampling pins,
+  corresponding to ADC channel 0 to 5 and 7.
+  Notes: P2_6 can not be used as adc pin!!!
+
+  Example of devicetree configuration.
+
+  &adc {
+    pinctrl-0 = <&adc_default>;
+    pinctrl-names = "default";
+    #address-cells = <1>;
+    #size-cells = <0>;
+    status = "okay";
+    channel@0 {
+        reg = <0>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@1 {
+        reg = <1>;
+        zephyr,gain = "ADC_GAIN_1";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+    };
+  };
+
+  &pinctrl {
+    adc_default: adc_default {
+        group1 {
+            psels = <RTL8752H_PSEL(SW_MODE, P2_0, DIR_IN, DRV_LOW, PULL_DOWN)>,
+            <RTL8752H_PSEL(SW_MODE, P2_1, DIR_IN, DRV_LOW, PULL_DOWN)>;
+        };
+    };
+  };
+
+compatible: "realtek,rtl8752h-adc"
+
+include: [adc-controller.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+  channels:
+    type: int
+    description: Number of external channels
+    required: true
+
+  interrupts:
+    required: true
+
+  "#io-channel-cells":
+    const: 1
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+  is-bypass-mode:
+    type: boolean
+    description: |
+      Config adc channels as bypass mode or divide mode.
+      In "divide mode" the ADC range is 0 to 3.3V.
+      In "bypass mode" the ADC range is 0 to 0.9V.
+
+io-channel-cells:
+  - input
