@@ -160,4 +160,6 @@ source "drivers/spi/Kconfig.max32"
 
 source "drivers/spi/Kconfig.rtl87x2g"
 
+source "drivers/spi/Kconfig.rtl8752h"
+
 endif # SPI
