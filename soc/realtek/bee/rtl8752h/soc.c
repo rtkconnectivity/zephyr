@@ -76,13 +76,16 @@ static void print_vtor_table(uint32_t *addr)
 	uint32_t *RamVectorTable = addr;
 
 	for ( ; vector_n <= WDT_VECTORn; ++vector_n) {
-		irqn = vector_n - 16;
-		if (irqn >= Peripheral_First_IRQn) {
-			irqn = Peripheral_IRQn;
+		if (vector_n <= UART2_VECTORn) {
+			irqn = vector_n - 16;
+			DBG_DIRECT("vector_n:%d irqn:%d isr_addr:%x",
+				vector_n, irqn,
+				RamVectorTable[(uint32_t)vector_n]);
+		} else {
+			DBG_DIRECT("vector_n:%d irqn:multiplexed isr_addr:%x",
+				vector_n,
+				RamVectorTable[(uint32_t)vector_n]);
 		}
-		DBG_DIRECT("irqn:%d vector_n:%d isr_addr:%x",
-			irqn, vector_n,
-			RamVectorTable[(uint32_t)vector_n]);
 	}
 }
 
@@ -140,10 +143,10 @@ static void rtk_irq_restore_from_rom(void)
 
 static void rtk_irq_restore_and_relocate(void)
 {
-	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
 	/* only recover irq from rtk rom project, system exception not included */
 	rtk_irq_restore_from_rom();
 #ifdef REALTEK_VTOR_RELOCATE
+	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
 	/* copy *all* vector(exception + irq) to relocate */
 	memcpy((void *)DATA_RAM_START_ADDR, _vector_start, vector_size);
 	SCB->VTOR = (uint32_t)DATA_RAM_START_ADDR;
@@ -160,6 +163,8 @@ static int rtk_task_init(void)
 		lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
 		printk("Successfully loaded Realtek Lowerstack ROM!\n");
 		lowerstack_entry();
+		/* keep irq restore operation before lowstack_thread be scheduled */
+		/* print_vtor_table((uint32_t*)DATA_RAM_START_ADDR); */
 		rtk_load_irq_priority();
 		rtk_irq_restore_from_rom();
 	} else {
@@ -280,6 +285,7 @@ static int rtk_platform_init(void)
 	phy_hw_control_init(false);
 	phy_init(false);
 
+	rtk_task_init();
 
 	if (flash_nor_get_exist(FLASH_NOR_IDX_SPIC0) != FLASH_NOR_EXIST_NONE) {
 		if (flash_nor_load_query_info(FLASH_NOR_IDX_SPIC0) == FLASH_NOR_RET_SUCCESS) {
@@ -341,4 +347,3 @@ static int rtk_register_update(void)
 
 SYS_INIT(rtk_platform_init, EARLY, 0);
 SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
-SYS_INIT(rtk_task_init, POST_KERNEL, 0);
