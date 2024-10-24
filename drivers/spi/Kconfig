@@ -137,4 +137,6 @@ source "drivers/spi/Kconfig.ifx_cat1"
 
 source "drivers/spi/Kconfig.rtl87x2g"
 
+source "drivers/spi/Kconfig.rtl8752h"
+
 endif # SPI

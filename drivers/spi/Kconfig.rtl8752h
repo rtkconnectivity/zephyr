@@ -1,0 +1,32 @@
+# RTL8752H spi configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config SPI_RTL8752H
+	bool "RTL8752H SPI driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_SPI_ENABLED
+	select USE_HAL_REALTEK_SPI
+	help
+	  Enables the RTL8752H spi driver.
+
+if SPI_RTL8752H
+
+config SPI_RTL8752H_INTERRUPT
+	bool "RTL8752H MCU SPI Interrupt Support"
+	default y if SPI_ASYNC
+	default y if SPI_RTL8752H_DMA
+	help
+	  Enable the interrupt driven mode for SPI instances
+
+config SPI_RTL8752H_DMA
+	bool "RTL8752H MCU SPI DMA Support"
+	select DMA
+	select SPI_RTL8752H_INTERRUPT
+	select USE_HAL_REALTEK_DMA
+	help
+	  Use the DMA for SPI transfer
+	  that enable dma channels in their device tree node.
+
+endif # SPI_RTL8752H
