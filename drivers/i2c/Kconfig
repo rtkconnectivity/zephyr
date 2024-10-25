@@ -94,6 +94,7 @@ source "drivers/i2c/Kconfig.mchp_mss"
 source "drivers/i2c/Kconfig.sedi"
 source "drivers/i2c/Kconfig.ambiq"
 source "drivers/i2c/Kconfig.rtl87x2g"
+source "drivers/i2c/Kconfig.rtl8752h"
 
 config I2C_INIT_PRIORITY
 	int "Init priority"

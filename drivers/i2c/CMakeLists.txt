@@ -55,6 +55,7 @@ zephyr_library_sources_ifdef(CONFIG_I2C_MCHP_MSS		i2c_mchp_mss.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_SEDI		i2c_sedi.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_AMBIQ		i2c_ambiq.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_RTL87X2G		i2c_rtl87x2g.c)
+zephyr_library_sources_ifdef(CONFIG_I2C_RTL8752H		i2c_rtl8752h.c)
 
 zephyr_library_sources_ifdef(CONFIG_I2C_STM32_V1
 	i2c_ll_stm32_v1.c
