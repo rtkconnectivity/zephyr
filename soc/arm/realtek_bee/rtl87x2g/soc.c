@@ -23,43 +23,76 @@
 LOG_MODULE_REGISTER(soc);
 
 extern void os_zephyr_patch_init(void);
-extern void BTMAC_Handler(void);
-extern void GDMA0_Channel9_Handler(void);
-extern void PF_RTC_Handler(void);
-
 extern void z_arm_nmi(void);
 extern void _isr_wrapper(void);
 extern void z_arm_svc(void);
-
 extern const T_ROM_HEADER_FORMAT nonsecure_rom_header;
 
 #define VECTOR_ADDRESS ((uintptr_t)_vector_start)
 
-/*
- *  rtk_rom_irq_connect() calls IRQ_CONNECT to register isr to
- *	zephyr's vector table/sw isr table. In zephyr app, we discard
- *	rtk's RamVectorTable, but use zephyr's build-time-generated
- *	vector table instead.
- *	Note: IRQ_CONNECT will set the interrupt's priority again.
- */
-void rtk_rom_irq_connect(void)
+static int rtl87x2g_task_init(void)
 {
-	IRQ_CONNECT(WDT_IRQn, 2, HardFault_Handler_Rom, NULL, 0);
-	IRQ_CONNECT(RXI300_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
-	IRQ_CONNECT(RXI300_SEC_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
-	IRQ_CONNECT(GDMA0_Channel9_IRQn, 6, GDMA0_Channel9_Handler, NULL, 0);
-	IRQ_CONNECT(PF_RTC_IRQn, 0, PF_RTC_Handler, NULL, 0);
-	IRQ_CONNECT(BTMAC_IRQn, 1, BTMAC_Handler, NULL, 0);
-	IRQ_CONNECT(BTMAC_WRAP_AROUND_IRQn, 0, HardFault_Handler_Rom, NULL, 0);
-	/* IRQ_CONNECT(Flash_SEC_IRQn, 5, Flash_SEC_Handler, NULL, 0); */
+	BOOL_PATCH_FUNC lowerstack_entry;
+	T_ROM_HEADER_FORMAT *stack_header = (T_ROM_HEADER_FORMAT *)STACK_ROM_ADDRESS;
+
+	if (memcmp(stack_header->uuid, nonsecure_rom_header.uuid, UUID_SIZE) == 0) {
+		lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
+		printk("Successfully loaded Realtek Lowerstack ROM!\n");
+		lowerstack_entry();
+	} else {
+		printk("Failed to load Realtek Lowerstack ROM!\n");
+	}
+
+	AON_REG_WRITE_BITFIELD(AON_NS_REG0X_FW_GENERAL_NS, km4_pon_boot_done, 1);
+
+	return 0;
+}
+/*
+ * The RTL87X2G initialization process updates vector entries in the RamVectorTable.
+ * Therefore, we need to register these ISRs into Zephyr's interrupt system.
+ */
+static void rtl87x2g_isr_register(void)
+{
+/*
+ * For interrupts that update the ISR during the RTL87X2G initialization,
+ * the following steps are necessary:
+ * 1. Register the ISR in Zephyr's sw_isr_table.
+ * 2. Update Zephyr's ISR wrapper back into the RamVectorTable.
+ * Note:
+ * Make sure skip the first 16 system exception vectors.
+ */
+	uint32_t *RamVectorTable_INT = (uint32_t *)(SCB->VTOR + 16 * 4);
+
+	for (int irq = 0; irq < CONFIG_NUM_IRQS; irq++) {
+		if (RamVectorTable_INT[irq] != (uint32_t)_isr_wrapper) {
+			z_isr_install(irq, (void *)RamVectorTable_INT[irq], NULL);
+			RamVectorTableUpdate(irq+16, (IRQ_Fun)_isr_wrapper);
+		}
+	}
+/*
+ * The ISRs for WDT_IRQn, RXI300_IRQn, and RXI300_SEC_IRQn are registered
+ * before entering the Zephyr. Therefore, we need to specifically
+ * register these ISRs in Zephyr's sw_isr_table.
+ */
+	z_isr_install(WDT_IRQn, (void *)HardFault_Handler_Rom, NULL);
+	z_isr_install(RXI300_IRQn, (void *)HardFault_Handler_Rom, NULL);
+	z_isr_install(RXI300_SEC_IRQn, (void *)HardFault_Handler_Rom, NULL);
+
+/*
+ * SVC_VECTORn and NMI_VECTORn are the only two exception vectors
+ * that need specific updates back to zephyr's version.
+ */
+	RamVectorTableUpdate(SVC_VECTORn, (IRQ_Fun)z_arm_svc);
+	RamVectorTableUpdate(NMI_VECTORn, (IRQ_Fun)z_arm_nmi);
 }
 
-static int rtk_platform_init(void)
+static int rtl87x2g_platform_init(void)
 {
 /*
- * SCB->VTOR points to zephyr's vector table which is placed in flash.
- * However, vector table place in flash will trigger hardfault when flash erasing.
- * So point SCB->VTOR to RAM vector table, and copy zephyr's vector table to RAM.
+ * RTL87X2G reserves a RAM region for the vector table, referred to as the RamVectorTable.
+ * Steps to initialize the vector table in RAM:
+ * 1. Set the SCB->VTOR register to point to the start address of the RamVectorTable.
+ * 2. Copy Zephyr's vector table to the RamVectorTable.
  */
 	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
 #if (CONFIG_TRUSTED_EXECUTION_NONSECURE==1)
@@ -71,8 +104,6 @@ static int rtk_platform_init(void)
 	SCB->VTOR = (uint32_t)S_RAM_VECTOR_ADDR;
 	(void)memcpy((void *)S_RAM_VECTOR_ADDR, _vector_start, vector_size);
 #endif
-	/* connect rtk-rom-irq to zephyr's vector table, also will reset priority here!*/
-	rtk_rom_irq_connect();
 
 	os_zephyr_patch_init();
 
@@ -81,7 +112,6 @@ static int rtk_platform_init(void)
 	os_pm_init();
 
 	secure_os_func_ptr_init();
-	RamVectorTableUpdate(SVC_VECTORn, (IRQ_Fun)z_arm_svc);
 
 	secure_platform_func_ptr_init();
 
@@ -92,7 +122,6 @@ static int rtk_platform_init(void)
 	log_module_trace_init(NULL);
 	log_buffer_init();
 	log_gdma_init();
-	RamVectorTableUpdate(GDMA0_Channel9_VECTORn, (IRQ_Fun)_isr_wrapper);
 
 	si_flow_data_init();
 
@@ -127,8 +156,6 @@ static int rtk_platform_init(void)
 	power_manager_master_init();
 	power_manager_slave_init();
 	platform_pm_init();
-	RamVectorTableUpdate(PF_RTC_VECTORn, (IRQ_Fun)_isr_wrapper);
-	RamVectorTableUpdate(NMI_VECTORn, (IRQ_Fun)z_arm_nmi);
 
 	init_osc_sdm_timer();/* use osif timer api */
 
@@ -148,41 +175,25 @@ static int rtk_platform_init(void)
 #if (CONFIG_TRUSTED_EXECUTION_NONSECURE == 1)
 	setup_non_secure_nvic();
 #endif
+	rtl87x2g_task_init();
+	rtl87x2g_isr_register();
 
 	return 0;
 }
 
-static int rtk_task_init(void)
-{
-	BOOL_PATCH_FUNC lowerstack_entry;
-	T_ROM_HEADER_FORMAT *stack_header = (T_ROM_HEADER_FORMAT *)STACK_ROM_ADDRESS;
-
-	if (memcmp(stack_header->uuid, nonsecure_rom_header.uuid, UUID_SIZE) == 0) {
-		lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
-		printk("Successfully loaded Realtek Lowerstack ROM!\n");
-		lowerstack_entry();
-		RamVectorTableUpdate(BTMAC_VECTORn, (IRQ_Fun)_isr_wrapper);
-		RamVectorTableUpdate(BTMAC_WRAP_AROUND_VECTORn, (IRQ_Fun)_isr_wrapper);
-	} else {
-		printk("Failed to load Realtek Lowerstack ROM!\n");
-	}
-
-	AON_REG_WRITE_BITFIELD(AON_NS_REG0X_FW_GENERAL_NS, km4_pon_boot_done, 1);
-
-	return 0;
-}
-
-static int rtk_register_update(void)
+static int rtl87x2g_register_update(void)
 {
 	NVIC_SetPriority(SysTick_IRQn, 0xff);
 #ifdef CONFIG_SYSTICK_USE_EXTERNAL_CLOCK
 	SysTick->CTRL &= ~SysTick_CTRL_CLKSOURCE_Msk;
 #endif
 /*
- * Unset SCB_CCR_DIV_0_TRP bit to avoid usagefault when dividing by zero.
- * If this bit is set, ll_iso_generate_cis_unframed_parameters_from_host_info()
- * in rom will trigger usage fault.
- * WARNING: In Freertos, this bit will not be set.
+ * Clear the SCB_CCR_DIV_0_TRP bit to avoid a usage fault when dividing by zero.
+ * Reason:
+ * If this bit is set, the function ll_iso_generate_cis_unframed_parameters_from_host_info()
+ * in ROM will trigger a usage fault.
+ * Note:
+ * In FreeRTOS, this bit is not set by default.
  */
 	SCB->CCR &= ~SCB_CCR_DIV_0_TRP_Msk;
 	return 0;
@@ -202,6 +213,5 @@ void sys_arch_reboot(int type)
 	WDG_SystemReset(0, type);
 }
 
-SYS_INIT(rtk_platform_init, EARLY, 0);
-SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
-SYS_INIT(rtk_task_init, POST_KERNEL, 0);
+SYS_INIT(rtl87x2g_platform_init, EARLY, 0);
+SYS_INIT(rtl87x2g_register_update, PRE_KERNEL_2, 1);
