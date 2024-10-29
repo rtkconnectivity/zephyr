@@ -76,6 +76,11 @@
 			};
 		};
 
+		trace: memory@18100000 {
+			compatible = "zephyr,memory-region";
+			reg = <0x18100000 0x80000>;
+			zephyr,memory-region = "TRACE";
+		};
 
 		rcu: reset-clock-controller@40000200 {
 			compatible = "realtek,rtl8752h-rcu";
