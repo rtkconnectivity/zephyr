@@ -46,13 +46,13 @@
 		data_ram {
 			#address-cells = <1>;
 			#size-cells = <1>;
-			app_ram_data: memory@209000 {
+			app_ram_data: memory@208800 {
 				device_type = "ram data region";
-				reg = < 0x209000 DT_SIZE_K(48)>;
+				reg = < 0x208800 DT_SIZE_K(57)>;
 			};
-			heap0: memory@215000 {
+			heap0: memory@216C00 {
 				device_type = "heap region";
-				reg = < 0x215000 DT_SIZE_K(20)>;
+				reg = < 0x216C00 DT_SIZE_K(13)>;
 			};
 		};
 		cache_ram{
@@ -70,9 +70,15 @@
 				device_type = "rom data region";
 				reg = < 0x280000 (DT_SIZE_K(1)+512)>;
 			};
-			heap1: memory@280600{
+			app_ram_data2: memory@280600{
+				compatible = "zephyr,memory-region";
+				device_type = "buffer ram data region";
+				zephyr,memory-region = "RAM2";
+				reg = < 0x280600 (DT_SIZE_K(1)+512)>;
+			};
+			heap1: memory@280C00{
 				device_type = "heap region";
-				reg = < 0x280600 (DT_SIZE_K(14)+512)>;
+				reg = < 0x280C00 (DT_SIZE_K(13))>;
 			};
 		};
 

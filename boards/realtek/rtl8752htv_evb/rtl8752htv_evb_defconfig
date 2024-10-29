@@ -7,9 +7,14 @@ CONFIG_OUTPUT_DISASSEMBLY=y
 
 # link application into the flash partition selected by the zephyr,code-partition property in /chosen in devicetree
 CONFIG_USE_DT_CODE_PARTITION=y
+CONFIG_CODE_DATA_RELOCATION=y
+CONFIG_REALTEK_BT_CONTROLLER_STACK_SIZE=2560
+# Save DataRAM for APP
+
 
 # For Debug
 CONFIG_DEBUG_OPTIMIZATIONS=y
+CONFIG_SYS_HEAP_RUNTIME_STATS=y
 
 CONFIG_MULTI_HEAP=y
 

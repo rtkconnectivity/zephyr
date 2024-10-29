@@ -4,3 +4,8 @@ zephyr_linker_sources(SECTIONS trace_section.ld)
 zephyr_library_sources(soc.c)
 zephyr_include_directories(.)
 set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/linker.ld CACHE INTERNAL "")
+if (CONFIG_CODE_DATA_RELOCATION)
+# save DataRAM for APP
+# zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/logging/log_core.c LOCATION RAM2_BSS)
+zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/shell/backends/shell_uart.c LOCATION RAM2_BSS)
+endif()
