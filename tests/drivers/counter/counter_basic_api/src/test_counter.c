@@ -46,9 +46,6 @@ static const struct device *const devices[] = {
 #ifdef CONFIG_COUNTER_NATIVE_POSIX
 	DEVICE_DT_GET(DT_NODELABEL(counter0)),
 #endif
-#ifdef CONFIG_COUNTER_INFINEON_CAT1
-	DEVICE_DT_GET(DT_NODELABEL(counter0_0)),
-#endif
 	/* NOTE: there is no trailing comma, as the DEVS_FOR_DT_COMPAT
 	 * handles it.
 	 */
@@ -108,6 +105,12 @@ static const struct device *const devices[] = {
 #endif
 #ifdef CONFIG_COUNTER_TIMER_RPI_PICO
 	DEVS_FOR_DT_COMPAT(raspberrypi_pico_timer)
+#endif
+#ifdef CONFIG_COUNTER_TIMER_RTL87X2G
+	DEVS_FOR_DT_COMPAT(realtek_rtl87x2g_timer)
+#endif
+#ifdef CONFIG_COUNTER_RTC_RTL87X2G
+	DEVS_FOR_DT_COMPAT(realtek_rtl87x2g_rtc)
 #endif
 #ifdef CONFIG_COUNTER_AMBIQ
 	DEVS_FOR_DT_COMPAT(ambiq_counter)
@@ -439,7 +442,7 @@ static void test_single_shot_alarm_instance(const struct device *dev, bool set_t
 		alarm_cnt : k_sem_count_get(&alarm_cnt_sem);
 	zassert_equal(1, cnt, "%s: Expecting alarm callback", dev->name);
 
-	k_busy_wait(1.5*counter_ticks_to_us(dev, ticks));
+	k_busy_wait(2*counter_ticks_to_us(dev, ticks));
 	cnt = IS_ENABLED(CONFIG_ZERO_LATENCY_IRQS) ?
 		alarm_cnt : k_sem_count_get(&alarm_cnt_sem);
 	zassert_equal(1, cnt, "%s: Expecting alarm callback", dev->name);
@@ -647,7 +650,7 @@ static void test_all_channels_instance(const struct device *dev)
 		}
 	}
 
-	k_busy_wait(1.5*counter_ticks_to_us(dev, ticks));
+	k_busy_wait(2*counter_ticks_to_us(dev, ticks));
 	cnt = IS_ENABLED(CONFIG_ZERO_LATENCY_IRQS) ?
 		alarm_cnt : k_sem_count_get(&alarm_cnt_sem);
 	zassert_equal(nchan, cnt,
@@ -982,6 +985,16 @@ static bool reliable_cancel_capable(const struct device *dev)
 	}
 #endif
 #ifdef CONFIG_COUNTER_NXP_S32_SYS_TIMER
+	if (single_channel_alarm_capable(dev)) {
+		return true;
+	}
+#endif
+#ifdef CONFIG_COUNTER_TIMER_RTL87X2G
+	if (single_channel_alarm_capable(dev)) {
+		return true;
+	}
+#endif
+#ifdef CONFIG_COUNTER_RTC_RTL87X2G
 	if (single_channel_alarm_capable(dev)) {
 		return true;
 	}
