@@ -23,6 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
+    - name: rtkconnectivity
+      url-base: https://github.com/rtkconnectivity
 
   group-filter: [-babblesim, -optional]
 
@@ -211,6 +213,12 @@ manifest:
       revision: bad894440fe72c814864798c8e3a76d13edffb6c
       path: modules/hal/quicklogic
       repo-path: hal_quicklogic
+      groups:
+        - hal
+    - name: hal_realtek
+      remote: rtkconnectivity
+      revision: main
+      path: modules/hal/realtek
       groups:
         - hal
     - name: hal_renesas
