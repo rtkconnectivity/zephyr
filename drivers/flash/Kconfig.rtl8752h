@@ -11,3 +11,34 @@ config SOC_FLASH_RTL8752H
 	select FLASH_HAS_PAGE_LAYOUT
 	help
 	  Enable rtl8752h flash driver.
+
+if SOC_FLASH_RTL8752H
+
+choice
+	prompt "Realtek RTL8752H Flash Mode"
+	default SOC_FLASH_RTL8752H_4BIT_MODE
+
+config SOC_FLASH_RTL8752H_1BIT_MODE
+	bool "Flash 1bit mode"
+	help
+		Set Realtek RTL8752H Flash to 1bit mode
+
+config SOC_FLASH_RTL8752H_2BIT_MODE
+	bool "Flash 2bit mode"
+	help
+		Set Realtek RTL8752H Flash to 2bit mode
+
+config SOC_FLASH_RTL8752H_4BIT_MODE
+	bool "Flash 4bit mode"
+	help
+		Set Realtek RTL8752H Flash to 4bit mode
+
+endchoice
+
+config SOC_FLASH_RTL8752H_BIT_MODE
+	int
+	default 0 if SOC_FLASH_RTL8752H_1BIT_MODE
+	default 1 if SOC_FLASH_RTL8752H_2BIT_MODE
+	default 2 if SOC_FLASH_RTL8752H_4BIT_MODE
+
+endif # SOC_FLASH_RTL8752H
