@@ -1,0 +1,35 @@
+if SOC_SERIES_RTL87X2G
+config SOC_SERIES
+	default "rtl87x2g"
+
+config SOC_PART_NUMBER
+	default "rtl8762gn" if SOC_PART_NUMBER_RTL8762GN
+
+config NUM_IRQS
+	int
+	default 109
+
+config CODE_DATA_RELOCATION
+	default y
+
+config USE_DT_CODE_PARTITION
+	default y
+
+config FPU
+	default y if CPU_HAS_FPU
+
+config SYS_CLOCK_HW_CYCLES_PER_SEC
+	int
+	default 32000
+
+config SYS_CLOCK_TICKS_PER_SEC
+	int
+	default 100
+    #10ms/1tick
+
+config ARCH_HAS_CUSTOM_BUSY_WAIT
+	default y
+
+rsource "Kconfig.defconfig.rtl87*"
+
+endif # SOC_SERIES_RTL87X2G

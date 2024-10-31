@@ -1,0 +1,17 @@
+config SOC_SERIES_RTL87X2G
+	select ARM
+	select CPU_CORTEX_M55
+	select CPU_HAS_ARM_SAU
+	select CPU_HAS_FPU
+	select CPU_HAS_ARM_MPU
+	select DYNAMIC_INTERRUPTS
+	select ARMV8_M_DSP
+	select ARMV8_1_M_MVEI
+	select ARMV8_1_M_MVEF
+	select ARM_TRUSTZONE_M
+	select XIP
+	select HAS_PM
+	select THREAD_STACK_INFO
+
+
+

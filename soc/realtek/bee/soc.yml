@@ -1,0 +1,6 @@
+family:
+- name: realtek_bee
+  series:
+  - name: rtl87x2g
+    socs:
+    - name: rtl8762gn
