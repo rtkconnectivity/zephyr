@@ -183,6 +183,13 @@ config BT_AMBIQ_HCI
 	  Supports Ambiq Bluetooth SoC using SPI as the communication protocol.
 	  HCI packets are sent and received as single Byte transfers.
 
+config BT_RTL87X2G
+	bool "RTL87X2G BT HCI driver"
+	depends on SOC_SERIES_RTL87X2G
+	help
+	  This option enables the bt hci driver for RTL87X2G family of
+	  processors.
+
 config BT_HCI_INIT_PRIORITY
 	int "BT HCI init priority"
 	default 75 if BT_AMBIQ_HCI

@@ -221,4 +221,6 @@ rsource "Kconfig.xmc4xxx"
 
 source "drivers/serial/Kconfig.si32"
 
+source "drivers/serial/Kconfig.rtl87x2g"
+
 endif # SERIAL

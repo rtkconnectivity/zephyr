@@ -1,0 +1,36 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  RTL87X2G AON_QDEC.
+
+compatible: "realtek,rtl87x2g-aon_qdec"
+
+include: [sensor-device.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  counts-per-revolution:
+    type: int
+    required: true
+    default: 4
+    description: |
+      This is a number that is used to determine how many revolutions
+      were done based on the current counter's value.
+    enum:
+      - 2
+      - 4
+
+  debounce-time-ms:
+    type: int
+    default: 4
+    description: |
+      Set the debounce time. The unit is ms.

@@ -1,0 +1,10 @@
+/*
+ * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&timer2 {
+    status = "okay";
+    prescaler = <1>;
+};
