@@ -1,0 +1,7 @@
+config SOC_FAMILY_REALTEK_BEE
+	bool
+
+config SOC_FAMILY
+	default "realtek_bee" if SOC_FAMILY_REALTEK_BEE
+
+rsource "*/Kconfig.soc"
