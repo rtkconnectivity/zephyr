@@ -1,0 +1,5 @@
+description: Realtek rtl87x2g IEEE 802.15.4 node
+
+compatible: "realtek,rtl87x2g-ieee802154"
+
+include: base.yaml

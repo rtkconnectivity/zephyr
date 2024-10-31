@@ -11,6 +11,7 @@ menuconfig KSCAN
 if KSCAN
 
 source "drivers/kscan/Kconfig.input"
+source "drivers/kscan/Kconfig.rtl87x2g"
 
 module = KSCAN
 module-str = kscan

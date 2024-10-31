@@ -128,4 +128,6 @@ source "drivers/adc/Kconfig.numaker"
 
 source "drivers/adc/Kconfig.ene"
 
+source "drivers/adc/Kconfig.rtl87x2g"
+
 endif # ADC
