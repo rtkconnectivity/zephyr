@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2024 Realtek Semiconductor Corp.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /dts-v1/;
 #include <realtek/rtl87x2g.dtsi>
 #include "rtl8762gn_evb-pinctrl.dtsi"
