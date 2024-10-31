@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 zephyr_include_directories(.)
 
+zephyr_compile_definitions(STACK_ROM_ADDRESS=0x36000)
+
 zephyr_library_sources(soc.c)
 zephyr_library_sources_ifdef(CONFIG_REALTEK_IMAGE_HEADER image_header.c)
 
