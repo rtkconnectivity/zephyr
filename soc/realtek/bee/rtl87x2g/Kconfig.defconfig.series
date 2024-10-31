@@ -1,3 +1,5 @@
+# Copyright (c) 2024 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
 if SOC_SERIES_RTL87X2G
 config SOC_SERIES
 	default "rtl87x2g"
