@@ -25,6 +25,11 @@
 		};
 	};
 
+	bee_bt_hci: bee_bt_hci {
+		compatible = "realtek,bee-bt-hci";
+		status = "disabled";
+	};
+
     itcm0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
