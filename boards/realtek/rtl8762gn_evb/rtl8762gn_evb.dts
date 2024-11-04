@@ -20,6 +20,7 @@
 		zephyr,console = &uart2;
 		zephyr,shell-uart = &uart2;
 		zephyr,flash-controller = &fmc;
+		zephyr,bt-hci = &bee_bt_hci;
 	};
 
 	/* These aliases are provided for compatibility with samples */
@@ -85,4 +86,8 @@
 	parity = "none";
 	stop-bits = "1";
 	data-bits = <8>;
+};
+
+&bee_bt_hci {
+	status= "okay";
 };
