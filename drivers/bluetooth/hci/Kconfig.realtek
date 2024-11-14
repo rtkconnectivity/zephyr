@@ -1,0 +1,14 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_FAMILY_REALTEK_BEE
+
+config BT_RTK_HCI_H2C_POOL_SIZE
+	int "HCI h2c pool size"
+	default 3072
+	help
+		HCI H2C POOL is used by HCI command packets and
+		HCI ACL data packets. Set this value according max
+		LE ACL data packets num and max HCI command packets num.
+
+endif

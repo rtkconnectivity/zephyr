@@ -45,4 +45,7 @@ config BT_BUF_ACL_RX_SIZE
 config BT_BUF_ACL_RX_COUNT
 	default 7
 
+config REALTEK_BT_CONTROLLER_STACK_SIZE
+	default 2560
+
 endif # BT
