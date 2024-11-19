@@ -256,7 +256,7 @@
 		rtc: rtc@40000100 {
 			compatible = "realtek,rtl8752h-rtc";
 			reg = <0x40000100 0x40>;
-			interrupts = <61 0>;
+			interrupts = <19 0>;
 			channels = <4>;
 			status = "disabled";
 		};
