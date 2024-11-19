@@ -15,6 +15,7 @@ source "drivers/kscan/Kconfig.xec"
 source "drivers/kscan/Kconfig.ht16k33"
 source "drivers/kscan/Kconfig.input"
 source "drivers/kscan/Kconfig.rtl87x2g"
+source "drivers/kscan/Kconfig.rtl8752h"
 
 module = KSCAN
 module-str = kscan

@@ -9,5 +9,6 @@ zephyr_library_sources_ifdef(CONFIG_KSCAN_XEC		kscan_mchp_xec.c)
 zephyr_library_sources_ifdef(CONFIG_KSCAN_HT16K33	kscan_ht16k33.c)
 zephyr_library_sources_ifdef(CONFIG_KSCAN_INPUT		kscan_input.c)
 zephyr_library_sources_ifdef(CONFIG_KSCAN_RTL87X2G  	kscan_rtl87x2g.c)
+zephyr_library_sources_ifdef(CONFIG_KSCAN_RTL8752H  	kscan_rtl8752h.c)
 
 zephyr_library_sources_ifdef(CONFIG_USERSPACE	    kscan_handlers.c)

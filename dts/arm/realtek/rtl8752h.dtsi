@@ -261,6 +261,16 @@
 			status = "disabled";
 		};
 
+		kscan: kscan@40005000 {
+			compatible = "realtek,rtl8752h-kscan";
+			reg = <0x40005000 0x34>;
+			interrupts = <19 0>;
+			clocks = <&cctl APB_CLK(KEYSCAN)>;
+			max-row-size = <12>;
+			max-col-size = <20>;
+			status = "disabled";
+		};
+
 		spi0: spi@40013000 {
 			compatible = "realtek,rtl8752h-spi";
 			reg = <0x40013000 0xf0>;
