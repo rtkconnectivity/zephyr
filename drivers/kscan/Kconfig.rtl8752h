@@ -1,0 +1,33 @@
+# RTL8752H kscan configuration
+
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config KSCAN_RTL8752H
+	bool "RTL8752H MCU kscan driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_KSCAN_ENABLED
+	select USE_HAL_REALTEK_KEYSCAN
+	help
+	  Enable the RTL8752H kscan driver.
+
+if KSCAN_RTL8752H
+config RTL8752H_KEYSCAN_MAX_ROW_SIZE
+	int "Max row size for rtl8762g kscan"
+	default 12
+	help
+	  Max row size for rtl8762g kscan.
+
+config RTL8752H_KEYSCAN_MAX_COL_SIZE
+	int "Max column size for rtl8762g kscan"
+	default 20
+	help
+	  Max column size for rtl8762g kscan.
+
+config RTL8752H_KEYSCAN_GHOST_KEY_FILTER
+	bool "Ghost key filter for rtl8762g kscan"
+	default y
+	help
+	  Ghost key filter for rtl8762g kscan.
+
+endif # KSCAN_RTL8752H

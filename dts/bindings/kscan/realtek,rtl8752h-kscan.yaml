@@ -1,0 +1,103 @@
+# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  RTL8752H KSCAN.
+
+  The RTL8752H KSCAN should be used with an external kscan matrix.
+  There is a total of 12 rows and 20 columns. You can assign any available pins
+  to row or colunm by pinctrl.
+  The rows and columns need to be indexed starting from 0.
+
+  Example of devicetree configuration.
+
+  &kscan {
+        pinctrl-0 = <&kscan_default>;
+        pinctrl-names = "default";
+        row-size = <2>;
+        col-size = <2>;
+        debounce-time-ms = <10>;
+        scan-time-ms = <10>;
+        release-time-ms = <10>;
+        scan-debounce-cnt = <1>;
+        status = "okay";
+    };
+
+    &pinctrl {
+        kscan_default: kscan_default {
+            group1 {
+              psels = <RTL8752H_PSEL(KEY_COL_0, P0_6, DIR_OUT, DRV_LOW, PULL_NONE)>,
+              <RTL8752H_PSEL(KEY_COL_1, P0_7, DIR_OUT, DRV_LOW, PULL_NONE)>;
+            };
+            group2 {
+              psels = <RTL8752H_PSEL(KEY_ROW_0, P2_4, DIR_IN, DRV_LOW, PULL_UP)>,
+              <RTL8752H_PSEL(KEY_ROW_1, P2_5, DIR_IN, DRV_LOW, PULL_UP)>;
+              bias-pull-strong;
+            };
+        };
+    };
+
+compatible: "realtek,rtl8752h-kscan"
+
+include: [kscan.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+  max-row-size:
+    type: int
+    default: 12
+    required: true
+    description: Max row size of kscan array.
+
+  max-col-size:
+    type: int
+    default: 20
+    required: true
+    description: Max column size of kscan array.
+
+  row-size:
+    type: int
+    required: true
+    description: Actual row size of external kscan matrix.
+
+  col-size:
+    type: int
+    required: true
+    description: Actual column size of external kscan matrix.
+
+  debounce-time-us:
+    type: int
+    description: Debounce time for hardware debounce first time, range from 0 to 10240,
+                 unit is us. The resolution is 20us.
+
+  scan-time-us:
+    type: int
+    description: Scan interval time, range from 0 to 10240, unit is us.
+                 The resolution is 20us.
+
+  release-time-us:
+    type: int
+    description: All release detect time, range from 0 to 10240, unit is us.
+                 The resolution is 20us.
+
+  scan-debounce-cnt:
+    type: int
+    default: 1
+    description: Counter for scan interval to realize software debounce,
+      unit is times.
+      The actual software-realized debounce time for each key change
+      is scan-debounce-cnt * scan-time-ms.
