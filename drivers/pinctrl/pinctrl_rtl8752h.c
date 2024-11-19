@@ -24,10 +24,10 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 
 #if DBG_DIRECT_SHOW
 	DBG_DIRECT("[%s] cfg_fun=%d, cfg_pin=%d, cfg_dir=%d,"
-		   "__func__, cfg_drv=%d , cfg_pull=%d, cfg_pull_strength=%d, cfg_wakeup_high=%d, "
+		   " cfg_drv=%d , cfg_pull=%d, cfg_pull_strength=%d, cfg_wakeup_high=%d, "
 		   "cfg_wakeup_low=%d",
-		   cfg_fun, cfg_pin, cfg_dir, cfg_drv, cfg_pull, cfg_pull_strength, cfg_wakeup_high,
-		   cfg_wakeup_low);
+		   __func__, cfg_fun, cfg_pin, cfg_dir, cfg_drv, cfg_pull, cfg_pull_strength,
+		   cfg_wakeup_high, cfg_wakeup_low);
 #endif
 
 	Pad_PullConfigValue(cfg_pin, cfg_pull_strength);
