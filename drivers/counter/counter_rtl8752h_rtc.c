@@ -17,6 +17,8 @@
 
 #include <rtl876x_rtc.h>
 #include <rtl876x_rcc.h>
+#include <rtl876x_nvic.h>
+#include <vector_table.h>
 
 LOG_MODULE_REGISTER(counter_rtl8752h_rtc, CONFIG_COUNTER_LOG_LEVEL);
 
@@ -212,8 +214,9 @@ static void alarm_irq_handle(const struct device *dev, uint32_t chan)
 	RTC_ClearCompINT(chan);
 }
 
-static void irq_handler(const struct device *dev)
+static void irq_handler(void)
 {
+	const struct device *dev = DEVICE_DT_GET(DT_DRV_INST(0));
 	const struct counter_rtl8752h_rtc_config *cfg = dev->config;
 
 	for (uint32_t i = 0; i < cfg->counter_info.channels; i++) {
@@ -264,9 +267,12 @@ static const struct counter_driver_api counter_rtl8752h_rtc_driver_api = {
 #define RTC_IRQ_CONFIG(index)                                                                      \
 	static void irq_config_##index(const struct device *dev)                                   \
 	{                                                                                          \
-		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), irq_handler,        \
-			    DEVICE_DT_INST_GET(index), 0);                                         \
-		irq_enable(DT_INST_IRQN(index));                                                   \
+		RamVectorTableUpdate(RTC_IRQn, irq_handler);                                       \
+		NVIC_InitTypeDef NVIC_InitStruct;                                                  \
+		NVIC_InitStruct.NVIC_IRQChannel = RTC_IRQn;                                        \
+		NVIC_InitStruct.NVIC_IRQChannelPriority = 2;                                       \
+		NVIC_InitStruct.NVIC_IRQChannelCmd = ENABLE;                                       \
+		NVIC_Init(&NVIC_InitStruct);                                                       \
 	}                                                                                          \
 	static void set_irq_pending_##index(void)                                                  \
 	{                                                                                          \
