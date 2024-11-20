@@ -19,6 +19,9 @@ config NUM_IRQS
 	int
 	default 109
 
+config NUM_METAIRQ_PRIORITIES
+	default 1
+
 config CODE_DATA_RELOCATION
 	default y
 
