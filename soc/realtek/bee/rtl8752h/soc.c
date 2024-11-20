@@ -127,6 +127,7 @@ static void rtk_irq_restore_from_rom(void)
 		/* rtk rom irq places vectors at RamVectorTable */
 		if (RamVectorTable[vector_n] != (uint32_t)_isr_wrapper) {
 			/* update zephyr irq dynamic */
+			irq_disable(irqn);
 			irq_connect_dynamic(irqn, irq_restore_priority[i],
 								(void *)RamVectorTable[vector_n],
 								NULL, 0);
