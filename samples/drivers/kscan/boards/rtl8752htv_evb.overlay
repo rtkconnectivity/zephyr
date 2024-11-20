@@ -1,0 +1,37 @@
+/*
+ * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zephyr,keyboard-scan = &kscan;
+	};
+};
+
+&kscan {
+	pinctrl-0 = <&kscan_default>;
+    pinctrl-names = "default";
+	row-size = <2>;
+	col-size = <2>;
+	debounce-time-us = <5000>;
+	scan-time-us = <5000>;
+	release-time-us = <5000>;
+	scan-debounce-cnt = <1>;
+	status = "okay";
+};
+
+&pinctrl {
+	kscan_default: kscan_default {
+		group1 {
+			psels = <RTL8752H_PSEL(KEY_COL_0, P0_0, DIR_OUT, DRV_LOW, PULL_NONE)>,
+			<RTL8752H_PSEL(KEY_COL_1, P0_1, DIR_OUT, DRV_LOW, PULL_NONE)>;
+		};
+		group2 {
+			psels = <RTL8752H_PSEL(KEY_ROW_0, P4_0, DIR_IN, DRV_LOW, PULL_UP)>,
+			<RTL8752H_PSEL(KEY_ROW_1, P4_1, DIR_IN, DRV_LOW, PULL_UP)>;
+			bias-pull-strong;
+		};
+	};
+};
