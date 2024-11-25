@@ -1,12 +1,12 @@
-# RTL8752H counter rtc configuration
+# RTL8752H rtc configuration
 
 # Copyright(c) 2020, Realtek Semiconductor Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-config COUNTER_RTC_RTL8752H
-	bool "RTL8752H rtc counter driver"
-	default y if !RTC_RTL8752H
+config RTC_RTL8752H
+	bool "RTL8752H RTC driver"
+	default n
 	depends on DT_HAS_REALTEK_RTL8752H_RTC_ENABLED
 	select USE_HAL_REALTEK_RTC
 	help
-	  Enable the RTL8752H counter rtc driver.
+	  Enable the RTL8752H rtc driver.

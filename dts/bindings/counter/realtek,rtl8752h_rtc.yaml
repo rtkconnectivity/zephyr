@@ -9,7 +9,7 @@ description: |
 
 compatible: "realtek,rtl8752h-rtc"
 
-include: base.yaml
+include: [base.yaml, rtc-device.yaml]
 
 properties:
   reg:
