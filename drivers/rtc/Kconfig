@@ -49,5 +49,6 @@ source "drivers/rtc/Kconfig.pcf8563"
 source "drivers/rtc/Kconfig.mc146818"
 source "drivers/rtc/Kconfig.stm32"
 source "drivers/rtc/Kconfig.rtl87x2g"
+source "drivers/rtc/Kconfig.rtl8752h"
 
 endif # RTC
