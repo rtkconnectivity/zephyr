@@ -376,6 +376,7 @@
 			reg = <0x40001800 0x40>;
 			interrupts = <8 0>;
 			channels = <4>;
+			alarms-count = <4>;
 			status = "disabled";
 		};
 
