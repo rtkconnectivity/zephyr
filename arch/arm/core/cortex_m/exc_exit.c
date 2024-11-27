@@ -56,7 +56,7 @@ Z_GENERIC_SECTION(.text._HandlerModeExit) void z_arm_exc_exit(void)
 {
 #ifdef CONFIG_PREEMPT_ENABLED
 	/* If thread is preemptible */
-	if (_kernel.cpus->current->base.prio >= 0) {
+	if (_kernel.cpus->current->base.prio >= 0 || thread_is_metairq(_kernel.ready_q.cache)) {
 		/* and cached thread is not current thread */
 		if (_kernel.ready_q.cache != _kernel.cpus->current) {
 			/* trigger a context switch */
