@@ -1,0 +1,20 @@
+# Copyright (c) 2024 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
+if BOARD_RTL87X2G_EVB
+
+config BOARD
+	default "rtl87x2g_evb"
+
+config SERIAL
+	default y
+
+config UART_INTERRUPT_DRIVEN
+	default y
+
+config CONSOLE
+	default y
+
+config UART_CONSOLE
+	default CONSOLE
+
+endif #BOARD_RTL87X2G_EVB

@@ -1,0 +1,95 @@
+# Copyright(c) 2024, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config ZEPHYR_HAL_REALTEK_BEE_MODULE
+	bool
+
+config USE_HAL_REALTEK_BEE_ADC
+	bool
+	help
+	  Enable HAL REALTEK BEE ADC driver
+
+config USE_HAL_REALTEK_BEE_TIM
+	bool
+	help
+	  Enable HAL REALTEK BEE TIM driver
+
+config USE_HAL_REALTEK_BEE_ENHTIM
+	bool
+	help
+	  Enable HAL REALTEK BEE ENHTIM driver
+
+config USE_HAL_REALTEK_BEE_RTC
+	bool
+	help
+	  Enable HAL REALTEK BEE RTC driver
+
+config USE_HAL_REALTEK_BEE_DMA
+	bool
+	help
+	  Enable HAL REALTEK BEE DMA driver
+
+config USE_HAL_REALTEK_BEE_GPIO
+	bool
+	help
+	  Enable HAL REALTEK BEE GPIO driver
+
+config USE_HAL_REALTEK_BEE_I2C
+	bool
+	help
+	  Enable HAL REALTEK BEE I2C driver
+
+config USE_HAL_REALTEK_BEE_KEYSCAN
+	bool
+	help
+	  Enable HAL REALTEK BEE KEYSCAN driver
+
+config USE_HAL_REALTEK_BEE_AON_QDEC
+	bool
+	help
+	  Enable HAL REALTEK BEE AON QDEC driver
+
+config USE_HAL_REALTEK_BEE_UART
+	bool
+	help
+	  Enable HAL REALTEK BEE UART driver
+
+config USE_HAL_REALTEK_BEE_SPI
+	bool
+	help
+	  Enable HAL REALTEK BEE SPI driver
+
+config USE_HAL_REALTEK_BEE_USB
+	bool
+	help
+	  Enable HAL REALTEK BEE USB driver
+
+config USE_HAL_REALTEK_BEE_AON_WDT
+	bool
+	help
+	  Enable HAL REALTEK BEE AON WDT driver
+
+config USE_HAL_REALTEK_BEE_CORE_WDT
+	bool
+	help
+	  Enable HAL REALTEK BEE CORE WDT driver
+
+config USE_HAL_REALTEK_BEE_RCC
+	bool
+	help
+	  Enable HAL REALTEK BEE RCC driver
+
+config USE_HAL_REALTEK_BEE_NVIC
+	bool
+	help
+	  Enable HAL REALTEK BEE NVIC driver
+
+config USE_HAL_REALTEK_BEE_PINMUX
+	bool
+	help
+	  Enable HAL REALTEK BEE PINMUX driver
+
+config USE_HAL_REALTEK_BEE_HCI
+	bool
+	help
+	  Enable HAL REALTEK BEE HCI driver

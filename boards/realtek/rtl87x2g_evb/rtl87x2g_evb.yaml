@@ -1,0 +1,13 @@
+identifier: rtl87x2g_evb
+name: Realtek rtl87x2g evaluation board
+type: mcu
+arch: arm
+ram: 384
+flash: 1024
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - gpio
+  - uart
+vendor: realtek
