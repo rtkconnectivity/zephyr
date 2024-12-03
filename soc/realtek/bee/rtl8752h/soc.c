@@ -36,7 +36,7 @@ extern bool if_os_init_done;
 
 extern struct sys_multi_heap multi_heap;
 
-enum{
+enum {
 	START_TO_RUN_C_CODE = 3,
 	AFTER_CHECK_PAD_BOOT_FROM_FLASH_I = 4,
 	AFTER_LOAD_PATCH = 5,
@@ -61,39 +61,37 @@ extern void os_zephyr_patch_init(void);
  * not include such as FLASH_SEC_IRQn, WDT_IRQn
  */
 static const IRQn_Type irq_restore_num[] = {
-			BTMAC_IRQn, BTMAC_WRAP_AROUND_IRQn,
-			Timer4_5_IRQn, ZIGBEE_IRQn,
-			PF_RTC_IRQn, Peripheral_IRQn,
-			GDMA0_Channel1_IRQn, GDMA0_Channel2_IRQn,
-			GDMA0_Channel3_IRQn};
+	BTMAC_IRQn,         BTMAC_WRAP_AROUND_IRQn, Timer4_5_IRQn,       ZIGBEE_IRQn,
+	PF_RTC_IRQn,        Peripheral_IRQn,        GDMA0_Channel1_IRQn, GDMA0_Channel2_IRQn,
+	GDMA0_Channel3_IRQn};
 
-static uint32_t irq_restore_priority[sizeof(irq_restore_num)/sizeof(IRQn_Type)];
+static uint32_t irq_restore_priority[sizeof(irq_restore_num) / sizeof(IRQn_Type)];
 
+#if (CONFIG_PRINT_RTK_RAM_VECTOR_TABLE)
 static void print_vtor_table(uint32_t *addr)
 {
 	VECTORn_Type vector_n = InitialSP_VECTORn;
 	IRQn_Type irqn;
 	uint32_t *RamVectorTable = addr;
 
-	for ( ; vector_n <= WDT_VECTORn; ++vector_n) {
+	for (; vector_n <= WDT_VECTORn; ++vector_n) {
 		if (vector_n <= UART2_VECTORn) {
 			irqn = vector_n - 16;
-			DBG_DIRECT("vector_n:%d irqn:%d isr_addr:%x",
-				vector_n, irqn,
-				RamVectorTable[(uint32_t)vector_n]);
+			DBG_DIRECT("vector_n:%d irqn:%d isr_addr:%x", vector_n, irqn,
+				   RamVectorTable[(uint32_t)vector_n]);
 		} else {
-			DBG_DIRECT("vector_n:%d irqn:multiplexed isr_addr:%x",
-				vector_n,
-				RamVectorTable[(uint32_t)vector_n]);
+			DBG_DIRECT("vector_n:%d irqn:multiplexed isr_addr:%x", vector_n,
+				   RamVectorTable[(uint32_t)vector_n]);
 		}
 	}
 }
+#endif /* CONFIG_PRINT_RTK_RAM_VECTOR_TABLE */
 
 static void rtk_load_irq_priority(void)
 {
 	uint32_t irqn;
 	/* save selected irq priority from rom */
-	for (int i =  0; i < sizeof(irq_restore_num)/sizeof(IRQn_Type); ++i) {
+	for (int i = 0; i < sizeof(irq_restore_num) / sizeof(IRQn_Type); ++i) {
 		irqn = irq_restore_num[i];
 		/*RTK IRQn multiplexing */
 		if (irqn >= Peripheral_First_IRQn) {
@@ -106,7 +104,11 @@ static void rtk_load_irq_priority(void)
 void z_arm_platform_init(void)
 {
 	DBG_DIRECT("%s...", __func__);
-	/* print_vtor_table((uint32_t*)DATA_RAM_START_ADDR); */
+
+#if (CONFIG_PRINT_RTK_RAM_VECTOR_TABLE)
+	print_vtor_table((uint32_t *)DATA_RAM_START_ADDR);
+#endif
+
 	rtk_load_irq_priority();
 }
 #endif
@@ -117,7 +119,7 @@ static void rtk_irq_restore_from_rom(void)
 	uint32_t vector_n;
 	int irqn;
 	/* set external irq from rtk rom project to isq_wrapper */
-	for (int i =  0; i < sizeof(irq_restore_num)/sizeof(IRQn_Type); ++i) {
+	for (int i = 0; i < sizeof(irq_restore_num) / sizeof(IRQn_Type); ++i) {
 		irqn = irq_restore_num[i];
 		/* RTK IRQn multiplexing */
 		if (irqn >= Peripheral_First_IRQn) {
@@ -129,10 +131,9 @@ static void rtk_irq_restore_from_rom(void)
 			/* update zephyr irq dynamic */
 			irq_disable(irqn);
 			irq_connect_dynamic(irqn, irq_restore_priority[i],
-								(void *)RamVectorTable[vector_n],
-								NULL, 0);
-			DBG_DIRECT("restore vector_n:%d isr_addr:%x _isr_wrapper:%x",
-				vector_n, RamVectorTable[vector_n], _isr_wrapper);
+					    (void *)RamVectorTable[vector_n], NULL, 0);
+			DBG_DIRECT("restore vector_n:%d isr_addr:%x _isr_wrapper:%x", vector_n,
+				   RamVectorTable[vector_n], _isr_wrapper);
 #ifdef REALTEK_VTOR_RELOCATE
 			/* update to rtk ram vector table */
 			RamVectorTableUpdate(vector_n, (IRQ_Fun)_isr_wrapper);
@@ -156,7 +157,7 @@ static void rtk_irq_restore_and_relocate(void)
 
 static int rtk_task_init(void)
 {
-	char c_rom_uuid[16]  = DEFINE_symboltable_uuid;
+	char c_rom_uuid[16] = DEFINE_symboltable_uuid;
 	BOOL_PATCH_FUNC lowerstack_entry;
 	T_ROM_HEADER_FORMAT *stack_header = (T_ROM_HEADER_FORMAT *)STACK_ROM_ADDRESS;
 
@@ -165,7 +166,6 @@ static int rtk_task_init(void)
 		printk("Successfully loaded Realtek Lowerstack ROM!\n");
 		lowerstack_entry();
 		/* keep irq restore operation before lowstack_thread be scheduled */
-		/* print_vtor_table((uint32_t*)DATA_RAM_START_ADDR); */
 		rtk_load_irq_priority();
 		rtk_irq_restore_from_rom();
 	} else {
@@ -230,8 +230,7 @@ static int rtk_platform_init(void)
 	work_around_32k_power_glitch();
 
 	AON_FAST_REG_REG0X_FW_GENERAL_TYPE aon_fast_boot = {
-		.d16 = btaon_fast_read(AON_FAST_REG_REG0X_FW_GENERAL)
-		};
+		.d16 = btaon_fast_read(AON_FAST_REG_REG0X_FW_GENERAL)};
 
 	bool aon_boot_done = aon_fast_boot.aon_boot_done;
 
@@ -252,8 +251,7 @@ static int rtk_platform_init(void)
 	work_around_32k_power_glitch_after_restart();
 
 	AON_FAST_REG_REG0X_FW_GENERAL_TYPE aon_fast_reg_0x0 = {
-		.d16 = btaon_fast_read(AON_FAST_REG_REG0X_FW_GENERAL)
-		};
+		.d16 = btaon_fast_read(AON_FAST_REG_REG0X_FW_GENERAL)};
 
 	aon_fast_reg_0x0.aon_boot_done = 1;
 	btaon_fast_write(AON_FAST_REG_REG0X_FW_GENERAL, aon_fast_reg_0x0.d16);
@@ -302,8 +300,9 @@ static int rtk_platform_init(void)
 			}
 
 			if (flash_nor_set_tb_bit(FLASH_NOR_IDX_SPIC0, 1) == FLASH_NOR_RET_SUCCESS &&
-			flash_nor_set_bp_lv(FLASH_NOR_IDX_SPIC0,
-			boot_cfg.flash_setting.bp_lv) == FLASH_NOR_RET_SUCCESS){
+			    flash_nor_set_bp_lv(FLASH_NOR_IDX_SPIC0,
+						boot_cfg.flash_setting.bp_lv) ==
+				    FLASH_NOR_RET_SUCCESS) {
 				FLASH_PRINT_INFO1("Flash BP Lv = %d", boot_cfg.flash_setting.bp_lv);
 			} else {
 				FLASH_PRINT_INFO0("Flash BP fail!");
