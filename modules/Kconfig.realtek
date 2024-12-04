@@ -79,6 +79,11 @@ config USE_HAL_REALTEK_IR
 	help
 	  Enable HAL REALTEK IR driver
 
+config USE_HAL_REALTEK_CAN
+	bool
+	help
+	  Enable HAL REALTEK CAN driver
+
 config USE_HAL_REALTEK_USB
 	bool
 	help
