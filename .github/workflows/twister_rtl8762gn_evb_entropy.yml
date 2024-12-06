@@ -1,0 +1,130 @@
+name: Twister Build rtl8762gn_evb entropy
+run-name: Test Twister Build rtl8762gn_evb entropy
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
+jobs:
+  Test-Build:
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
+      options: '--entrypoint /bin/bash'
+
+    steps:
+      - name: set_env
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "pull_request_target" ];then
+            echo "This is pull request"
+            echo "EVENT_TRIGER_REF=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+          fi
+          if [ "${{ github.event_name }}" = "push" ];then
+            echo "This is push"
+            echo "EVENT_TRIGER_REF=${{ github.ref }}" >> $GITHUB_ENV
+          fi
+
+      - name: print_env
+        run: |
+          echo "sdk-version -> ${ZSDK_VERSION}"
+          echo "event_triger_ref: ${EVENT_TRIGER_REF}"
+          echo "${{ github.event.pull_request.head.sha || github.ref }}"
+
+      - name: setup sdk
+        shell: bash
+        run: |
+            echo "zephyr sdk -> zephyr-sdk-${ZSDK_VERSION}"
+            ls /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}
+            /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}/setup.sh -c
+
+      - name: checkout manifest
+        uses: actions/checkout@v4
+        with:
+          repository: "rtkconnectivity/realtek-zephyr-project"
+          path: "zephyr-rtk-project"
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: west update
+        shell: bash
+        run: |
+            west init -m https://github.com/rtkconnectivity/realtek-zephyr-project  zephyr-rtk-project
+            cd zephyr-rtk-project
+            west update
+
+      - name: check zephyr path and manifest_rev
+        shell: bash
+        run: |
+            echo "GITHUB_REPOSITORY -> $GITHUB_REPOSITORY"
+            ls -l
+            cd zephyr-rtk-project
+            ls -l
+            readarray -t project_list <<< "$(west list)"
+            echo "${project_list[@]}"
+            EVENT_PROJECT_PATH=""
+            for i in "${project_list[@]}"
+              do
+                  project_detail=($i)
+                  project_url=`echo ${project_detail[3]}`
+                  repository_name=`echo "$GITHUB_REPOSITORY" | awk -F/ '{print $NF}'`
+                  if [[ $project_url == *"${repository_name}" ]]
+                  then
+                      EVENT_PROJECT_PATH=`echo ${project_detail[1]}`
+                      echo "EVENT_PROJECT_PATH=$EVENT_PROJECT_PATH" >> $GITHUB_ENV
+                      echo "EVENT_PROJECT_PATH -> $EVENT_PROJECT_PATH"
+                      echo "GITHUB_ENV -> $GITHUB_ENV"
+                      break
+                  fi
+              done
+              if [ -z "$EVENT_PROJECT_PATH" ]
+              then
+                  echo "logic error, can not find local path for ${GITHB_REPOSITY}"
+                  exit 1
+              fi
+              cd $EVENT_PROJECT_PATH
+              git remote add origin ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}
+              echo "need to checkout ${GITHUB_REPOSITORY} in zmk/$EVENT_PROJECT_PATH"
+              echo "manifest_rev=$( git rev-parse manifest-rev )" >> $GITHUB_ENV
+
+      - name: checkout event triggered ref
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          path: ${{ format('{0}/{1}','zephyr-rtk-project',env.EVENT_PROJECT_PATH) }}
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+          clean: false
+
+      - name: after check temp module
+        shell: bash
+        run: |
+          cd zephyr-rtk-project/$EVENT_PROJECT_PATH
+          echo "manifest_rev -> ${manifest_rev}"
+          git branch manifest-rev $manifest_rev
+
+      - name: Install Packages
+        run: |
+          cd zephyr-rtk-project/$EVENT_PROJECT_PATH
+          python3 -m pip install -U -r ./scripts/requirements.txt
+
+      - name: do twist build
+        shell: bash
+        run: |
+          cd zephyr-rtk-project/$EVENT_PROJECT_PATH
+          python ./scripts/twister -p rtl8762gn_evb -T tests/drivers/entropy
+
+      - name: Upload Unit Test Results
+        if: success() || failure()
+        uses: actions/upload-artifact@v2
+        with:
+          name: Results
+          path: |
+            zephyr-rtk-project/zephyr/twister-out/
+          retention-days: 14
+
+      - name: Clear Workspace
+        if: success() || failure()
+        run: |
+          rm -rf twister-out*/
