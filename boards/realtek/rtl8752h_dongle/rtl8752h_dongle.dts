@@ -1,0 +1,94 @@
+/dts-v1/;
+#include <realtek/rtl8752h.dtsi>
+#include "rtl8752h_dongle-pinctrl.dtsi"
+#include <zephyr/dt-bindings/gpio/realtek-rtl8752h-gpio.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	model = "RealTek rtl8752h dongle ";
+	compatible = "realtek,rtl8752h_dongle";
+
+	chosen {
+		zephyr,code-partition = &app_partition;
+		zephyr,console = &uart2;
+		zephyr,shell-uart = &uart2;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			/* pin p4_3 */
+			gpios = <&gpio 31 GPIO_ACTIVE_LOW>;
+			label = "LED 0";
+		};
+		led_rgb_r: led_rgb_r {
+			/* pin p4_1 */
+			gpios = <&gpio 29 GPIO_ACTIVE_LOW>;
+			label = "RGB Red";
+		};
+		led_rgb_g: led_rgb_g {
+			/* pin p4_2 */
+			gpios = <&gpio 30 GPIO_ACTIVE_LOW>;
+			label = "RGB Green";
+		};
+		led_rgb_b: led_rgb_b {
+			/* pin p4_0 */
+			gpios = <&gpio 32 GPIO_ACTIVE_LOW>;
+			label = "RGB Blue";
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		button0: button_0 {
+			label = "Push button switch 0";
+			gpios = <&gpio 20 (GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_0>;
+		};
+	};
+
+	/* These aliases are provided for compatibility with samples */
+	aliases {
+		led0 = &led0;
+		led1 = &led_rgb_r;
+		led2 = &led_rgb_g;
+		led3 = &led_rgb_b;
+		sw0 = &button0;
+	};
+
+};
+
+&flash {
+	reg = <0x800000 DT_SIZE_K(1024)>;
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		app_partition: partition@15000 {
+			label = "app-image";
+			reg = <0x15000 (DT_SIZE_K(412))>;
+		};
+		storage_partition: partition@7C000 {
+			label = "storage";
+			reg = <0x7C000 DT_SIZE_K(16)>;
+		};
+	};
+};
+
+&gpio {
+	status = "okay";
+};
+
+&uart2 {
+	pinctrl-0 = <&uart2_default>;
+	pinctrl-names = "default";
+	status = "okay";
+	current-speed = <2000000>;
+	parity = "none";
+	stop-bits = "1";
+	data-bits = <8>;
+};
+
+&bee_bt_hci {
+	status= "okay";
+};

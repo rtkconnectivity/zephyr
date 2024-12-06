@@ -1,0 +1,27 @@
+identifier: rtl8752h_dongle
+name: Realtek rtl8752h dongle
+type: mcu
+arch: arm
+ram: 104
+flash: 1024
+toolchain:
+  - zephyr
+  - gnuarmemb
+  - xtools
+supported:
+  - adc
+  - gpio
+  - i2c
+  - counter
+  - spi
+  - nvs
+  - pwm
+  - uart
+  - ble
+  - entropy
+testing:
+  ignore_tags:
+    - net
+    - hwinfo
+    - ipc
+vendor: realtek
