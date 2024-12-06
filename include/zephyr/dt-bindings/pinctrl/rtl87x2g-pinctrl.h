@@ -165,8 +165,8 @@
 #define RTL87X2G_biu_volt_reg_0              148
 #define RTL87X2G_back_end_power_0            149
 #define RTL87X2G_card_int_n_sdhc_0           150
-#define RTL87X2G_CAN_TX                      155
-#define RTL87X2G_CAN_RX                      156
+#define RTL87X2G_A2C_TX                      155
+#define RTL87X2G_A2C_RX                      156
 #define RTL87X2G_LRC_SPORT1                  157
 #define RTL87X2G_BCLK_SPORT1                 158
 #define RTL87X2G_ADCDAT_SPORT1               159
