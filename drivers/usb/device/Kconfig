@@ -243,10 +243,10 @@ config USB_DC_RTL87X2G_DMA
 
 if USB_DC_RTL87X2G_DMA
 config USB_EP_HEAP_SIZE
-    int
-    default 256
-    help
-      Size of the heap for usb ep.
+	int "dma heap size for usb eps"
+	default 1024
+	help
+	  Size of the heap for usb ep.
 endif # USB_DC_RTL87X2G_DMA
 
 endif # USB_DC_RTL87X2G
