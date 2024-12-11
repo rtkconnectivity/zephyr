@@ -54,6 +54,8 @@ static int dma_rtl87x2g_ch2num(uint32_t reg, uint32_t ch)
 	}
 }
 
+extern FlagStatus GDMA_GetSuspendChannelStatus(GDMA_ChannelTypeDef *GDMA_Channelx);
+
 /*
  * API functions
  */
@@ -402,18 +404,18 @@ static int dma_rtl87x2g_start(const struct device *dev, uint32_t channel)
 
 	data->channels[channel].busy = true;
 
-	dma_channel->GDMA_CTL_HIGHx = data->channels[channel].p_dma_lli[0].CTL_HIGH;
+	dma_channel->GDMA_CTLx_H = data->channels[channel].p_dma_lli[0].CTL_HIGH;
 
-	GDMA_CFG_LOWx_TypeDef gdma_0x40 = {.d32 = dma_channel->GDMA_CFG_LOWx};
-	GDMA_CTL_LOWx_TypeDef gdma_0x18 = {.d32 = dma_channel->GDMA_CTL_LOWx};
+	GDMA_CFGx_L_TypeDef gdma_0x40 = {.d32 = dma_channel->GDMA_CFGx_L};
+	GDMA_CTLx_L_TypeDef gdma_0x18 = {.d32 = dma_channel->GDMA_CTLx_L};
 
-	dma_channel->GDMA_LLPx = (uint32_t)(data->channels[channel].p_dma_lli);
-	gdma_0x18.b.LLP_DST_EN = 1;
-	gdma_0x18.b.LLP_SRC_EN = 1;
-	gdma_0x40.b.RELOAD_SRC = 0;
-	gdma_0x40.b.RELOAD_DST = 0;
-	dma_channel->GDMA_CTL_LOWx = gdma_0x18.d32;
-	dma_channel->GDMA_CFG_LOWx = gdma_0x40.d32;
+	dma_channel->GDMA_LLPx_L = (uint32_t)(data->channels[channel].p_dma_lli);
+	gdma_0x18.b.llp_dst_en = 1;
+	gdma_0x18.b.llp_src_en = 1;
+	gdma_0x40.b.reload_src = 0;
+	gdma_0x40.b.reload_dst = 0;
+	dma_channel->GDMA_CTLx_L = gdma_0x18.d32;
+	dma_channel->GDMA_CFGx_L = gdma_0x40.d32;
 
 	GDMA_SetSourceAddress(dma_channel, 0);
 	GDMA_SetDestinationAddress(dma_channel, 0);
@@ -497,7 +499,7 @@ static int dma_rtl87x2g_resume(const struct device *dev, uint32_t channel)
 		return -EINVAL;
 	}
 
-	if (!GDMA_GetSuspendCmdStatus(dma_channel)) {
+	if (!GDMA_GetSuspendChannelStatus(dma_channel)) {
 		LOG_ERR("resume channel not suspend");
 		return -EINVAL;
 	}
@@ -588,9 +590,9 @@ static void dma_rtl87x2g_isr(const struct device *dev)
 	for (uint32_t i = 0; i < cfg->channels; i++) {
 		dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, i);
 		dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
-		errflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_StatuErr & BIT(dma_channel_num);
-		ftfflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_StatusTfr & BIT(dma_channel_num);
-		blockflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_StatusBlock & BIT(dma_channel_num);
+		errflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_STATUSERR_L & BIT(dma_channel_num);
+		ftfflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_STATUSTFR_L & BIT(dma_channel_num);
+		blockflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_STATUSBLOCK_L & BIT(dma_channel_num);
 
 		GDMA_ClearINTPendingBit(dma_channel_num,
 					GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block);
