@@ -81,7 +81,6 @@
 				compatible = "soc-nv-flash";
 				write-block-size = <1>;
 				erase-block-size = <4096>;
-				reg = <0x4000000 DT_SIZE_K(1024)>;
 			};
 		};
 

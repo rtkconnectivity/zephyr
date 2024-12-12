@@ -1,5 +1,10 @@
 if SOC_FAMILY_REALTEK_BEE
 
+if REALTEK_OTA
+config COMMON_LIBC_MALLOC_ARENA_SIZE
+	default 8192
+endif
+
 rsource "*/Kconfig.defconfig.series"
 
 endif
