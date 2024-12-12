@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Teslabs Engineering S.L.
+ * Copyright(c) 2024, Realtek Semiconductor Corporation.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
