@@ -23,8 +23,8 @@ manifest:
       url-base: https://github.com/zephyrproject-rtos
     - name: babblesim
       url-base: https://github.com/BabbleSim
-    - name: rtkconnectivity
-      url-base: https://github.com/rtkconnectivity
+    - name: zhiyuan_tang
+      url-base: https://github.com/ZhiyuanTang17
 
   group-filter: [-babblesim, -optional]
 
@@ -215,8 +215,8 @@ manifest:
       groups:
         - hal
     - name: hal_realtek
-      remote: rtkconnectivity
-      revision: for-official-review
+      remote: zhiyuan_tang
+      revision: basic-pr
       path: modules/hal/realtek
       groups:
         - hal

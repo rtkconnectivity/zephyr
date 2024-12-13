@@ -1,0 +1,14 @@
+# Copyright (c) 2024 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
+
+#General Kernel Options
+CONFIG_TICKLESS_KERNEL=n
+CONFIG_TIMESLICE_SIZE=10
+CONFIG_INIT_STACKS=y
+
+#Build a secure image by default
+CONFIG_TRUSTED_EXECUTION_SECURE=y
+CONFIG_ARM_SECURE_BUSFAULT_HARDFAULT_NMI=y
+
+#DISASSEMBLY
+CONFIG_OUTPUT_DISASSEMBLY=y

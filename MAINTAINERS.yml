@@ -3468,6 +3468,19 @@ Nuvoton NPCX Platforms:
   labels:
     - "platform: Nuvoton NPCX"
 
+Realtek Bee Platforms:
+  status: maintained
+  maintainers:
+    - zhiyuan_tang
+  files:
+    - drivers/*/*rtl87*
+    - boards/realtek/
+    - soc/realtek/
+    - dts/arm/realtek/
+    - dts/bindings/*/*rtl87*
+  labels:
+    - "platform: realtek bee"
+
 Nuvoton Numicro Numaker Platforms:
   status: maintained
   maintainers:
@@ -4776,6 +4789,14 @@ West:
   files: []
   labels:
     - "platform: Quicklogic"
+
+"West project: hal_realtek":
+  status: maintained
+  maintainers:
+    - zhiyuan_tang
+  files: []
+  labels:
+    - "platform: realtek bee"
 
 "West project: hal_renesas":
   status: maintained
