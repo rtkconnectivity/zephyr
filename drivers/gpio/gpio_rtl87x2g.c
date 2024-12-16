@@ -588,16 +588,14 @@ static void gpio_rtl87x2g_isr(void *arg)
 	const struct gpio_rtl87x2g_config *config = dev->config;
 	struct gpio_rtl87x2g_data *data = dev->data;
 	GPIO_TypeDef *port_base = config->port_base;
-	sys_slist_t *list = &data->cb;
 	const struct device *port = dev;
 	uint32_t pins = port_base->GPIO_INT_STS;
-	struct gpio_callback *cb = NULL, *tmp = NULL;
 
-	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(list, cb, tmp, node) {
-		if (cb->pin_mask & pins) {
-			__ASSERT(cb->handler, "No callback handler!");
-			cb->handler(port, cb, cb->pin_mask & pins);
-			GPIO_ClearINTPendingBit(port_base, cb->pin_mask & pins);
+	gpio_fire_callbacks(&data->cb, port, pins);
+
+	for (uint32_t i = 0; i < 32; i++) {
+		if (BIT(i) & pins) {
+			GPIO_ClearINTPendingBit(port_base, BIT(i) & pins);
 		}
 	}
 }
