@@ -405,14 +405,14 @@ static int dma_rtl87x2g_start(const struct device *dev, uint32_t channel)
 	dma_channel->GDMA_CTL_HIGHx = data->channels[channel].p_dma_lli[0].CTL_HIGH;
 
 	GDMA_CFG_LOWx_TypeDef gdma_0x40 = {.d32 = dma_channel->GDMA_CFG_LOWx};
-	GDMA_CTL_LOWx_TypeDef gdma_0x18 = {.d32 = dma_channel->GDMA_CTL_LOWx};
+	GDMA_CTL_LOWx_TypeDef gdma_0x18 = {.d32 = dma_channel->GDMA_CTLx_L};
 
 	dma_channel->GDMA_LLPx = (uint32_t)(data->channels[channel].p_dma_lli);
 	gdma_0x18.b.LLP_DST_EN = 1;
 	gdma_0x18.b.LLP_SRC_EN = 1;
 	gdma_0x40.b.RELOAD_SRC = 0;
 	gdma_0x40.b.RELOAD_DST = 0;
-	dma_channel->GDMA_CTL_LOWx = gdma_0x18.d32;
+	dma_channel->GDMA_CTLx_L = gdma_0x18.d32;
 	dma_channel->GDMA_CFG_LOWx = gdma_0x40.d32;
 
 	GDMA_SetSourceAddress(dma_channel, 0);
