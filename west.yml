@@ -25,6 +25,8 @@ manifest:
       url-base: https://github.com/BabbleSim
     - name: rtkconnectivity
       url-base: https://github.com/rtkconnectivity
+    - name: wanghao-realmcu
+      url-base: https://github.com/wanghao-realmcu
 
   group-filter: [-babblesim, -optional]
 
@@ -214,7 +216,7 @@ manifest:
       groups:
         - hal
     - name: hal_realtek
-      remote: rtkconnectivity
+      remote: wanghao-realmcu
       revision: main
       path: modules/hal/realtek
       groups:
