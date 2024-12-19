@@ -29,6 +29,7 @@ zephyr_library_sources_ifdef(CONFIG_INPUT_SBUS input_sbus.c)
 zephyr_library_sources_ifdef(CONFIG_INPUT_STMPE811 input_stmpe811.c)
 zephyr_library_sources_ifdef(CONFIG_INPUT_XEC_KBD input_xec_kbd.c)
 zephyr_library_sources_ifdef(CONFIG_INPUT_XPT2046 input_xpt2046.c)
+zephyr_library_sources_ifdef(CONFIG_INPUT_RTL87X2G_KSCAN input_rtl87x2g_kscan.c)
 # zephyr-keep-sorted-stop
 
 if (CONFIG_INPUT_SDL_TOUCH)
