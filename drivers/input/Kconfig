@@ -15,6 +15,7 @@ source "drivers/input/Kconfig.npcx"
 source "drivers/input/Kconfig.sdl"
 source "drivers/input/Kconfig.stmpe811"
 source "drivers/input/Kconfig.xpt2046"
+source "drivers/input/Kconfig.rtl87x2g_kscan"
 
 endmenu # Input Drivers
 

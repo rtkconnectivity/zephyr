@@ -12,6 +12,7 @@ zephyr_library_sources_ifdef(CONFIG_INPUT_GT911 input_gt911.c)
 zephyr_library_sources_ifdef(CONFIG_INPUT_NPCX_KBD input_npcx_kbd.c)
 zephyr_library_sources_ifdef(CONFIG_INPUT_STMPE811 input_stmpe811.c)
 zephyr_library_sources_ifdef(CONFIG_INPUT_XPT2046 input_xpt2046.c)
+zephyr_library_sources_ifdef(CONFIG_INPUT_RTL87X2G_KSCAN input_rtl87x2g_kscan.c)
 
 if (CONFIG_INPUT_SDL_TOUCH)
   zephyr_library_sources(input_sdl_touch.c)
