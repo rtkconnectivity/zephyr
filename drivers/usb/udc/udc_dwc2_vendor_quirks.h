@@ -308,6 +308,136 @@ DT_INST_FOREACH_STATUS_OKAY(QUIRK_NRF_USBHS_DEFINE)
 
 #endif /*DT_HAS_COMPAT_STATUS_OKAY(nordic_nrf_usbhs) */
 
+#if DT_HAS_COMPAT_STATUS_OKAY(realtek_rtl87x2g_udc)
+#include "trace.h"
+#define DT_DRV_COMPAT snps_dwc2
+
+#define UDC_DT_WRAPPER_REG_ADDR(n) UINT_TO_POINTER(DT_INST_REG_ADDR_BY_NAME(n, wrapper))
+
+static int rtl8773g_udc_init(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	extern int hal_usb_phy_power_on(void);
+	extern void hal_rtk_usb_init(void);
+
+	hal_usb_phy_power_on();
+	hal_rtk_usb_init();
+
+	return 0;
+}
+
+static int rtl8773g_udc_pre_enable(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	return 0;
+}
+
+static int rtl8773g_udc_post_enable(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	return 0;
+}
+
+static int rtl8773g_udc_disable(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	extern void usb_rtk_disable_power_seq(void);
+	usb_rtk_disable_power_seq();
+
+	return 0;
+}
+
+static int rtl8773g_udc_shutdown(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	return 0;
+}
+
+static int rtl8773g_udc_irq_clear(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	return 0;
+}
+
+static int rtl8773g_udc_caps(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct udc_data *data = dev->data;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	data->caps.hs = true;
+	data->caps.rwup = true;
+	data->caps.mps0 = 16;
+
+	return 0;
+}
+
+static int rtl8773g_udc_is_phy_clk_off(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	return 0;
+}
+
+static int rtl8773g_udc_post_hibernation_entry(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	return 0;
+}
+
+static inline int rtl8773g_udc_pre_hibernation_exit(const struct device *dev)
+{
+	const struct udc_dwc2_config *const config = dev->config;
+	struct usb_dwc2_reg *const base = config->base;
+	void *wrapper = UDC_DT_WRAPPER_REG_ADDR(0);
+
+	return 0;
+}
+
+#define QUIRK_RTL87X2G_UDC_DEFINE(n)                                                               \
+	struct dwc2_vendor_quirks dwc2_vendor_quirks_##n = {                                       \
+		.init = rtl8773g_udc_init,                                                         \
+		.pre_enable = rtl8773g_udc_pre_enable,                                             \
+		.post_enable = rtl8773g_udc_post_enable,                                           \
+		.disable = rtl8773g_udc_disable,                                                   \
+		.shutdown = rtl8773g_udc_shutdown,                                                 \
+		.irq_clear = rtl8773g_udc_irq_clear,                                               \
+		.caps = rtl8773g_udc_caps,                                                         \
+		.is_phy_clk_off = rtl8773g_udc_is_phy_clk_off,                                     \
+		.post_hibernation_entry = rtl8773g_udc_post_hibernation_entry,                     \
+		.pre_hibernation_exit = rtl8773g_udc_pre_hibernation_exit,                         \
+	};
+
+DT_INST_FOREACH_STATUS_OKAY(QUIRK_RTL87X2G_UDC_DEFINE)
+
+#undef DT_DRV_COMPAT
+
+#endif /*DT_HAS_COMPAT_STATUS_OKAY(realtek_rtl87x2g_udc) */
+
 /* Add next vendor quirks definition above this line */
 
 #endif /* ZEPHYR_DRIVERS_USB_UDC_DWC2_VENDOR_QUIRKS_H */
