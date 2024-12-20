@@ -473,6 +473,19 @@
 			status = "disabled";
 		};
 
+		zephyr_udc0: udc@40100000 {
+			compatible = "realtek,rtl87x2g-udc", "snps,dwc2";
+			reg = <0x40100000 0x40000>, <0x40100000 0x40000>;
+			reg-names = "wrapper", "core";
+			interrupts = <77 0>, <78 0>;
+			num-in-eps = <6>;
+			num-out-eps = <6>;
+			ghwcfg1 = <0>;
+			ghwcfg2 = <0x22abfc72>;
+			ghwcfg4 = <0x1e10aa60>;
+			status = "disabled";
+		};
+
 		ieee802154: ieee802154@4005c000 {
 			compatible = "realtek,rtl87x2g-ieee802154";
 			reg = <0x4005c000 0x4000>;

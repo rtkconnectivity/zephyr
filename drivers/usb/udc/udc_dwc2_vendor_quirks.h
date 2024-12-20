@@ -38,16 +38,12 @@ static inline int stm32f4_fsotg_enable_clk(const struct usb_dw_stm32_clk *const 
 	if (clk->pclken_len > 1) {
 		uint32_t clk_rate;
 
-		ret = clock_control_configure(clk->dev,
-					      (void *)&clk->pclken[1],
-					      NULL);
+		ret = clock_control_configure(clk->dev, (void *)&clk->pclken[1], NULL);
 		if (ret) {
 			return ret;
 		}
 
-		ret = clock_control_get_rate(clk->dev,
-					     (void *)&clk->pclken[1],
-					     &clk_rate);
+		ret = clock_control_get_rate(clk->dev, (void *)&clk->pclken[1], &clk_rate);
 		if (ret) {
 			return ret;
 		}
@@ -80,27 +76,26 @@ static inline int stm32f4_fsotg_disable_phy(const struct device *dev)
 	return 0;
 }
 
-#define QUIRK_STM32F4_FSOTG_DEFINE(n)						\
-	static const struct stm32_pclken pclken_##n[] = STM32_DT_INST_CLOCKS(n);\
-										\
-	static const struct usb_dw_stm32_clk stm32f4_clk_##n = {		\
-		.dev = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE),			\
-		.pclken = pclken_##n,						\
-		.pclken_len = DT_INST_NUM_CLOCKS(n),				\
-	};									\
-										\
-	static int stm32f4_fsotg_enable_clk_##n(const struct device *dev)	\
-	{									\
-		return stm32f4_fsotg_enable_clk(&stm32f4_clk_##n);		\
-	}									\
-										\
-	struct dwc2_vendor_quirks dwc2_vendor_quirks_##n = {			\
-		.pre_enable = stm32f4_fsotg_enable_clk_##n,			\
-		.post_enable = stm32f4_fsotg_enable_phy,			\
-		.disable = stm32f4_fsotg_disable_phy,				\
-		.irq_clear = NULL,						\
+#define QUIRK_STM32F4_FSOTG_DEFINE(n)                                                              \
+	static const struct stm32_pclken pclken_##n[] = STM32_DT_INST_CLOCKS(n);                   \
+                                                                                                   \
+	static const struct usb_dw_stm32_clk stm32f4_clk_##n = {                                   \
+		.dev = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE),                                    \
+		.pclken = pclken_##n,                                                              \
+		.pclken_len = DT_INST_NUM_CLOCKS(n),                                               \
+	};                                                                                         \
+                                                                                                   \
+	static int stm32f4_fsotg_enable_clk_##n(const struct device *dev)                          \
+	{                                                                                          \
+		return stm32f4_fsotg_enable_clk(&stm32f4_clk_##n);                                 \
+	}                                                                                          \
+                                                                                                   \
+	struct dwc2_vendor_quirks dwc2_vendor_quirks_##n = {                                       \
+		.pre_enable = stm32f4_fsotg_enable_clk_##n,                                        \
+		.post_enable = stm32f4_fsotg_enable_phy,                                           \
+		.disable = stm32f4_fsotg_disable_phy,                                              \
+		.irq_clear = NULL,                                                                 \
 	};
-
 
 DT_INST_FOREACH_STATUS_OKAY(QUIRK_STM32F4_FSOTG_DEFINE)
 
@@ -124,7 +119,7 @@ DT_INST_FOREACH_STATUS_OKAY(QUIRK_STM32F4_FSOTG_DEFINE)
  * until a valid VBUS signal is detected.
  */
 static K_EVENT_DEFINE(usbhs_events);
-#define USBHS_VBUS_READY	BIT(0)
+#define USBHS_VBUS_READY BIT(0)
 
 static void usbhs_vbus_handler(nrfs_usb_evt_t const *p_evt, void *const context)
 {
@@ -249,15 +244,15 @@ static inline int usbhs_is_phy_clk_off(const struct device *dev)
 	return !k_event_test(&usbhs_events, USBHS_VBUS_READY);
 }
 
-#define QUIRK_NRF_USBHS_DEFINE(n)						\
-	struct dwc2_vendor_quirks dwc2_vendor_quirks_##n = {			\
-		.init = usbhs_enable_nrfs_service,				\
-		.pre_enable = usbhs_enable_core,				\
-		.disable = usbhs_disable_core,					\
-		.shutdown = usbhs_disable_nrfs_service,				\
-		.irq_clear = usbhs_irq_clear,					\
-		.caps = usbhs_init_caps,					\
-		.is_phy_clk_off = usbhs_is_phy_clk_off,				\
+#define QUIRK_NRF_USBHS_DEFINE(n)                                                                  \
+	struct dwc2_vendor_quirks dwc2_vendor_quirks_##n = {                                       \
+		.init = usbhs_enable_nrfs_service,                                                 \
+		.pre_enable = usbhs_enable_core,                                                   \
+		.disable = usbhs_disable_core,                                                     \
+		.shutdown = usbhs_disable_nrfs_service,                                            \
+		.irq_clear = usbhs_irq_clear,                                                      \
+		.caps = usbhs_init_caps,                                                           \
+		.is_phy_clk_off = usbhs_is_phy_clk_off,                                            \
 	};
 
 DT_INST_FOREACH_STATUS_OKAY(QUIRK_NRF_USBHS_DEFINE)
@@ -265,6 +260,90 @@ DT_INST_FOREACH_STATUS_OKAY(QUIRK_NRF_USBHS_DEFINE)
 #undef DT_DRV_COMPAT
 
 #endif /*DT_HAS_COMPAT_STATUS_OKAY(nordic_nrf_usbhs) */
+
+#if DT_HAS_COMPAT_STATUS_OKAY(realtek_rtl87x2g_udc)
+#include "trace.h"
+#define DT_DRV_COMPAT snps_dwc2
+
+#define UDC_DT_WRAPPER_REG_ADDR(n) UINT_TO_POINTER(DT_INST_REG_ADDR_BY_NAME(n, wrapper))
+
+static int rtl8773g_udc_init(const struct device *dev)
+{
+	extern int hal_usb_phy_power_on(void);
+	extern void hal_rtk_usb_init(void);
+
+	hal_usb_phy_power_on();
+	hal_rtk_usb_init();
+
+	return 0;
+}
+
+static int rtl8773g_udc_pre_enable(const struct device *dev)
+{
+
+	return 0;
+}
+
+static int rtl8773g_udc_post_enable(const struct device *dev)
+{
+
+	return 0;
+}
+
+static int rtl8773g_udc_disable(const struct device *dev)
+{
+	extern void usb_rtk_disable_power_seq(void);
+	usb_rtk_disable_power_seq();
+
+	return 0;
+}
+
+static int rtl8773g_udc_shutdown(const struct device *dev)
+{
+
+	return 0;
+}
+
+static int rtl8773g_udc_irq_clear(const struct device *dev)
+{
+
+	return 0;
+}
+
+static int rtl8773g_udc_caps(const struct device *dev)
+{
+	struct udc_data *data = dev->data;
+
+	data->caps.hs = true;
+	data->caps.rwup = true;
+	data->caps.mps0 = 16;
+
+	return 0;
+}
+
+static int rtl8773g_udc_is_phy_clk_off(const struct device *dev)
+{
+
+	return 0;
+}
+
+#define QUIRK_RTL87X2G_UDC_DEFINE(n)                                                               \
+	struct dwc2_vendor_quirks dwc2_vendor_quirks_##n = {                                       \
+		.init = rtl8773g_udc_init,                                                         \
+		.pre_enable = rtl8773g_udc_pre_enable,                                             \
+		.post_enable = rtl8773g_udc_post_enable,                                           \
+		.disable = rtl8773g_udc_disable,                                                   \
+		.shutdown = rtl8773g_udc_shutdown,                                                 \
+		.irq_clear = rtl8773g_udc_irq_clear,                                               \
+		.caps = rtl8773g_udc_caps,                                                         \
+		.is_phy_clk_off = rtl8773g_udc_is_phy_clk_off,                                     \
+	};
+
+DT_INST_FOREACH_STATUS_OKAY(QUIRK_RTL87X2G_UDC_DEFINE)
+
+#undef DT_DRV_COMPAT
+
+#endif /*DT_HAS_COMPAT_STATUS_OKAY(realtek_rtl87x2g_udc) */
 
 /* Add next vendor quirks definition above this line */
 
