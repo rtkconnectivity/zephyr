@@ -10,7 +10,7 @@
 #include "rtl_bt_hci.h"
 #include "trace.h"
 
-#define F_RTK_BT_HCI_H2C_POOL_SIZE              3*1024
+#define F_RTK_BT_HCI_H2C_POOL_SIZE 3 * 1024
 
 LOG_MODULE_REGISTER(bt_driver, CONFIG_BT_HCI_DRIVER_LOG_LEVEL);
 #define DT_DRV_COMPAT realtek_bee_bt_hci
@@ -18,18 +18,15 @@ LOG_MODULE_REGISTER(bt_driver, CONFIG_BT_HCI_DRIVER_LOG_LEVEL);
 struct k_thread rx_thread_data;
 static K_KERNEL_STACK_DEFINE(rx_thread_stack, CONFIG_BT_RX_STACK_SIZE);
 
-typedef struct
-{
+typedef struct {
 	intptr_t _unused;
 	uint8_t *p_buf;
 	uint32_t len;
 } T_RTL_BT_RX_BUF;
 
-static struct
-{
-	struct k_fifo   fifo;
-} rx =
-{
+static struct {
+	struct k_fifo fifo;
+} rx = {
 	.fifo = Z_FIFO_INITIALIZER(rx.fifo),
 };
 
@@ -47,8 +44,7 @@ static bool bt_rtl87x2x_check_hci_event_discardable(const uint8_t *event_data)
 	case BT_HCI_EVT_EXTENDED_INQUIRY_RESULT:
 		return true;
 #endif
-	case BT_HCI_EVT_LE_META_EVENT:
-	{
+	case BT_HCI_EVT_LE_META_EVENT: {
 		uint8_t sub_event_type = event_data[sizeof(struct bt_hci_evt_hdr)];
 
 		switch (sub_event_type) {
@@ -67,20 +63,16 @@ static bool bt_rtl87x2x_recv_cb(T_RTL_BT_HCI_EVT evt, bool status, uint8_t *p_bu
 {
 	int ret = 0;
 
-	LOG_DBG("%s: evt %u status %u, type %u, len %u", __func__, evt,
-			status, p_buf[0], len);
+	LOG_DBG("%s: evt %u status %u, type %u, len %u", __func__, evt, status, p_buf[0], len);
 	switch (evt) {
-	case BT_HCI_EVT_OPENED:
-	{
+	case BT_HCI_EVT_OPENED: {
 		LOG_DBG("BT_HCI_EVT_OPENED");
 		if (status == false) {
 			ret = -EXDEV;
 		}
-	}
-	break;
+	} break;
 
-	case BT_HCI_EVT_DATA_IND:
-	{
+	case BT_HCI_EVT_DATA_IND: {
 		T_RTL_BT_RX_BUF *p_rx_buf;
 
 		p_rx_buf = calloc(1, sizeof(T_RTL_BT_RX_BUF));
@@ -92,8 +84,7 @@ static bool bt_rtl87x2x_recv_cb(T_RTL_BT_HCI_EVT evt, bool status, uint8_t *p_bu
 			break;
 		}
 		rtl_bt_hci_ack(p_buf);
-	}
-	break;
+	} break;
 
 	default:
 		ret = -EINVAL;
@@ -101,10 +92,11 @@ static bool bt_rtl87x2x_recv_cb(T_RTL_BT_HCI_EVT evt, bool status, uint8_t *p_bu
 	}
 
 	if (ret != 0) {
-		DBG_DIRECT("[ERR] bt_rtl87x2g_recv_cb: error, evt %d status %d, type %d, len %d, ret %d",
-				evt, status, p_buf[0], len, ret);
-		LOG_ERR("bt_rtl87x2g_recv_cb: error, evt %u status %u, type %u, len %u, ret %d", evt,
-				status, p_buf[0], len, ret);
+		DBG_DIRECT("[ERR] bt_rtl87x2g_recv_cb: error, evt %d status %d, type %d, len %d, "
+			   "ret %d",
+			   evt, status, p_buf[0], len, ret);
+		LOG_ERR("bt_rtl87x2g_recv_cb: error, evt %u status %u, type %u, len %u, ret %d",
+			evt, status, p_buf[0], len, ret);
 		return false;
 	}
 
@@ -119,8 +111,7 @@ void bt_rtl87x2x_handle_rx_data(T_RTL_BT_RX_BUF *p_rx_buf)
 	size_t buf_tailroom = 0;
 	/* First byte is packet type */
 	switch (p_rx_buf->p_buf[0]) {
-	case H4_EVT:
-	{
+	case H4_EVT: {
 		bool discardable = false;
 		struct bt_hci_evt_hdr hdr;
 
@@ -142,11 +133,9 @@ void bt_rtl87x2x_handle_rx_data(T_RTL_BT_RX_BUF *p_rx_buf)
 		}
 		DBG_DIRECT("[ERR] H4_EVT: event 0x%x, len %d, alloc failed", hdr.evt, hdr.len);
 		LOG_ERR("H4_EVT: event 0x%x, len %d, alloc failed", hdr.evt, hdr.len);
-	}
-	break;
+	} break;
 
-	case H4_ACL:
-	{
+	case H4_ACL: {
 		struct bt_hci_acl_hdr hdr;
 
 		memcpy((void *)&hdr, &p_rx_buf->p_buf[1], sizeof(hdr));
@@ -156,7 +145,8 @@ void bt_rtl87x2x_handle_rx_data(T_RTL_BT_RX_BUF *p_rx_buf)
 			buf_tailroom = net_buf_tailroom(z_buf);
 			if (buf_tailroom >= (hdr.len + sizeof(hdr))) {
 				net_buf_add_mem(z_buf, &p_rx_buf->p_buf[1], hdr.len + sizeof(hdr));
-				LOG_DBG("H4_ACL: handle 0x%x, Calling bt_recv(%p)", hdr.handle, z_buf);
+				LOG_DBG("H4_ACL: handle 0x%x, Calling bt_recv(%p)", hdr.handle,
+					z_buf);
 				hci->recv(dev, z_buf);
 				break;
 			}
@@ -164,11 +154,9 @@ void bt_rtl87x2x_handle_rx_data(T_RTL_BT_RX_BUF *p_rx_buf)
 		}
 		DBG_DIRECT("[ERR] H4_ACL: handle 0x%x, len %d, alloc failed", hdr.handle, hdr.len);
 		LOG_ERR("H4_ACL: handle 0x%x, len %d, alloc failed", hdr.handle, hdr.len);
-	}
-	break;
+	} break;
 
-	case H4_ISO:
-	{
+	case H4_ISO: {
 		struct bt_hci_iso_hdr hdr;
 
 		memcpy((void *)&hdr, &p_rx_buf->p_buf[1], sizeof(hdr));
@@ -178,7 +166,8 @@ void bt_rtl87x2x_handle_rx_data(T_RTL_BT_RX_BUF *p_rx_buf)
 			buf_tailroom = net_buf_tailroom(z_buf);
 			if (buf_tailroom >= (hdr.len + sizeof(hdr))) {
 				net_buf_add_mem(z_buf, &p_rx_buf->p_buf[1], hdr.len + sizeof(hdr));
-				LOG_DBG("H4_ISO: handle 0x%x, Calling bt_recv(%p)", hdr.handle, z_buf);
+				LOG_DBG("H4_ISO: handle 0x%x, Calling bt_recv(%p)", hdr.handle,
+					z_buf);
 				hci->recv(dev, z_buf);
 				break;
 			}
@@ -186,8 +175,7 @@ void bt_rtl87x2x_handle_rx_data(T_RTL_BT_RX_BUF *p_rx_buf)
 		}
 		DBG_DIRECT("[ERR] H4_ISO: handle 0x%x, len %d, alloc failed", hdr.handle, hdr.len);
 		LOG_ERR("H4_ISO: handle 0x%x, len %d, alloc failed", hdr.handle, hdr.len);
-	}
-	break;
+	} break;
 
 	default:
 		DBG_DIRECT("[ERR] rtl_rx_thread: invalid type %d", p_rx_buf->p_buf[0]);
@@ -209,8 +197,9 @@ static void rtl_rx_thread(void *p1, void *p2, void *p3)
 	while (1) {
 		p_rx_buf = k_fifo_get(&rx.fifo, K_FOREVER);
 		do {
-			/* DBG_DIRECT("[BT] thread, p_rx_buf %p, p_buf %p", p_rx_buf, p_rx_buf->p_buf); */
-
+			/* DBG_DIRECT("[BT] thread, p_rx_buf %p, p_buf %p", p_rx_buf,
+			 * p_rx_buf->p_buf);
+			 */
 			bt_rtl87x2x_handle_rx_data(p_rx_buf);
 
 			/* Give other threads a chance to run if the ISR
@@ -232,23 +221,17 @@ static int bt_rtl87x2x_send(const struct device *dev, struct net_buf *buf)
 	T_RTL_BT_HCI_BUF hci_buf = {0};
 
 	switch (bt_buf_get_type(buf)) {
-	case BT_BUF_ACL_OUT:
-	{
+	case BT_BUF_ACL_OUT: {
 		h4_type = H4_ACL;
-	}
-	break;
+	} break;
 
-	case BT_BUF_CMD:
-	{
+	case BT_BUF_CMD: {
 		h4_type = H4_CMD;
-	}
-	break;
+	} break;
 
-	case BT_BUF_ISO_OUT:
-	{
+	case BT_BUF_ISO_OUT: {
 		h4_type = H4_ISO;
-	}
-	break;
+	} break;
 
 	default:
 		ret = -EINVAL;
@@ -274,8 +257,8 @@ static int bt_rtl87x2x_send(const struct device *dev, struct net_buf *buf)
 done:
 	net_buf_unref(buf);
 	if (ret != 0) {
-		DBG_DIRECT("[ERR] %s: error, h4_type %d, len %d, ret %d",
-			__func__, h4_type, buf->len, ret);
+		DBG_DIRECT("[ERR] %s: error, h4_type %d, len %d, ret %d", __func__, h4_type,
+			   buf->len, ret);
 		LOG_ERR("%s: error, h4_type %d, len %u, ret %d", __func__, h4_type, buf->len, ret);
 	} else {
 		LOG_DBG("%s: h4_type %d, len %u", __func__, h4_type, buf->len);
@@ -287,10 +270,10 @@ done:
 static int bt_rtl87x2x_open(const struct device *dev, bt_hci_recv_t recv)
 {
 	k_tid_t tid;
+
 	tid = k_thread_create(&rx_thread_data, rx_thread_stack,
-						K_KERNEL_STACK_SIZEOF(rx_thread_stack),
-						rtl_rx_thread, NULL, NULL, NULL,
-						0, 0, K_NO_WAIT);
+			      K_KERNEL_STACK_SIZEOF(rx_thread_stack), rtl_rx_thread, NULL, NULL,
+			      NULL, 0, 0, K_NO_WAIT);
 	k_thread_name_set(tid, "rtl_rx_thread");
 
 	struct bt_rtl_data *hci = dev->data;
@@ -319,16 +302,15 @@ static int bt_rtl87x2x_close(const struct device *dev)
 }
 
 static const struct bt_hci_driver_api drv = {
-	.open           = bt_rtl87x2x_open,
-	.send           = bt_rtl87x2x_send,
-	.close          = bt_rtl87x2x_close,
+	.open = bt_rtl87x2x_open,
+	.send = bt_rtl87x2x_send,
+	.close = bt_rtl87x2x_close,
 };
 
-#define BT_RTL_DEVICE_INIT(inst) \
-	static struct bt_rtl_data bt_rtl_data_##inst = { \
-	}; \
-	DEVICE_DT_INST_DEFINE(inst, NULL, NULL, &bt_rtl_data_##inst, NULL, \
-			      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &drv)
+#define BT_RTL_DEVICE_INIT(inst)                                                                   \
+	static struct bt_rtl_data bt_rtl_data_##inst = {};                                         \
+	DEVICE_DT_INST_DEFINE(inst, NULL, NULL, &bt_rtl_data_##inst, NULL, POST_KERNEL,            \
+			      CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &drv)
 
 /* Only one instance supported */
 BT_RTL_DEVICE_INIT(0)

@@ -3,16 +3,15 @@
 # Copyright(c) 2024, Realtek Semiconductor Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
-config KSCAN_RTL87X2G
+config INPUT_RTL87X2G_KSCAN
 	bool "RTL87X2G MCU kscan driver"
-	default y
+	default n
 	depends on DT_HAS_REALTEK_RTL87X2G_KSCAN_ENABLED
-	depends on !INPUT_RTL87X2G_KSCAN
 	select USE_HAL_REALTEK_KEYSCAN
 	help
 	  Enable the RTL87X2G kscan driver.
 
-if KSCAN_RTL87X2G
+if INPUT_RTL87X2G_KSCAN
 config RTL87X2G_KEYSCAN_MAX_ROW_SIZE
 	int "Max row size for rtl87x2g kscan"
 	default 12
@@ -31,4 +30,4 @@ config RTL87X2G_KEYSCAN_GHOST_KEY_FILTER
 	help
 	  Ghost key filter for rtl87x2g kscan.
 
-endif # KSCAN_RTL87X2G
+endif # INPUT_RTL87X2G_KSCAN

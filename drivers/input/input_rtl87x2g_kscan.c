@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ * Copyright(c) 2024, Realtek Semiconductor Corporation.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -24,13 +24,14 @@
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
+#include <zephyr/input/input.h>
 
 #ifdef CONFIG_PM
 #include "power_manager_unit_platform.h"
 #endif
 #include "rtl_keyscan.h"
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(kscan_rtl87x2g, CONFIG_KSCAN_LOG_LEVEL);
+LOG_MODULE_REGISTER(kscan_rtl87x2g, CONFIG_INPUT_LOG_LEVEL);
 
 struct kscan_rtl87x2g_config {
 	uint32_t reg;
@@ -54,8 +55,7 @@ struct kscan_rtl87x2g_data {
 	kscan_key_index keys[26];
 	uint32_t key_map[CONFIG_RTL87X2G_KEYSCAN_MAX_ROW_SIZE];
 	uint8_t press_num;
-	kscan_callback_t callback;
-	bool cb_en;
+
 #ifdef CONFIG_PM_DEVICE
 	KEYSCANStoreReg_Typedef store_buf;
 #endif
@@ -64,39 +64,6 @@ struct kscan_rtl87x2g_data {
 #ifdef CONFIG_PM_DEVICE
 static PMCheckResult kscan_pm_check_state = PM_CHECK_PASS;
 #endif
-
-static int kscan_rtl87x2g_configure(const struct device *dev, kscan_callback_t callback)
-{
-	struct kscan_rtl87x2g_data *data = dev->data;
-
-	if (!callback) {
-		return -EINVAL;
-	}
-
-	data->callback = callback;
-	LOG_DBG("dev %s: configure cb %p", dev->name, callback);
-
-	return 0;
-}
-
-static int kscan_rtl87x2g_disable_callback(const struct device *dev)
-{
-	struct kscan_rtl87x2g_data *data = dev->data;
-
-	LOG_DBG("dev %s: disable cb", dev->name);
-	data->cb_en = false;
-	return 0;
-}
-
-static int kscan_rtl87x2g_enable_callback(const struct device *dev)
-{
-	struct kscan_rtl87x2g_data *data = dev->data;
-
-	LOG_DBG("dev %s: enable cb", dev->name);
-	data->cb_en = true;
-
-	return 0;
-}
 
 static bool kscan_rtl87x2g_ghost_key_filter(kscan_key_index *new_keys, uint8_t new_press_num)
 {
@@ -136,10 +103,10 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 	struct kscan_rtl87x2g_data *data = dev->data;
 	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
 	uint32_t scan_debounce_cnt = config->scan_debounce_cnt;
-	kscan_callback_t callback = data->callback;
 	static uint8_t press_cnt;
-	static bool all_release_flag = true;
 	static kscan_key_index last_keys[26];
+	static bool all_release_flag = true;
+
 	kscan_key_index new_keys[26];
 	uint32_t new_key_map[CONFIG_RTL87X2G_KEYSCAN_MAX_ROW_SIZE];
 	uint8_t new_press_num = KeyScan_GetFifoDataNum(keyscan);
@@ -178,7 +145,8 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 					uint8_t new_row = new_keys[i].row;
 					uint8_t new_col = new_keys[i].column;
 
-					/* update new_key_map, set bit if related key pressed */
+					/* update new_key_map, set bit if related key pressed
+					 */
 
 					new_key_map[new_row] |= BIT(new_col);
 
@@ -196,12 +164,15 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 
 					data->key_map[new_row] |= BIT(new_col);
 
-					if (callback && data->cb_en) {
 #ifdef CONFIG_PM_DEVICE
-						kscan_pm_check_state = PM_CHECK_FAIL;
+					kscan_pm_check_state = PM_CHECK_FAIL;
 #endif
-						callback(dev, new_row, new_col, true);
-					}
+					input_report_abs(dev, INPUT_ABS_X, new_col, false,
+							 K_FOREVER);
+					input_report_abs(dev, INPUT_ABS_Y, new_row, false,
+							 K_FOREVER);
+					input_report_key(dev, INPUT_BTN_TOUCH, true, true,
+							 K_FOREVER);
 				}
 
 				/* update release keys */
@@ -224,9 +195,12 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 
 					data->key_map[old_row] &= ~BIT(old_col);
 
-					if (callback && data->cb_en) {
-						callback(dev, old_row, old_col, false);
-					}
+					input_report_abs(dev, INPUT_ABS_X, old_col, false,
+							 K_FOREVER);
+					input_report_abs(dev, INPUT_ABS_Y, old_row, false,
+							 K_FOREVER);
+					input_report_key(dev, INPUT_BTN_TOUCH, false, true,
+							 K_FOREVER);
 				}
 
 				memcpy(data->keys, new_keys, sizeof(new_keys));
@@ -257,9 +231,9 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 			uint8_t old_row = data->keys[i].row;
 			uint8_t old_col = data->keys[i].column;
 
-			if (callback && data->cb_en) {
-				callback(dev, old_row, old_col, false);
-			}
+			input_report_abs(dev, INPUT_ABS_X, old_col, false, K_FOREVER);
+			input_report_abs(dev, INPUT_ABS_Y, old_row, false, K_FOREVER);
+			input_report_key(dev, INPUT_BTN_TOUCH, false, true, K_FOREVER);
 		}
 
 		data->press_num = 0;
@@ -312,7 +286,8 @@ static int kscan_rtl87x2g_pm_action(const struct device *dev, enum pm_device_act
 			/* no kscan wakeup pin is configured */
 			return ret;
 		}
-		/* there are kscan wakeup pins configured, check if they wakeup the system */
+		/* there are kscan wakeup pins configured, check if they wakeup the system
+		 */
 		for (uint8_t i = 0U; i < state->pin_cnt; i++) {
 			if (state->pins[i].wakeup_low || state->pins[i].wakeup_high) {
 				if (System_WakeUpInterruptValue(state->pins[i].pin) == SET) {
@@ -322,6 +297,7 @@ static int kscan_rtl87x2g_pm_action(const struct device *dev, enum pm_device_act
 				}
 			}
 		}
+
 		break;
 	default:
 		return -ENOTSUP;
@@ -342,12 +318,6 @@ static void kscan_register_dlps_cb(void)
 }
 
 #endif /* CONFIG_PM_DEVICE */
-
-static const struct kscan_driver_api kscan_rtl87x2g_driver_api = {
-	.config = kscan_rtl87x2g_configure,
-	.disable_callback = kscan_rtl87x2g_disable_callback,
-	.enable_callback = kscan_rtl87x2g_enable_callback,
-};
 
 static int kscan_rtl87x2g_init(const struct device *dev)
 {
@@ -446,14 +416,11 @@ static int kscan_rtl87x2g_init(const struct device *dev)
 		.scan_debounce_cnt = DT_INST_PROP(index, scan_debounce_cnt),                       \
 		RTL87X2G_KSCAN_IRQ_HANDLER_FUNC(index)};                                           \
                                                                                                    \
-	static struct kscan_rtl87x2g_data kscan_rtl87x2g_data_##index = {                          \
-		.callback = NULL,                                                                  \
-	};                                                                                         \
+	static struct kscan_rtl87x2g_data kscan_rtl87x2g_data_##index = {};                        \
 	PM_DEVICE_DT_INST_DEFINE(index, kscan_rtl87x2g_pm_action);                                 \
 	DEVICE_DT_INST_DEFINE(index, &kscan_rtl87x2g_init, PM_DEVICE_DT_INST_GET(index),           \
 			      &kscan_rtl87x2g_data_##index, &kscan_rtl87x2g_cfg_##index,           \
-			      APPLICATION, CONFIG_KSCAN_INIT_PRIORITY,                             \
-			      &kscan_rtl87x2g_driver_api);                                         \
+			      POST_KERNEL, CONFIG_INPUT_INIT_PRIORITY, NULL);                      \
                                                                                                    \
 	RTL87X2G_KSCAN_IRQ_HANDLER(index)
 
