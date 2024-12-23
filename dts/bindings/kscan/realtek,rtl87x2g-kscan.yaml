@@ -5,7 +5,8 @@ description: |
   RTL87X2G KSCAN.
 
   The RTL87X2G KSCAN should be used with an external kscan matrix.
-  There is a total of 12 rows and 20 columns. You can assign any available pins to row or colunm by pinctrl.
+  There is a total of 12 rows and 20 columns.
+  You can assign any available pins to row or colunm by pinctrl.
   The rows and columns need to be indexed starting from 0.
 
   Example of devicetree configuration.
@@ -53,9 +54,6 @@ properties:
   pinctrl-0:
     required: true
 
-  pinctrl-1:
-    required: false
-
   pinctrl-names:
     required: true
 
@@ -100,4 +98,5 @@ properties:
     type: int
     default: 1
     description: Counter for scan interval to realize software debounce, unit is times.
-      The actual software-realized debounce time for each key change is scan-debounce-cnt * scan-time-ms.
+      The actual software-realized debounce time for each key change
+      is scan-debounce-cnt * scan-time-ms.
