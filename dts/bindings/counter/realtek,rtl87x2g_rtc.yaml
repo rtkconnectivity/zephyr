@@ -9,7 +9,7 @@ description: |
 
 compatible: "realtek,rtl87x2g-rtc"
 
-include: base.yaml
+include: [base.yaml, rtc-device.yaml]
 
 properties:
   reg:
