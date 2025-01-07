@@ -105,7 +105,7 @@
 				#gpio-cells = <2>;
 				reg = <0x40001000 0x64>;
 				clocks = <&cctl APB_CLK(GPIO)>;
-				interrupts = <30 0>, <29 0>, <27 0>, <26 0>;
+				interrupts = <30 3>, <29 3>, <27 3>, <26 3>;
 				status = "disabled";
 			};
 		};
@@ -114,7 +114,7 @@
 			compatible = "realtek,rtl8752h-uart";
 			reg = <0x40011000 0x60>;
 			clocks = <&cctl APB_CLK(UART0)>;
-			interrupts = <11 0>;
+			interrupts = <11 3>;
 			status = "disabled";
 		};
 
@@ -122,7 +122,7 @@
 			compatible = "realtek,rtl8752h-uart";
 			reg = <0x40012000 0x60>;
 			clocks = <&cctl APB_CLK(UART1)>;
-			interrupts = <12 0>;
+			interrupts = <12 3>;
 			status = "disabled";
 		};
 
@@ -130,14 +130,14 @@
 			compatible = "realtek,rtl8752h-uart";
 			reg = <0x40012400 0x60>;
 			clocks = <&cctl APB_CLK(UART2)>;
-			interrupts = <31 0>;
+			interrupts = <31 3>;
 			status = "disabled";
 		};
 
 		dma0: dma@400272c0 {
 			compatible = "realtek,rtl8752h-dma";
 			reg = <0x400272c0 0x4b0>;
-			interrupts = <20 0>, <21 0>, <22 0>;
+			interrupts = <20 3>, <21 3>, <22 3>;
 			dma-channels = <3>;
 			clocks = <&cctl APB_CLK(GDMA)>;
 			dma-port = <0>;
@@ -154,7 +154,7 @@
 		adc: adc@40010000 {
 			compatible = "realtek,rtl8752h-adc";
 			reg = <0x40010000 0x60>;
-			interrupts = <18 0>;
+			interrupts = <18 3>;
 			clocks = <&cctl APB_CLK(ADC)>;
 			channels = <8>;
 			status = "disabled";
@@ -164,7 +164,7 @@
 		timer2: timer@40002028 {
 			compatible = "realtek,rtl8752h-timer";
 			reg = <0x40002028 0x10>;
-			interrupts = <4 0>;
+			interrupts = <4 3>;
 			channels = <0>;
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
@@ -179,7 +179,7 @@
 		timer3: timer@4000203c {
 			compatible = "realtek,rtl8752h-timer";
 			reg = <0x4000203c 0x10>;
-			interrupts = <3 0>;
+			interrupts = <3 3>;
 			channels = <0>;
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
@@ -194,7 +194,7 @@
 		timer4: timer@40002050 {
 			compatible = "realtek,rtl8752h-timer";
 			reg = <0x40002050 0x10>;
-			interrupts = <8 0>;
+			interrupts = <8 3>;
 			channels = <0>;
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
@@ -209,7 +209,7 @@
 		timer5: timer@40002064 {
 			compatible = "realtek,rtl8752h-timer";
 			reg = <0x40002064 0x10>;
-			interrupts = <8 0>;
+			interrupts = <8 3>;
 			channels = <0>;
 			clocks = <&cctl APB_CLK(TIMER)>;
 			status = "disabled";
@@ -224,7 +224,7 @@
 		timer6: timer@40003000 {
 			compatible = "realtek,rtl8752h-timer";
 			reg = <0x40003000 0x400>;
-			interrupts = <24 0>;
+			interrupts = <24 3>;
 			is-enhanced;
 			channels = <0>;
 			clocks = <&cctl APB_CLK(ENHTIMER)>;
@@ -240,7 +240,7 @@
 		timer7: timer@40003024 {
 			compatible = "realtek,rtl8752h-timer";
 			reg = <0x40003024 0x400>;
-			interrupts = <25 0>;
+			interrupts = <25 3>;
 			is-enhanced;
 			channels = <0>;
 			clocks = <&cctl APB_CLK(ENHTIMER)>;
@@ -256,7 +256,7 @@
 		rtc: rtc@40000100 {
 			compatible = "realtek,rtl8752h-rtc";
 			reg = <0x40000100 0x40>;
-			interrupts = <19 0>;
+			interrupts = <19 3>;
 			channels = <4>;
 			alarms-count = <4>;
 			status = "disabled";
@@ -265,7 +265,7 @@
 		kscan: kscan@40005000 {
 			compatible = "realtek,rtl8752h-kscan";
 			reg = <0x40005000 0x34>;
-			interrupts = <19 0>;
+			interrupts = <19 3>;
 			clocks = <&cctl APB_CLK(KEYSCAN)>;
 			max-row-size = <12>;
 			max-col-size = <20>;
@@ -275,7 +275,7 @@
 		spi0: spi@40013000 {
 			compatible = "realtek,rtl8752h-spi";
 			reg = <0x40013000 0xf0>;
-			interrupts = <14 0>;
+			interrupts = <14 3>;
 			clocks = <&cctl APB_CLK(SPI0)>;
 			status = "disabled";
 			#address-cells = <1>;
@@ -285,7 +285,7 @@
 		spi1: spi@40013400 {
 			compatible = "realtek,rtl8752h-spi";
 			reg = <0x40013400 0xf0>;
-			interrupts = <15 0>;
+			interrupts = <15 3>;
 			clocks = <&cctl APB_CLK(SPI1)>;
 			status = "disabled";
 			#address-cells = <1>;
@@ -298,7 +298,7 @@
 			clock-frequency = <I2C_BITRATE_STANDARD>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			interrupts = <16 0>;
+			interrupts = <16 3>;
 			clocks = <&cctl APB_CLK(I2C0)>;
 			status = "disabled";
 		};
@@ -309,7 +309,7 @@
 			clock-frequency = <I2C_BITRATE_STANDARD>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			interrupts = <17 0>;
+			interrupts = <17 3>;
 			clocks = <&cctl APB_CLK(I2C1)>;
 			status = "disabled";
 		};
