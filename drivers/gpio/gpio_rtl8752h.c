@@ -37,9 +37,7 @@ static int gpio_rtl8752h_gpio2pad(uint32_t pin)
 	if (pin <= 9) {
 		return pin;
 	} else if (pin <= 12) {
-		return pin + 16;
-	} else if (pin >= 16 && pin < 21) {
-		return pin + 48;
+		return pin + 26;
 	} else if (pin == 13) {
 		return 32;
 	} else if (pin <= 28) {
@@ -444,7 +442,7 @@ static int gpio_rtl8752h_pm_action(const struct device *port, enum pm_device_act
 			 * 2. Enabled interrupt;
 			 */
 			if (port_base->GPIO_INT_EN & BIT(cur_wakeup_pad_node->next_gpio_num)) {
-				extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx,
+				extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef * GPIOx,
 								   uint32_t GPIO_Pin);
 				uint32_t GPIO_Pin_Swap =
 					GPIO_SwapDebPinBit(BIT(cur_wakeup_pad_node->next_gpio_num));
@@ -522,16 +520,14 @@ static void gpio_rtl8752h_isr(void *arg)
 	const struct gpio_rtl8752h_config *config = dev->config;
 	struct gpio_rtl8752h_data *data = dev->data;
 	GPIO_TypeDef *port_base = config->port_base;
-	sys_slist_t *list = &data->cb;
 	const struct device *port = dev;
 	uint32_t pins = port_base->INTSTATUS;
-	struct gpio_callback *cb = NULL, *tmp = NULL;
 
-	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(list, cb, tmp, node) {
-		if (cb->pin_mask & pins) {
-			__ASSERT(cb->handler, "No callback handler!");
-			cb->handler(port, cb, cb->pin_mask & pins);
-			GPIO_ClearINTPendingBit(cb->pin_mask & pins);
+	gpio_fire_callbacks(&data->cb, port, pins);
+
+	for (uint32_t i = 0; i < 32; i++) {
+		if (BIT(i) & pins) {
+			GPIO_ClearINTPendingBit(BIT(i) & pins);
 		}
 	}
 }
@@ -584,7 +580,7 @@ static int gpio_rtl8752h_init(const struct device *dev)
 #define GPIO_RTL8752H_SET_IRQ_INFO(index)                                                          \
 	static struct gpio_rtl8752h_irq_info gpio_rtl8752h_irq_info##index = {                     \
 		.gpio_irqs = {LISTIFY(DT_NUM_IRQS(DT_DRV_INST(index)),                             \
-				      GPIO_RTL8752H_SET_GPIO_IRQ_INFO, (,), index)},              \
+				      GPIO_RTL8752H_SET_GPIO_IRQ_INFO, (, ), index)},              \
 		.num_irq = DT_NUM_IRQS(DT_DRV_INST(index))};
 
 #define GPIO_RTL8752H_GET_IRQ_INFO(index) .irq_info = &gpio_rtl8752h_irq_info##index,
