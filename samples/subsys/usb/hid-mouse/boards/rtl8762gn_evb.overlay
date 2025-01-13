@@ -1,0 +1,78 @@
+/*
+ * Copyright(c) 2024, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/input/keymap.h>
+
+/ {
+	aliases {
+		led0 = &led_0;
+	};
+};
+
+&zephyr_udc0 {
+    status = "okay";
+};
+
+&gpioa {
+    status = "okay";
+};
+
+/ {
+	leds {
+		compatible = "gpio-leds";
+		led_0:led_0 {
+			gpios = <&gpioa 1 0>;
+		};
+	 	 status = "okay";
+	};
+};
+
+/ {
+	chosen {
+		zephyr,keyboard-scan = &kscan;
+	};
+};
+
+&kscan {
+	pinctrl-0 = <&kscan_default>;
+	pinctrl-names = "default";
+	row-size = <2>;
+	col-size = <2>;
+	debounce-time-us = <5000>;
+	scan-time-us = <5000>;
+	release-time-us = <5000>;
+	scan-debounce-cnt = <1>;
+	status = "okay";
+	kscan_input: kscan-input {
+		compatible = "zephyr,kscan-input";
+	};
+	keymap {
+		compatible = "input-keymap";
+		keymap = <
+			MATRIX_KEY(0, 0, INPUT_KEY_0)
+			MATRIX_KEY(0, 1, INPUT_KEY_1)
+			MATRIX_KEY(1, 0, INPUT_KEY_2)
+			MATRIX_KEY(1, 1, INPUT_KEY_3)
+		>;
+		row-size = <3>;
+		col-size = <3>;
+	};
+};
+
+&pinctrl {
+	kscan_default: kscan_default {
+		group1 {
+			psels = <RTL87X2G_PSEL(KEY_COL_0, P0_6, DIR_OUT, DRV_LOW, PULL_NONE)>,
+			<RTL87X2G_PSEL(KEY_COL_1, P0_7, DIR_OUT, DRV_LOW, PULL_NONE)>;
+		};
+		group2 {
+			psels = <RTL87X2G_PSEL(KEY_ROW_0, P2_6, DIR_IN, DRV_LOW, PULL_UP)>,
+			<RTL87X2G_PSEL(KEY_ROW_1, P2_7, DIR_IN, DRV_LOW, PULL_UP)>;
+			bias-pull-strong;
+		};
+	};
+};
