@@ -25,10 +25,12 @@
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_DEVICE
 #include "power_manager_unit_platform.h"
+#include "dlps.h"
 #endif
 #include "rtl876x_keyscan.h"
+#include "rtl876x_pinmux.h"
 #include "rtl876x_nvic.h"
 #include "rtl876x_rcc.h"
 #include "vector_table.h"
@@ -347,8 +349,7 @@ static PMCheckResult kscan_pm_check(void)
 
 static void kscan_register_dlps_cb(void)
 {
-	platform_pm_register_callback_func_with_priority((void *)kscan_pm_check, PLATFORM_PM_CHECK,
-							 1);
+	dlps_check_cb_reg(kscan_pm_check);
 }
 
 #endif /* CONFIG_PM_DEVICE */

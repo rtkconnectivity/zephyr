@@ -27,21 +27,24 @@ void z_pm_save_idle_exit(void)
 	 * This can be simply ignored if not required.
 	 */
 	pm_system_resume();
-#endif	/* CONFIG_PM */
+#endif /* CONFIG_PM */
 #ifdef CONFIG_SYS_CLOCK_EXISTS
 	sys_clock_idle_exit();
 #endif
 }
-
+#include "trace.h"
+extern int btmac_pm_get_error_code(void);
 void idle(void *unused1, void *unused2, void *unused3)
 {
 	ARG_UNUSED(unused1);
 	ARG_UNUSED(unused2);
 	ARG_UNUSED(unused3);
-
 	__ASSERT_NO_MSG(_current->base.prio >= 0);
-
-	__enable_irq();//sync with realtek pm flow
+	DBG_DIRECT("IDLE");
+	/* ToDo: check if it is necessary   */
+	SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+	/* sync with realtek pm flow */
+	__enable_irq();
 
 	while (true) {
 		/* SMP systems without a working IPI can't actual
@@ -61,10 +64,16 @@ void idle(void *unused1, void *unused2, void *unused3)
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 		/* sync with realtek pm flow */
-    	extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
+		extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
 		log_buffer_trigger_schedule_in_km4_idle_task();
 
 		extern void (*thermal_meter_read)(void);
+		thermal_meter_read();
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+		extern void LogUartDMAIdleHook(void);
+		extern void (*thermal_meter_read)(void);
+
+		LogUartDMAIdleHook();
 		thermal_meter_read();
 #else
 		/* Note weird API: k_cpu_idle() is called with local
@@ -72,18 +81,24 @@ void idle(void *unused1, void *unused2, void *unused3)
 		 * unmasked.  It does not take a spinlock or other
 		 * higher level construct.
 		 */
-		(void) arch_irq_lock();
+		(void)arch_irq_lock();
 #endif
 
 #ifdef CONFIG_PM
 		extern void (*power_manager_slave_inact_action_handler)(void);
 		power_manager_slave_inact_action_handler();
+		extern int platform_pm_get_error_code(void);
+		extern uint32_t *platform_pm_get_refuse_reason(void);
+		DBG_DIRECT("Platform fail to enter dlps, error 0x%x, reason 0x%x\r\n",
+			   platform_pm_get_error_code(), platform_pm_get_refuse_reason());
+
+		DBG_DIRECT("btmac pm error code, 0x%x\r\n", btmac_pm_get_error_code());
 #else
 		k_cpu_idle();
 #endif
 
 #if !defined(CONFIG_PREEMPT_ENABLED)
-# if !defined(CONFIG_USE_SWITCH) || defined(CONFIG_SPARC)
+#if !defined(CONFIG_USE_SWITCH) || defined(CONFIG_SPARC)
 		/* A legacy mess: the idle thread is by definition
 		 * preemptible as far as the modern scheduler is
 		 * concerned, but older platforms use
@@ -96,7 +111,7 @@ void idle(void *unused1, void *unused2, void *unused3)
 		if (_kernel.ready_q.cache != _current) {
 			z_swap_unlocked();
 		}
-# endif
+#endif
 #endif
 	}
 }

@@ -87,7 +87,7 @@ static int32_t next_timeout(void)
 	int32_t ret;
 
 	if ((to == NULL) ||
-	    ((int64_t)(to->dticks - ticks_elapsed) > (int64_t)INT_MAX)) {
+		((int64_t)(to->dticks - ticks_elapsed) > (int64_t)INT_MAX)) {
 		ret = MAX_WAIT;
 	} else {
 		ret = MAX(0, to->dticks - ticks_elapsed);
@@ -114,7 +114,7 @@ void z_add_timeout(struct _timeout *to, _timeout_func_t fn,
 		struct _timeout *t;
 
 		if (IS_ENABLED(CONFIG_TIMEOUT_64BIT) &&
-		    Z_TICK_ABS(timeout.ticks) >= 0) {
+			Z_TICK_ABS(timeout.ticks) >= 0) {
 			k_ticks_t ticks = Z_TICK_ABS(timeout.ticks) - curr_tick;
 
 			to->dticks = MAX(1, ticks);
@@ -227,8 +227,8 @@ void sys_clock_announce(int32_t ticks)
 	struct _timeout *t;
 
 	for (t = first();
-	     (t != NULL) && (t->dticks <= announce_remaining);
-	     t = first()) {
+		 (t != NULL) && (t->dticks <= announce_remaining);
+		 t = first()) {
 		int dt = t->dticks;
 
 		curr_tick += dt;
@@ -339,31 +339,28 @@ void z_vrfy_sys_clock_tick_set(uint64_t tick)
 #endif
 
 /* To support RTK PM */
+static struct k_spinlock rtk_timeout_lock;
 struct _timeout *get_first_timeout(void)
 {
-    sys_dnode_t *t = sys_dlist_peek_head(&timeout_list);
-
-    return t == NULL ? NULL : CONTAINER_OF(t, struct _timeout, node);
+	return first();
 }
 
 struct _timeout *get_next_timeout(struct _timeout *t)
 {
-    sys_dnode_t *n = sys_dlist_peek_next(&timeout_list, &t->node);
-
-    return n == NULL ? NULL : CONTAINER_OF(n, struct _timeout, node);
+	return next(t);
 }
 
 void sys_clock_announce_only_add_ticks(int32_t ticks)
 {
-	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
+	k_spinlock_key_t key = k_spin_lock(&rtk_timeout_lock);
 
 	curr_tick += ticks;
 
 	struct _timeout *t;
 
 	for (t = first();
-	     (t != NULL) && (t->dticks <= ticks);
-	     t = next(t)) {
+		 (t != NULL) && (t->dticks <= ticks);
+		 t = next(t)) {
 		int dt = t->dticks;
 
 		t->dticks = 0;
@@ -375,21 +372,21 @@ void sys_clock_announce_only_add_ticks(int32_t ticks)
 		t->dticks -= ticks;
 	}
 
-	k_spin_unlock(&timeout_lock, key);
+	k_spin_unlock(&rtk_timeout_lock, key);
 }
 
 void sys_clock_announce_process_timeout(void)
 {
-	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
+	k_spinlock_key_t key = k_spin_lock(&rtk_timeout_lock);
 
 	struct _timeout *t;
 
 	for (t = first();
-	     (t != NULL) && (t->dticks == 0);
-	     t = first()) {
+		 (t != NULL) && (t->dticks == 0);
+		 t = first()) {
 		remove_timeout(t);
 		t->fn(t);
 	}
 
-	k_spin_unlock(&timeout_lock, key);
+	k_spin_unlock(&rtk_timeout_lock, key);
 }

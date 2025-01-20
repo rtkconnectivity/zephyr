@@ -8,5 +8,6 @@ config SOC_SERIES_RTL8752H
 	select CPU_CORTEX_M_HAS_SYSTICK
 	select DYNAMIC_INTERRUPTS
 	select SYSTICK_USE_EXTERNAL_CLOCK
+	select HAS_PM
 	help
 	  Enable support for RTL8725H MCU series
