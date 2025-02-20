@@ -298,6 +298,13 @@ uint64_t sys_clock_cycle_get_64(void)
 }
 #endif
 
+#if CONFIG_SOC_FAMILY_REALTEK_BEE
+void sys_clock_only_add_cycle_count(int32_t ticks)
+{
+	cycle_count += ticks * last_load;
+}
+#endif
+
 void sys_clock_idle_exit(void)
 {
 	if (last_load == TIMER_STOPPED) {
