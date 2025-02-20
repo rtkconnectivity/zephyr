@@ -339,6 +339,8 @@ void z_vrfy_sys_clock_tick_set(uint64_t tick)
 #endif
 
 /* To support RTK PM */
+static int32_t pended_ticks;
+
 struct _timeout *get_first_timeout(void)
 {
     sys_dnode_t *t = sys_dlist_peek_head(&timeout_list);
@@ -357,39 +359,41 @@ void sys_clock_announce_only_add_ticks(int32_t ticks)
 {
 	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
 
-	curr_tick += ticks;
-
-	struct _timeout *t;
-
-	for (t = first();
-	     (t != NULL) && (t->dticks <= ticks);
-	     t = next(t)) {
-		int dt = t->dticks;
-
-		t->dticks = 0;
-
-		ticks -= dt;
-	}
-
-	if (t != NULL) {
-		t->dticks -= ticks;
-	}
+	pended_ticks += ticks;
 
 	k_spin_unlock(&timeout_lock, key);
 }
+
+extern void sys_clock_only_add_cycle_count(int32_t ticks);
 
 void sys_clock_announce_process_timeout(void)
 {
 	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
 
+	sys_clock_only_add_cycle_count(pended_ticks);
+
 	struct _timeout *t;
 
 	for (t = first();
-	     (t != NULL) && (t->dticks == 0);
+	     (t != NULL) && (t->dticks <= pended_ticks);
 	     t = first()) {
+		int dt = t->dticks;
+
+		curr_tick += dt;
+		t->dticks = 0;
 		remove_timeout(t);
+
+		k_spin_unlock(&timeout_lock, key);
 		t->fn(t);
+		key = k_spin_lock(&timeout_lock);
+		pended_ticks -= dt;
 	}
 
+	if (t != NULL) {
+		t->dticks -= pended_ticks;
+	}
+
+	curr_tick += pended_ticks;
+	pended_ticks = 0;
 	k_spin_unlock(&timeout_lock, key);
 }
