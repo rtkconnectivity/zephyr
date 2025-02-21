@@ -31,4 +31,28 @@ config RTL87X2G_KEYSCAN_GHOST_KEY_FILTER
 	help
 	  Ghost key filter for rtl87x2g kscan.
 
+config RTL87X2G_KEYSCAN_SCAN_MODE
+	bool "Config scanmode for rtl87x2g kscan"
+	default y
+	help
+	  default is autoscan, else is manual scan.
+
+if !RTL87X2G_KEYSCAN_SCAN_MODE
+config RTL87X2G_KEYSCAN_MANUAL_SEL
+	int "Setting the Trigger Method"
+	default 0
+	help
+	  0 is bit trigger 1 is key trigger.
+
+endif # RTL87X2G_KEYSCAN_SCAN_MODE
+
+if !RTL87X2G_KEYSCAN_SCAN_MODE
+config RTL87X2G_KEYSCAN_MANUAL_SCAN_INTERVAL_MSEC
+	int "Scan Interval when using manual mode"
+	default 50
+	help
+	  Scan Interval when using manual mode.
+
+endif # RTL87X2G_KEYSCAN_SCAN_MODE
+
 endif # KSCAN_RTL87X2G
