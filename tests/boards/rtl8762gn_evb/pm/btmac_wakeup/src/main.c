@@ -22,7 +22,12 @@ static const struct bt_data sd[] = {
 	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
 };
 
-ZTEST_SUITE(btmac_wakeup, NULL, NULL, NULL, NULL, NULL);
+void teardown_fn(void *data)
+{
+	power_mode_pause();
+}
+
+ZTEST_SUITE(btmac_wakeup, NULL, NULL, NULL, NULL, teardown_fn);
 
 ZTEST(btmac_wakeup, test_adv_wakeup)
 {

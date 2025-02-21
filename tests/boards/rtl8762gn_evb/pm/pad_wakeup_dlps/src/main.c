@@ -79,6 +79,7 @@ ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n", wakeup_count_key_press,
 			last_wakeup_clk, last_sleep_clk);
+	power_mode_pause();
 	zassert_true(wakeup_count_key_press == KEY_PRESS_NUMBERS, "test_gpio_wakeup_dlps failed,
 			wakeup Count: %d\n", wakeup_count_key_press);
 }
