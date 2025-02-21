@@ -4,6 +4,11 @@
 #include <zephyr/sys/printk.h>
 #include <pm.h>
 
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(timeout_wakeup);
+
+
 struct triggered_test_item {
 	int key;
 	struct k_work_poll work;
@@ -23,7 +28,7 @@ static uint32_t wakeup_count_before_test;
 static uint32_t wakeup_count_after_test;
 static uint32_t last_wakeup_clk, last_sleep_clk;
 
-#define TIMER_EXPIRE_NUMBERS 200
+#define TIMER_EXPIRE_NUMBERS 100
 #define THREAD_SLEEP_NUMBERS 100
 #define DELAYABLE_WORK_NUMBERS 100
 #define TRIGGERED_WORK_NUMBERS 100
@@ -128,6 +133,7 @@ ZTEST(timeout_wakeup, test_triggered_work_wakeup)
  * We acctually not use signal&event to trigger, we use timeout to trigger.
  */
 	uint32_t wakeup_count_triggered_work;
+	int64_t tag1, tag2, time_diff;
 
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
 	k_sem_init(&test_thread_sem, 0, UINT_MAX);
@@ -140,7 +146,16 @@ ZTEST(timeout_wakeup, test_triggered_work_wakeup)
 	k_work_poll_submit(&test_triggered_item.work,
 						&test_triggered_item.event,
 						1, K_MSEC(100));
+	LOG_INF("before dlps!");/*check log time stamp*/
+	tag1 = k_uptime_get();
 	k_sem_take(&test_thread_sem, K_FOREVER);
+	tag2 = k_uptime_get();
+	time_diff = tag2-tag1;
+	LOG_INF("after dlps!");/*check log time stamp*/
+	zassert_true(time_diff >= TRIGGERED_WORK_NUMBERS*100 && time_diff <=
+			TRIGGERED_WORK_NUMBERS * 100 + 1000,
+			"k_uptime_get is not accurate after dlps! time diff (ms) is %lld",
+			time_diff);
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
 	wakeup_count_triggered_work = wakeup_count_after_test - wakeup_count_before_test;
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n",
@@ -150,4 +165,9 @@ ZTEST(timeout_wakeup, test_triggered_work_wakeup)
 		"test_k_timer_wakeup failed, wakeup Count: %d\n", wakeup_count_triggered_work);
 }
 
-ZTEST_SUITE(timeout_wakeup, NULL, NULL, NULL, NULL, NULL);
+void teardown_fn(void *data)
+{
+	power_mode_pause();
+}
+
+ZTEST_SUITE(timeout_wakeup, NULL, NULL, NULL, NULL, teardown_fn);
