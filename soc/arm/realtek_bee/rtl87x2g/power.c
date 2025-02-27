@@ -232,6 +232,17 @@ static int rtl87x2g_power_init(void)
 	platform_pm_register_callback_func_with_priority((void *)submit_items_to_rtk_pm_workq,
 		PLATFORM_PM_RESTORE, 1);
 
+	/* The rtl87x2g Zephyr has not registered platform_pm_system.schedule_bottom_half_callback
+	 * in rtk power manager. Therefore,
+	 * we need to fine-tune platform_pm_system.stage_time[PLATFORM_PM_PEND]. The default value
+	 * is 100 (equivalent to 3.125ms), which is too large,
+	 * causing the system to wake up too early and thereby increasing power consumption.
+	 * In the Zephyr environment, change this default value to 20.
+	 * If the app has additional registered pend functions, consider increasing this value
+	 * accordingly to ensure the system does not oversleep.
+	 */
+	platform_pm_system.stage_time[PLATFORM_PM_PEND] = 20;
+
 	return ret;
 }
 
