@@ -3,7 +3,7 @@
 #include <zephyr/dt-bindings/gpio/realtek-rtl87x2g-gpio.h>
 #include <zephyr/ztest.h>
 #include <pm.h>
-#include <pmu_manager.h>
+#include <aon_reg.h>
 
 static struct k_sem test_thread_sem;
 
@@ -52,8 +52,8 @@ ZTEST_SUITE(pad_wakeup_powerdown, NULL, NULL, NULL, NULL, NULL);
 ZTEST(pad_wakeup_powerdown, test_gpio_wakeup_powerdown)
 {
 	printk("Starting gpio_wakeup_powerdown Test\n");
-	platform_pm_register_callback_func_with_priority(pm_verify_powerdown_is_entered,
-			PLATFORM_PM_STORE, 1);
+	power_stage_cb_register(pm_verify_powerdown_is_entered,
+			POWER_STAGE_STORE);
 	/* overwrite the power_mode_set(POWER_DLPS_MODE) in rtl87x2g_power_init() */
 	power_mode_set(POWER_POWERDOWN_MODE);
 	k_work_init(&button_work, button_pressed);
@@ -86,6 +86,7 @@ ZTEST(pad_wakeup_powerdown, test_gpio_wakeup_powerdown)
 
 	if (reset_type == 0x9d) {
 		TC_PRINT("The system has waked up from power-down mode. Test Pass!\n");
+		power_mode_pause();
 	} else {
 		k_sem_init(&test_thread_sem, 0, UINT_MAX);
 		k_sem_take(&test_thread_sem, K_FOREVER);
