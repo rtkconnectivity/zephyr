@@ -64,7 +64,13 @@ static void rtl87x2g_isr_register(void)
 
 	for (int irq = 0; irq < CONFIG_NUM_IRQS; irq++) {
 		if (RamVectorTable_INT[irq] != (uint32_t)_isr_wrapper) {
+			if (NVIC_GetEnableIRQ(irq) == 1) {
+				NVIC_DisableIRQ(irq);
+				z_isr_install(irq, (void *)RamVectorTable_INT[irq], NULL);
+				NVIC_EnableIRQ(irq);
+			} else {
 			z_isr_install(irq, (void *)RamVectorTable_INT[irq], NULL);
+			}
 			RamVectorTableUpdate(irq+16, (IRQ_Fun)_isr_wrapper);
 		}
 	}
@@ -73,10 +79,29 @@ static void rtl87x2g_isr_register(void)
  * before entering the Zephyr. Therefore, we need to specifically
  * register these ISRs in Zephyr's sw_isr_table.
  */
-	z_isr_install(WDT_IRQn, (void *)HardFault_Handler_Rom, NULL);
-	z_isr_install(RXI300_IRQn, (void *)HardFault_Handler_Rom, NULL);
-	z_isr_install(RXI300_SEC_IRQn, (void *)HardFault_Handler_Rom, NULL);
+	if (NVIC_GetEnableIRQ(WDT_IRQn) == 1) {
+		NVIC_DisableIRQ(WDT_IRQn);
+		z_isr_install(WDT_IRQn, (void *)HardFault_Handler_Rom, NULL);	
+		NVIC_EnableIRQ(WDT_IRQn);	
+	}  else {
+		z_isr_install(WDT_IRQn, (void *)HardFault_Handler_Rom, NULL);	
+	}
 
+	if (NVIC_GetEnableIRQ(RXI300_SEC_IRQn) == 1) {
+		NVIC_DisableIRQ(RXI300_SEC_IRQn);
+		z_isr_install(RXI300_SEC_IRQn, (void *)HardFault_Handler_Rom, NULL);	
+		NVIC_EnableIRQ(RXI300_SEC_IRQn);	
+	}  else {
+		z_isr_install(RXI300_SEC_IRQn, (void *)HardFault_Handler_Rom, NULL);	
+	}
+
+	if (NVIC_GetEnableIRQ(RXI300_IRQn) == 1) {
+		NVIC_DisableIRQ(RXI300_IRQn);
+		z_isr_install(RXI300_IRQn, (void *)HardFault_Handler_Rom, NULL);	
+		NVIC_EnableIRQ(RXI300_IRQn);	
+	}  else {
+		z_isr_install(RXI300_IRQn, (void *)HardFault_Handler_Rom, NULL);	
+	}
 /*
  * SVC_VECTORn and NMI_VECTORn are the only two exception vectors
  * that need specific updates back to zephyr's version.
