@@ -25,21 +25,23 @@
 
 /* source data size defined on bits 6-7 */
 /* 0 -> 1 byte, 1 -> 2 bytes, 2 -> 4 bytes */
-#define RTL8752H_DMA_CONFIG_SOURCE_DATA_SIZE(config) ((config >> 6) & 0x3)
+#define RTL8752H_DMA_CONFIG_SOURCE_DATA_SIZE(config) (1 << ((config >> 6) & 0x3))
 
 /* destination data size defined on bits 8-9 */
 /* 0 -> 1 byte, 1 -> 2 bytes, 2 -> 4 bytes */
-#define RTL8752H_DMA_CONFIG_DESTINATION_DATA_SIZE(config) ((config >> 8) & 0x3)
+#define RTL8752H_DMA_CONFIG_DESTINATION_DATA_SIZE(config) (1 << ((config >> 8) & 0x3))
 
 /* source msize defined on bits 10-12 */
 /* 0 -> msize1, 1 -> msize4, 2 -> msize8, 3 -> msize16 */
 /* 4 -> msize32, 5 -> msize64, 6 -> msize128, 7 -> msize256 */
-#define RTL8752H_DMA_CONFIG_SOURCE_MSIZE(config) ((config >> 10) & 0x7)
+#define RTL8752H_DMA_CONFIG_SOURCE_MSIZE(config)                                                   \
+	((1 << (((config >> 10) & 0x7) + 1)) - (((config >> 10) & 0x7) == 0 ? 1 : 0))
 
 /* destination msize defined on bits 13-15 */
 /* 0 -> msize1, 1 -> msize4, 2 -> msize8, 3 -> msize16 */
 /* 4 -> msize32, 5 -> msize64, 6 -> msize128, 7 -> msize256 */
-#define RTL8752H_DMA_CONFIG_DESTINATION_MSIZE(config) ((config >> 13) & 0x7)
+#define RTL8752H_DMA_CONFIG_DESTINATION_MSIZE(config)                                              \
+	((1 << (((config >> 13) & 0x7) + 1)) - (((config >> 13) & 0x7) == 0 ? 1 : 0))
 
 /* priority defined on bits 16-20 as 0-9 */
 #define RTL8752H_DMA_CONFIG_PRIORITY(config) ((config >> 16) & 0x1f)
