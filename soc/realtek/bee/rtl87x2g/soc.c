@@ -52,47 +52,72 @@ static int rtl87x2g_task_init(void)
  */
 static void rtl87x2g_isr_register(void)
 {
-/*
- * For interrupts that update the ISR during the RTL87X2G initialization,
- * the following steps are necessary:
- * 1. Register the ISR in Zephyr's sw_isr_table.
- * 2. Update Zephyr's ISR wrapper back into the RamVectorTable.
- * Note:
- * Make sure skip the first 16 system exception vectors.
- */
+	/*
+	 * For interrupts that update the ISR during the RTL87X2G initialization,
+	 * the following steps are necessary:
+	 * 1. Register the ISR in Zephyr's sw_isr_table.
+	 * 2. Update Zephyr's ISR wrapper back into the RamVectorTable.
+	 * Note:
+	 * Make sure skip the first 16 system exception vectors.
+	 */
 	uint32_t *RamVectorTable_INT = (uint32_t *)(SCB->VTOR + 16 * 4);
 
 	for (int irq = 0; irq < CONFIG_NUM_IRQS; irq++) {
 		if (RamVectorTable_INT[irq] != (uint32_t)_isr_wrapper) {
-			z_isr_install(irq, (void *)RamVectorTable_INT[irq], NULL);
-			RamVectorTableUpdate(irq+16, (IRQ_Fun)_isr_wrapper);
+			if (NVIC_GetEnableIRQ(irq) == 1) {
+				NVIC_DisableIRQ(irq);
+				z_isr_install(irq, (void *)RamVectorTable_INT[irq], NULL);
+				NVIC_EnableIRQ(irq);
+			} else {
+				z_isr_install(irq, (void *)RamVectorTable_INT[irq], NULL);
+			}
+			RamVectorTableUpdate(irq + 16, (IRQ_Fun)_isr_wrapper);
 		}
 	}
-/*
- * The ISRs for WDT_IRQn, RXI300_IRQn, and RXI300_SEC_IRQn are registered
- * before entering the Zephyr. Therefore, we need to specifically
- * register these ISRs in Zephyr's sw_isr_table.
- */
-	z_isr_install(WDT_IRQn, (void *)HardFault_Handler_Rom, NULL);
-	z_isr_install(RXI300_IRQn, (void *)HardFault_Handler_Rom, NULL);
-	z_isr_install(RXI300_SEC_IRQn, (void *)HardFault_Handler_Rom, NULL);
+	/*
+	 * The ISRs for WDT_IRQn, RXI300_IRQn, and RXI300_SEC_IRQn are registered
+	 * before entering the Zephyr. Therefore, we need to specifically
+	 * register these ISRs in Zephyr's sw_isr_table.
+	 */
+	if (NVIC_GetEnableIRQ(WDT_IRQn) == 1) {
+		NVIC_DisableIRQ(WDT_IRQn);
+		z_isr_install(WDT_IRQn, (void *)HardFault_Handler_Rom, NULL);
+		NVIC_EnableIRQ(WDT_IRQn);
+	} else {
+		z_isr_install(WDT_IRQn, (void *)HardFault_Handler_Rom, NULL);
+	}
 
-/*
- * SVC_VECTORn and NMI_VECTORn are the only two exception vectors
- * that need specific updates back to zephyr's version.
- */
+	if (NVIC_GetEnableIRQ(RXI300_SEC_IRQn) == 1) {
+		NVIC_DisableIRQ(RXI300_SEC_IRQn);
+		z_isr_install(RXI300_SEC_IRQn, (void *)HardFault_Handler_Rom, NULL);
+		NVIC_EnableIRQ(RXI300_SEC_IRQn);
+	} else {
+		z_isr_install(RXI300_SEC_IRQn, (void *)HardFault_Handler_Rom, NULL);
+	}
+
+	if (NVIC_GetEnableIRQ(RXI300_IRQn) == 1) {
+		NVIC_DisableIRQ(RXI300_IRQn);
+		z_isr_install(RXI300_IRQn, (void *)HardFault_Handler_Rom, NULL);
+		NVIC_EnableIRQ(RXI300_IRQn);
+	} else {
+		z_isr_install(RXI300_IRQn, (void *)HardFault_Handler_Rom, NULL);
+	}
+	/*
+	 * SVC_VECTORn and NMI_VECTORn are the only two exception vectors
+	 * that need specific updates back to zephyr's version.
+	 */
 	RamVectorTableUpdate(SVC_VECTORn, (IRQ_Fun)z_arm_svc);
 	RamVectorTableUpdate(NMI_VECTORn, (IRQ_Fun)z_arm_nmi);
 }
 
 static int rtl87x2g_platform_init(void)
 {
-/*
- * RTL87X2G reserves a RAM region for the vector table, referred to as the RamVectorTable.
- * Steps to initialize the vector table in RAM:
- * 1. Set the SCB->VTOR register to point to the start address of the RamVectorTable.
- * 2. Copy Zephyr's vector table to the RamVectorTable.
- */
+	/*
+	 * RTL87X2G reserves a RAM region for the vector table, referred to as the RamVectorTable.
+	 * Steps to initialize the vector table in RAM:
+	 * 1. Set the SCB->VTOR register to point to the start address of the RamVectorTable.
+	 * 2. Copy Zephyr's vector table to the RamVectorTable.
+	 */
 	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
 #if (CONFIG_TRUSTED_EXECUTION_NONSECURE == 1)
 	/* tz enabled */
@@ -110,19 +135,20 @@ static int rtl87x2g_platform_init(void)
 	/* Init heap using Zephyr heap APIs. */
 	os_init();
 
-    /* Init essential APIs related to OS for RTK PM. */
+	/* Init essential APIs related to OS for RTK PM. */
 	os_pm_init();
 
 	/* TZ enabled: for “Non-secure function call”.
 	 * Init non-secure function pointer that will be called by secure side using
 	 * cmse_nsfptr_create().
-	 * Example: RTK FLASH APIs in secure side would call os_lock() which is a non-secure function.
+	 * Example: RTK FLASH APIs in secure side would call os_lock() which is a non-secure
+	 function.
 	 * Sample code: nonsecure_os_lock = (NS_UINT32_PATCH_FUNC)cmse_nsfptr_create(func);
 	 * Link: https://developer.arm.com/documentation/100720/0200/CMSE-support
 
 	 * TZ disabled: no special process, just a common function pointer assignment.
 	 * Sample code: secure_os_lock = (UINT32_PATCH_FUNC)((uint32_t)func | 0x1);
-	 */  
+	 */
 	secure_os_func_ptr_init();
 
 	/* Function same as secure_os_func_ptr_init. But the non-secure function pointer
@@ -177,7 +203,7 @@ static int rtl87x2g_platform_init(void)
 	hw_aes_mutex_init();
 
 	/* Setup 32k clk src */
-	set_up_32k_clk_src();/* use osif mem api */
+	set_up_32k_clk_src(); /* use osif mem api */
 	set_lp_module_clk_info();
 
 	/* RTK-PM Initialization */
@@ -187,14 +213,14 @@ static int rtl87x2g_platform_init(void)
 	platform_pm_init();
 
 	/* Init OSC32 SDM fw-k sw timer. */
-	init_osc_sdm_timer();/* use osif timer api */
+	init_osc_sdm_timer(); /* use osif timer api */
 
 	/* Dynamic Voltage Frequency Scaling initialization */
 	dvfs_init();
 
 	/* PHY initialization */
 	phy_hw_control_init(false);
-	phy_init(false);/* use osif timer api */
+	phy_init(false); /* use osif timer api */
 	/* Temperature compensation-related initialization */
 	thermal_tracking_timer_init();
 
@@ -218,10 +244,10 @@ static int rtl87x2g_platform_init(void)
 
 static int rtl87x2g_update_systick_config(void)
 {
-/* rtl87x2g's cortex-m systick timer is using external clock source
- * instead of cpu clock as referance.
- * The priority of systick interrupt is lowest for rtl87x2g SoCs.
- */
+	/* rtl87x2g's cortex-m systick timer is using external clock source
+	 * instead of cpu clock as referance.
+	 * The priority of systick interrupt is lowest for rtl87x2g SoCs.
+	 */
 	NVIC_SetPriority(SysTick_IRQn, 0xff);
 	SysTick->CTRL &= ~SysTick_CTRL_CLKSOURCE_Msk;
 

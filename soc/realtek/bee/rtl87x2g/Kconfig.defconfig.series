@@ -22,6 +22,9 @@ config NUM_IRQS
 config CODE_DATA_RELOCATION
 	default y
 
+config NUM_METAIRQ_PRIORITIES
+	default 1
+
 config USE_DT_CODE_PARTITION
 	default y
 
