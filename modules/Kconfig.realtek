@@ -69,6 +69,11 @@ config USE_HAL_REALTEK_SPI
 	help
 	  Enable HAL REALTEK SPI driver
 
+config USE_HAL_REALTEK_IR
+	bool
+	help
+	  Enable HAL REALTEK IR driver
+
 config USE_HAL_REALTEK_USB
 	bool
 	help

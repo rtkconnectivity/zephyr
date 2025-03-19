@@ -1,0 +1,13 @@
+# RTL8752H ir configuration
+
+# Copyright(c) 2024, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config IR_RTL8752H
+	bool "RTL8752H MCU ir driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_IR_ENABLED
+	select USE_HAL_REALTEK_IR
+
+	help
+	  Enable the RTL8752H ir driver.
