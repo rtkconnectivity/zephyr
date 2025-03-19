@@ -1,0 +1,35 @@
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  BEE IR.
+
+compatible: "realtek,bee-ir"
+
+include: [base.yaml, pinctrl-device.yaml]
+
+bus: ir
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+  rx-falling-edge-trig:
+    type: boolean
+    description: Specify trigger mode in IR RX mode.
+      RX will be triggered by rising edge by default.
+
+  dma-names:
+    required: true
