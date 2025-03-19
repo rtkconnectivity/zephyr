@@ -1,0 +1,21 @@
+#include <dt-bindings/pinctrl/rtl8752h-pinctrl.h>
+
+&ir {
+	status = "okay";
+	pinctrl-0 = <&ir_tx>;
+	pinctrl-1 = <&ir_rx>;
+	pinctrl-names = "ir-tx", "ir-rx";
+};
+
+&pinctrl {
+	ir_tx: ir_tx {
+		group1 {
+			psels = <RTL8752H_PSEL(IRDA_TX, P0_2, DIR_OUT, DRV_HIGH, PULL_NONE)>;
+		};
+	};
+	ir_rx: ir_rx {
+		group1 {
+			psels = <RTL8752H_PSEL(IRDA_RX, P0_4, DIR_OUT, DRV_HIGH, PULL_NONE)>;
+		};
+	};
+};

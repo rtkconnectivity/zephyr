@@ -272,6 +272,14 @@
 			status = "disabled";
 		};
 
+		ir: ir@40015800 {
+			compatible = "realtek,rtl8752h-ir";
+			reg = <0x40015800 0x54>;
+			interrupts = <28 0>;
+			clocks = <&cctl APB_CLK(IR)>;
+			status = "disabled";
+		};
+
 		spi0: spi@40013000 {
 			compatible = "realtek,rtl8752h-spi";
 			reg = <0x40013000 0xf0>;
