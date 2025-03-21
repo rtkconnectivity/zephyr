@@ -7,6 +7,7 @@
 #include <zephyr/bluetooth/buf.h>
 #include <zephyr/drivers/bluetooth.h>
 #include <zephyr/logging/log.h>
+#include <stdlib.h>
 #include "rtl_bt_hci.h"
 #include "trace.h"
 
