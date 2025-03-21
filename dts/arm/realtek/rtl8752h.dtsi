@@ -298,6 +298,16 @@
 			status = "disabled";
 		};
 
+		i2s: i2s0@40029000 {
+			compatible = "realtek,rtl8752h-i2s";
+			reg = <0x40029000 0x28>;
+			interrupts = <6 0>, <7 0>;
+			clocks = <&cctl APB_CLK(I2S0)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
 		spi0: spi@40013000 {
 			compatible = "realtek,rtl8752h-spi";
 			reg = <0x40013000 0xf0>;
