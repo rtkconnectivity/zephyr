@@ -7,5 +7,6 @@ config SOC_SERIES_RTL8752H
 	select CPU_HAS_ARM_MPU
 	select DYNAMIC_INTERRUPTS
 	select SYSTICK_USE_EXTERNAL_CLOCK
+	select THREAD_STACK_INFO
 	help
 	  Enable support for RTL8725H MCU series
