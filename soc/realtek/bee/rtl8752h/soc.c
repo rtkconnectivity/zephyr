@@ -129,9 +129,15 @@ static void rtk_irq_restore_from_rom(void)
 		/* rtk rom irq places vectors at RamVectorTable */
 		if (RamVectorTable[vector_n] != (uint32_t)_isr_wrapper) {
 			/* update zephyr irq dynamic */
-			irq_disable(irqn);
-			irq_connect_dynamic(irqn, irq_restore_priority[i],
-					    (void *)RamVectorTable[vector_n], NULL, 0);
+			if (irq_is_enabled(irqn)) {
+				irq_disable(irqn);
+				irq_connect_dynamic(irqn, irq_restore_priority[i],
+						    (void *)RamVectorTable[vector_n], NULL, 0);
+				irq_enable(irqn);
+			} else {
+				irq_connect_dynamic(irqn, irq_restore_priority[i],
+						    (void *)RamVectorTable[vector_n], NULL, 0);
+			}
 			DBG_DIRECT("restore vector_n:%d isr_addr:%x _isr_wrapper:%x", vector_n,
 				   RamVectorTable[vector_n], _isr_wrapper);
 #ifdef REALTEK_VTOR_RELOCATE
@@ -231,9 +237,7 @@ static int rtk_platform_init(void)
 
 	AON_FAST_REG_REG0X_FW_GENERAL_TYPE aon_fast_boot = {
 		.d16 = btaon_fast_read(AON_FAST_REG_REG0X_FW_GENERAL)};
-
 	bool aon_boot_done = aon_fast_boot.aon_boot_done;
-
 	if (!aon_boot_done) {
 		pmu_power_on_sequence_restart();
 
@@ -241,6 +245,8 @@ static int rtk_platform_init(void)
 
 		/* Pad_ClearAllWakeupINT(); */
 	} else {
+		/* power management exit */
+		DBG_DIRECT("%s...", "si_flow_after_exit_low_power_mode");
 		si_flow_after_exit_low_power_mode();
 
 		pmu_pm_exit();
