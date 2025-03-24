@@ -442,7 +442,7 @@ static int gpio_rtl8752h_pm_action(const struct device *port, enum pm_device_act
 			 * 2. Enabled interrupt;
 			 */
 			if (port_base->GPIO_INT_EN & BIT(cur_wakeup_pad_node->next_gpio_num)) {
-				extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef * GPIOx,
+				extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx,
 								   uint32_t GPIO_Pin);
 				uint32_t GPIO_Pin_Swap =
 					GPIO_SwapDebPinBit(BIT(cur_wakeup_pad_node->next_gpio_num));
@@ -580,7 +580,7 @@ static int gpio_rtl8752h_init(const struct device *dev)
 #define GPIO_RTL8752H_SET_IRQ_INFO(index)                                                          \
 	static struct gpio_rtl8752h_irq_info gpio_rtl8752h_irq_info##index = {                     \
 		.gpio_irqs = {LISTIFY(DT_NUM_IRQS(DT_DRV_INST(index)),                             \
-				      GPIO_RTL8752H_SET_GPIO_IRQ_INFO, (, ), index)},              \
+				      GPIO_RTL8752H_SET_GPIO_IRQ_INFO, (,), index)},              \
 		.num_irq = DT_NUM_IRQS(DT_DRV_INST(index))};
 
 #define GPIO_RTL8752H_GET_IRQ_INFO(index) .irq_info = &gpio_rtl8752h_irq_info##index,

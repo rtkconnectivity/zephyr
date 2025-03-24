@@ -244,6 +244,7 @@ static int rtk_platform_init(void)
 	AON_FAST_REG_REG0X_FW_GENERAL_TYPE aon_fast_boot = {
 		.d16 = btaon_fast_read(AON_FAST_REG_REG0X_FW_GENERAL)};
 	bool aon_boot_done = aon_fast_boot.aon_boot_done;
+
 	if (!aon_boot_done) {
 		pmu_power_on_sequence_restart();
 

@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
- / {
+/ {
 	aliases {
 		rtc = &rtc;
 	};
 };
 
 &rtc {
-    status = "okay";
-    prescaler = <3200>;
+	status = "okay";
+	prescaler = <3200>;
 };

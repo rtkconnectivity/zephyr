@@ -73,6 +73,7 @@ zephyr_library_sources_ifdef(CONFIG_GPIO_RPI_PICO   gpio_rpi_pico.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_RT1718S    gpio_rt1718s.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_RT1718S    gpio_rt1718s_port.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_RTL8752H   gpio_rtl8752h.c)
+zephyr_library_sources_ifdef(CONFIG_GPIO_RTL87X2G   gpio_rtl87x2g.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_RV32M1     gpio_rv32m1.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_RZT2M    gpio_rzt2m.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_SAM        gpio_sam.c)
@@ -96,7 +97,6 @@ zephyr_library_sources_ifdef(CONFIG_GPIO_XEC_V2     gpio_mchp_xec_v2.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_XLNX_AXI   gpio_xlnx_axi.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_XLNX_PS    gpio_xlnx_ps.c gpio_xlnx_ps_bank.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_XMC4XXX    gpio_xmc4xxx.c)
-zephyr_library_sources_ifdef(CONFIG_GPIO_RTL87X2G       gpio_rtl87x2g.c)
 # zephyr-keep-sorted-stop
 
 # zephyr-keep-sorted-start

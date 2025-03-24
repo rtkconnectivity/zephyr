@@ -12,7 +12,7 @@
 
 &kscan {
 	pinctrl-0 = <&kscan_default>;
-    pinctrl-names = "default";
+	pinctrl-names = "default";
 	row-size = <2>;
 	col-size = <2>;
 	debounce-time-us = <5000>;

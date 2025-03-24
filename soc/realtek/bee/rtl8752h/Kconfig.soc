@@ -16,10 +16,6 @@ config SOC_RTL8752HKF
 	bool "SOC_RTL8752HKF"
 	select SOC_SERIES_RTL8752H
 
-# config SOC_RTL8752HXX
-# 	bool
-# 	select SOC_SERIES_RTL8752H
-
 config SOC
 	default "rtl8752htv" if SOC_RTL8752HTV
 	default "rtl8752hkf" if SOC_RTL8752HKF
@@ -27,4 +23,8 @@ config SOC
 config REALTEK_VTOR_RELOCATE
 	bool
 	help
-	  This config will relocate vector table to realtek allocated ram.
+		This config will relocate vector table to realtek allocated ram.
+
+config PRINT_RTK_RAM_VECTOR_TABLE
+	bool
+	default n

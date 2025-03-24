@@ -7,5 +7,5 @@
 test_dma0: &dma0 {};
 
 &dma0 {
-    status = "okay";
+	status = "okay";
 };
