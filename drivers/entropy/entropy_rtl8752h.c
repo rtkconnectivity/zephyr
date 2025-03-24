@@ -8,7 +8,6 @@
 #include <zephyr/drivers/entropy.h>
 #include <string.h>
 
-#include <utils.h>
 
 static int entropy_rtl8752h_get_entropy(const struct device *dev,
 										uint8_t *buffer,
