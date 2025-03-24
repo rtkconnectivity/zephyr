@@ -1,4 +1,8 @@
-/* #if DT_NODE_HAS_STATUS(DT_NODELABLE(trace), okay) */
+/*
+ * Copyright (c) 2024 Realtek Semiconductor Corp.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 GROUP_START(TRACE)
 
 	SECTION_PROLOGUE(_TRACE_SECTION_NAME, (NOLOAD),SUBALIGN(4))
@@ -10,4 +14,3 @@ GROUP_START(TRACE)
 	} GROUP_LINK_IN(TRACE)
 
 GROUP_END(TRACE)
-/* #endif */

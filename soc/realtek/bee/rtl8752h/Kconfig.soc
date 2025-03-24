@@ -1,6 +1,4 @@
-# ST Microelectronics STM32F0 MCU line
-
-# Copyright (c) 2017 RnDity Sp. z o.o.
+# Copyright (c) 2024 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config SOC_SERIES_RTL8752H

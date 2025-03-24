@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
+
 CONFIG_TICKLESS_KERNEL=n
 CONFIG_TIMESLICE_SIZE=10
 
