@@ -339,7 +339,7 @@ void z_vrfy_sys_clock_tick_set(uint64_t tick)
 }
 #endif /* CONFIG_ZTEST */
 
-#ifdef CONFIG_SOC_FAMILY
+#ifdef CONFIG_SOC_FAMILY_REALTEK_BEE
 /* To support RTK PM */
 static int32_t pended_ticks;
 
@@ -399,4 +399,4 @@ void sys_clock_announce_process_timeout(void)
 	pended_ticks = 0;
 	k_spin_unlock(&timeout_lock, key);
 }
-#endif
+#endif /* CONFIG_SOC_FAMILY_REALTEK_BEE */
