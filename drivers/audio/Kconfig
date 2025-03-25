@@ -31,6 +31,7 @@ source "subsys/logging/Kconfig.template.log_config"
 
 source "drivers/audio/Kconfig.tas6422dac"
 source "drivers/audio/Kconfig.tlv320dac"
+source "drivers/audio/Kconfig.rtl8752h"
 
 endif # AUDIO_CODEC
 

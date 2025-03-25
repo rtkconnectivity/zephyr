@@ -167,6 +167,8 @@
 
 #define RTL8752H_SW_MODE 257
 
+#define RTL8752H_PWR_OFF 258
+
 /** @} */
 
 #define P0_0 0 /**<GPIO0   */

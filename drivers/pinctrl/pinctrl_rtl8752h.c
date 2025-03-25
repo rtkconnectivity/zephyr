@@ -32,11 +32,13 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 
 	Pad_PullConfigValue(cfg_pin, cfg_pull_strength);
 
-	if (cfg_fun >= RTL8752H_SW_MODE) {
+	if (cfg_fun == RTL8752H_SW_MODE) {
 		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
-	} else {
+	} else if (cfg_fun < RTL8752H_SW_MODE) {
 		Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
 		Pinmux_Config(cfg_pin, cfg_fun);
+	} else if (cfg_fun == RTL8752H_PWR_OFF) {
+		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_NOT_PWRON, cfg_pull, cfg_dir, cfg_drv);
 	}
 
 	if (cfg_wakeup_high) {
