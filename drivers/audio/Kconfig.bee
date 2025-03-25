@@ -1,0 +1,13 @@
+# BEE codec configuration
+
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config AUDIO_BEE
+	bool "BEE MCU codec controller driver"
+	default y
+	depends on DT_HAS_REALTEK_BEE_CODEC_ENABLED
+	select I2S
+	select USE_HAL_REALTEK_CODEC
+	help
+	  Enable the bee codec driver.

@@ -128,6 +128,7 @@
 #define BEE_MCLK               127
 
 #define BEE_SW_MODE 257
+#define BEE_PWR_OFF 258
 
 #define BEE_PIN_DISCONNECTED BEE_PIN_MSK
 

@@ -59,7 +59,7 @@
 	  (((BEE_##pull) & BEE_PULL_MSK) << BEE_PULL_POS)))
 
 /**
- * @brief Utility macro to build rtl8752h psels property entry when a pin is disconnected.
+ * @brief Utility macro to build bee psels property entry when a pin is disconnected.
  *
  * This can be useful in situations where code running before Zephyr, e.g. a bootloader
  * configures pins that later needs to be disconnected.

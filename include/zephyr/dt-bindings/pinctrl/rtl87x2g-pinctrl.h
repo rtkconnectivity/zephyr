@@ -186,6 +186,7 @@
 #define BEE_dig_debug          255
 
 #define BEE_SW_MODE 257
+#define BEE_PWR_OFF 258
 
 #define BEE_QDPH0_IN_NONE      0x0F00
 #define BEE_QDPH0_IN_P1_3_P1_4 0x0F01

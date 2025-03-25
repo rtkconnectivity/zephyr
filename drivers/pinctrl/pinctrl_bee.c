@@ -44,16 +44,18 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 
 	bee_pad_set_pull(cfg_pin, cfg_pull_strength);
 
-	if (cfg_fun > BEE_SW_MODE) {
+	if (cfg_fun == BEE_PWR_OFF) {
+		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_NOT_PWRON, cfg_pull, cfg_dir, cfg_drv);
+	} else if (cfg_fun == BEE_SW_MODE) {
+		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
+	} else if (cfg_fun < BEE_SW_MODE) {
+		Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
+		Pinmux_Config(cfg_pin, cfg_fun);
+	} else {
 		Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 		Pinmux_AON_Config(cfg_fun);
 #endif
-	} else if (cfg_fun == BEE_SW_MODE) {
-		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
-	} else {
-		Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
-		Pinmux_Config(cfg_pin, cfg_fun);
 	}
 
 	System_WakeUpPinDisable(cfg_pin);
