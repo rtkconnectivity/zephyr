@@ -1,0 +1,62 @@
+/* i2s codec rx */
+&i2s {
+	dmas = <&dma0 0 16 0x2a1>, <&dma0 1 17 0x648a>;
+	dma-names = "tx", "rx";
+	pinctrl-0 = <&i2s_default>;
+	pinctrl-names = "default";
+
+	status = "okay";
+	codec: codec@0 {
+		compatible = "realtek,rtl8752h-codec";
+		reg = <0>;
+		channel-sequence = "l_l";
+		mic-bias = "1_8";
+		mic-bst-gain = "30dB";
+		mic-bst-mode = "differential";
+		mic-type = "amic";
+		dmic-data-latch = "rising_latch";
+		ad-gain = <0x2f>;
+		boost-gain = "0dB";
+		pinctrl-0 = <&codec_default>;
+		pinctrl-names = "default";
+	};
+};
+
+&dma0 {
+    status = "okay";
+};
+
+&pinctrl {
+    i2s_default: i2s_default {
+        group1 {
+            psels = <RTL8752H_PSEL(LRC_SPORT0, P4_0, DIR_OUT, DRV_LOW, PULL_NONE)>,
+             <RTL8752H_PSEL(BCLK_SPORT0, P4_1, DIR_OUT, DRV_LOW, PULL_NONE)>,
+             <RTL8752H_PSEL(DACDAT_SPORT0, P4_2, DIR_OUT, DRV_LOW, PULL_NONE)>;
+        };
+    };
+
+    codec_default: codec_default {
+        group1 {
+            psels = <RTL8752H_PSEL(PWR_OFF, H_0, DIR_OUT, DRV_HIGH, PULL_NONE)>,
+             <RTL8752H_PSEL(PWR_OFF, P2_6, DIR_OUT, DRV_HIGH, PULL_NONE)>,
+             <RTL8752H_PSEL(PWR_OFF, P2_7, DIR_OUT, DRV_HIGH, PULL_NONE)>;
+        };
+    };
+};
+
+
+// /* i2s codec tx */
+// &i2s {
+// 	dmas = <&dma0 0 16 0x2a1>, <&dma0 1 17 0x648a>;
+// 	dma-names = "tx", "rx";
+// 	pinctrl-0 = <&i2s_default>;
+// 	pinctrl-names = "default";
+// 	status = "okay";
+// };
+
+// &dma0 {
+//     status = "okay";
+// };
+
+// &pinctrl {
+// };
