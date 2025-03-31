@@ -127,7 +127,7 @@ static int i2c_rtl8752h_msg_handler(const struct device *dev)
 			*data->current->buf++ = i2c->IC_DATA_CMD;
 		}
 	} else {
-		LOG_DBG("[%s] write line%d\n", __func__, ___LINE__);
+		LOG_DBG("[%s] write line%d\n", __func__, __LINE__);
 		for (uint32_t cnt = 0; cnt < data->xfer_len; ++cnt) {
 			if (cnt >= data->xfer_len - 1) {
 				i2c->IC_DATA_CMD = *data->current->buf++ | (stop_f ? BIT9 : 0);
@@ -161,7 +161,7 @@ static int i2c_rtl8752h_msg_handler(const struct device *dev)
 		}
 	}
 
-	LOG_DBG("[%s] write exit line%d\n", __func__, ___LINE__);
+	LOG_DBG("[%s] write exit line%d\n", __func__, __LINE__);
 
 	return 0;
 }

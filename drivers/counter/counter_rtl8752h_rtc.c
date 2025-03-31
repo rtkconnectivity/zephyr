@@ -117,7 +117,7 @@ static int counter_rtl8752h_rtc_set_alarm(const struct device *dev, uint8_t chan
 	if (alarm_cfg->flags & COUNTER_ALARM_CFG_EXPIRE_WHEN_LATE) {
 		diff = now - alarm_cfg->ticks;
 		LOG_DBG("diff=%d, guard_period=%d\n", diff, data->guard_period);
-		if (diff < data->guard_period) {
+		if (diff <= data->guard_period) {
 			rtc_late_int_table[chan] = true;
 			cfg->set_irq_pending();
 			RTC_INTConfig(rtc_cmp_int_table[chan], DISABLE);
@@ -220,7 +220,8 @@ static void irq_handler(void)
 	const struct counter_rtl8752h_rtc_config *cfg = dev->config;
 
 	for (uint32_t i = 0; i < cfg->counter_info.channels; i++) {
-		if (RTC_GetINTStatus(rtc_cmp_int_table[i]) || rtc_late_int_table[i]) {
+		if (RTC_GetINTStatus(rtc_cmp_int_table[i]) || rtc_late_int_table[i] ||
+		    rtc_late_int_table[i]) {
 			alarm_irq_handle(dev, i);
 		}
 	}
@@ -276,6 +277,8 @@ static const struct counter_driver_api counter_rtl8752h_rtc_driver_api = {
 	}                                                                                          \
 	static void set_irq_pending_##index(void)                                                  \
 	{                                                                                          \
+		extern void NVIC_SetPendingSubIRQ(uint32_t status);                                \
+		NVIC_SetPendingSubIRQ(BIT11);                                                      \
 		(NVIC_SetPendingIRQ(DT_INST_IRQN(index)));                                         \
 	}                                                                                          \
 	static uint32_t get_irq_pending_##index(void)                                              \

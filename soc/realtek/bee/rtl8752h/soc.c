@@ -67,11 +67,100 @@ extern void os_zephyr_patch_init(void);
  * not include such as FLASH_SEC_IRQn, WDT_IRQn
  */
 static const IRQn_Type irq_restore_num[] = {
-	BTMAC_IRQn,         BTMAC_WRAP_AROUND_IRQn, Timer4_5_IRQn,       ZIGBEE_IRQn,
-	PF_RTC_IRQn,        Peripheral_IRQn,        GDMA0_Channel1_IRQn, GDMA0_Channel2_IRQn,
-	GDMA0_Channel3_IRQn};
+	BTMAC_IRQn,  BTMAC_WRAP_AROUND_IRQn, Timer4_5_IRQn,      ZIGBEE_IRQn,
+	PF_RTC_IRQn, Peripheral_IRQn,        GDMA0_Channel3_IRQn};
 
 static uint32_t irq_restore_priority[sizeof(irq_restore_num) / sizeof(IRQn_Type)];
+
+uint32_t PeriIrqStatus_SW;
+
+void NVIC_SetPendingSubIRQ(uint32_t status)
+{
+	PeriIrqStatus_SW |= status;
+}
+
+void First_Peripheral_Handler(void)
+{
+	IRQ_Fun pFun;
+	uint32_t PeriIrqStatus, ExactIrqStatus;
+	IRQ_Fun *Vectors = (IRQ_Fun *)vector_table_level_two;
+
+	PeriIrqStatus = PERIPHINT->STATUS;
+	/* Save exact IRQ status */
+	ExactIrqStatus = (PeriIrqStatus & (PERIPHINT->EN)) | PeriIrqStatus_SW;
+
+	PeriIrqStatus_SW = 0;
+
+	/* Check exact IRQ function */
+	/* SPIC0 */
+	if (ExactIrqStatus & BIT0) {
+		pFun = Vectors[SPIC0_VECTORn];
+		pFun();
+	}
+	/* Q-decode */
+	if (ExactIrqStatus & BIT1) {
+		pFun = Vectors[Qdecode_VECTORn];
+		pFun();
+	}
+	/* Keyscan */
+	if (ExactIrqStatus & BIT2) {
+		pFun = Vectors[Keyscan_VECTORn];
+		pFun();
+	}
+	/* SPI2W */
+	if (ExactIrqStatus & BIT3) {
+		pFun = Vectors[SPI2W_VECTORn];
+		pFun();
+	}
+	/* Low Power Comparator */
+	if (ExactIrqStatus & BIT4) {
+		pFun = Vectors[LPCOMP_VECTORn];
+		pFun();
+	}
+	/* PTA Mailbox */
+	if (ExactIrqStatus & BIT5) {
+		pFun = Vectors[PTA_Mailbox_VECTORn];
+		pFun();
+	}
+	/* SPIC1 */
+	if (ExactIrqStatus & BIT6) {
+		pFun = Vectors[SPIC1_VECTORn];
+		pFun();
+	}
+	/* SHA256 */
+	if (ExactIrqStatus & BIT7) {
+		pFun = Vectors[SHA256_VECTORn];
+		pFun();
+	}
+	/* Platform */
+	if (ExactIrqStatus & BIT8) {
+		pFun = Vectors[Platform_VECTORn];
+		pFun();
+	}
+	/* TRNG */
+	if (ExactIrqStatus & BIT9) {
+		pFun = Vectors[TRNG_VECTORn];
+		pFun();
+	}
+	/* FLASH_SEC */
+	if (ExactIrqStatus & BIT10) {
+		pFun = Vectors[FLASH_SEC_VECTORn];
+		pFun();
+	}
+	/* RTC */
+	if (ExactIrqStatus & BIT11) {
+		pFun = Vectors[RTC_VECTORn];
+		pFun();
+	}
+	/* WDT */
+	if (ExactIrqStatus & BIT12) {
+		pFun = Vectors[WDT_VECTORn];
+		pFun();
+	}
+
+	/* Clear sub-rout IRQ */
+	HAL_WRITE32(PERI_INT_REG_BASE, 0, PeriIrqStatus);
+}
 
 #if (CONFIG_PRINT_RTK_RAM_VECTOR_TABLE)
 static void print_vtor_table(uint32_t *addr)
@@ -132,6 +221,8 @@ static void rtk_irq_restore_from_rom(void)
 			irqn = Peripheral_IRQn;
 		}
 		vector_n = irqn + 16;
+
+		RamVectorTable[Peripheral_IRQn + 16] = (void *)First_Peripheral_Handler;
 		/* rtk rom irq places vectors at RamVectorTable */
 		if (RamVectorTable[vector_n] != (uint32_t)_isr_wrapper) {
 			/* update zephyr irq dynamic */
@@ -346,13 +437,13 @@ static int rtk_register_update(void)
 	DBG_DIRECT("SystemCpuClock:%x", SystemCpuClock);
 #ifdef CONFIG_SYSTICK_USE_EXTERNAL_CLOCK
 #if (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC != 32000)
-	#error "CONFIG_SYSTICK_USE_EXTERNAL_CLOCK does not match CONFIG_SYS_CLOCK_TICKS_PER_SEC"
+#error "CONFIG_SYSTICK_USE_EXTERNAL_CLOCK does not match CONFIG_SYS_CLOCK_TICKS_PER_SEC"
 #endif
 	/* Selects the SysTick timer clock source: external 32768 */
 	SysTick->CTRL &= ~SysTick_CTRL_CLKSOURCE_Msk;
 #else
 #if (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC != 40000)
-	#error "CONFIG_SYSTICK_USE_EXTERNAL_CLOCK does not match CONFIG_SYS_CLOCK_TICKS_PER_SEC"
+#error "CONFIG_SYSTICK_USE_EXTERNAL_CLOCK does not match CONFIG_SYS_CLOCK_TICKS_PER_SEC"
 #endif
 #endif /* CONFIG_SYSTICK_USE_EXTERNAL_CLOCK */
 	return 0;

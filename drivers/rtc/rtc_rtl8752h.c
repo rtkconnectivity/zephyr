@@ -81,7 +81,7 @@ struct rtc_rtl8752h_config {
 static const uint32_t rtc_cmp_int_table[] = {RTC_INT_COMP0, RTC_INT_COMP1, RTC_INT_COMP2,
 					     RTC_INT_COMP3};
 #ifdef CONFIG_PM_DEVICE
-static const uint32_t rtc_cmp_wk_table[] = {RTC_WK_CMP0, RTC_WK_CMP1, RTC_WK_CMP2, RTC_WK_CMP3};
+static const uint32_t rtc_cmp_wk_table[] = {RTC_WK_COMP0, RTC_WK_COMP1, RTC_WK_COMP2, RTC_WK_COMP3};
 #endif
 #endif
 
@@ -207,6 +207,18 @@ static int rtc_rtl8752h_alarm_set_time(const struct device *dev, uint16_t id, ui
 	uint32_t alarm_cnt;
 
 	if (id > cfg->channels || (mask && (timeptr == 0))) {
+		return -EINVAL;
+	}
+
+	if ((mask & RTC_ALARM_TIME_MASK_SECOND && timeptr->tm_sec > 60) ||
+	    (mask & RTC_ALARM_TIME_MASK_MINUTE && timeptr->tm_min > 60) ||
+	    (mask & RTC_ALARM_TIME_MASK_HOUR && timeptr->tm_hour > 24) ||
+	    (mask & RTC_ALARM_TIME_MASK_MONTHDAY && timeptr->tm_mday > 31) ||
+	    (mask & RTC_ALARM_TIME_MASK_MONTH && timeptr->tm_mon > 11) ||
+	    (mask & RTC_ALARM_TIME_MASK_YEAR && timeptr->tm_year > 7100) ||
+	    (mask & RTC_ALARM_TIME_MASK_WEEKDAY && timeptr->tm_wday > 7) ||
+	    (mask & RTC_ALARM_TIME_MASK_YEARDAY && timeptr->tm_yday > 365) ||
+	    (mask & RTC_ALARM_TIME_MASK_NSEC && timeptr->tm_nsec > 1000000000)) {
 		return -EINVAL;
 	}
 

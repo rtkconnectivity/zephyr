@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ * Copyright(c) 2024, Realtek Semiconductor Corporation.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -17,7 +17,7 @@
 #include <rtl876x_gdma.h>
 
 #include <trace.h>
-#define DBG_DIRECT_SHOW 0
+#define DBG_DIRECT_SHOW 1
 LOG_MODULE_REGISTER(dma_rtl8752h, CONFIG_DMA_LOG_LEVEL);
 
 struct dma_rtl8752h_config {
@@ -108,13 +108,12 @@ static int dma_rtl8752h_configure(const struct device *dev, uint32_t channel,
 	}
 
 #if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel=%d, channel_direction=%d, block_size=%d, source_addr_adj=%d,
-		   dest_addr_adj = % d,
-		   source_data_size = % d, dest_data_size = % d, source_burst_length = % d,
-		   dest_burst_length = % d, dma_cfg->dma_slot = % d,
-		   line % d ",
-			   __func__,
-		   channel, dma_cfg->channel_direction, dma_cfg->head_block->block_size,
+	DBG_DIRECT("[%s] channel=%d, channel_direction=%d, block_size=%d, source_addr_adj=%d,"
+		   "dest_addr_adj = %d,"
+		   "source_data_size = %d, dest_data_size = %d, source_burst_length = %d,"
+		   "dest_burst_length = %d, dma_cfg->dma_slot = %d,"
+		   "line %d ",
+		   __func__, channel, dma_cfg->channel_direction, dma_cfg->head_block->block_size,
 		   dma_cfg->head_block->source_addr_adj, dma_cfg->head_block->dest_addr_adj,
 		   dma_cfg->source_data_size, dma_cfg->dest_data_size, dma_cfg->source_burst_length,
 		   dma_cfg->dest_burst_length, dma_cfg->dma_slot, __LINE__);
@@ -374,6 +373,7 @@ static int dma_rtl8752h_init(const struct device *dev)
 
 static void dma_rtl8752h_isr(const struct device *dev)
 {
+	DBG_DIRECT("[%s] line%d", __func__, __LINE__);
 	const struct dma_rtl8752h_config *cfg = dev->config;
 	struct dma_rtl8752h_data *data = dev->data;
 	int dma_channel_num;
