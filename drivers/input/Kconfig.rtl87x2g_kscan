@@ -12,22 +12,37 @@ config INPUT_RTL87X2G_KSCAN
 	  Enable the RTL87X2G kscan driver.
 
 if INPUT_RTL87X2G_KSCAN
-config RTL87X2G_KEYSCAN_MAX_ROW_SIZE
+config RTL87X2G_INPUT_KEYSCAN_MAX_ROW_SIZE
 	int "Max row size for rtl87x2g kscan"
 	default 12
 	help
 	  Max row size for rtl87x2g kscan.
 
-config RTL87X2G_KEYSCAN_MAX_COL_SIZE
+config RTL87X2G_INPUT_KEYSCAN_MAX_COL_SIZE
 	int "Max column size for rtl87x2g kscan"
 	default 20
 	help
 	  Max column size for rtl87x2g kscan.
 
-config RTL87X2G_KEYSCAN_GHOST_KEY_FILTER
+config RTL87X2G_INPUT_KEYSCAN_GHOST_KEY_FILTER
 	bool "Ghost key filter for rtl87x2g kscan"
 	default y
 	help
 	  Ghost key filter for rtl87x2g kscan.
+
+config RTL87X2G_INPUT_KEYSCAN_AUTOSCAN_MODE
+	bool "Config scanmode for rtl87x2g kscan"
+	default y
+	help
+	  default is autoscan, else is manual scan.
+
+if !RTL87X2G_INPUT_KEYSCAN_AUTOSCAN_MODE
+config RTL87X2G_KEYSCAN_MANUAL_SCAN_INTERVAL_MSEC
+	int "Scan Interval when using manual mode"
+	default 50
+	help
+	  Scan Interval when using manual mode.
+
+endif # RTL87X2G_INPUT_KEYSCAN_AUTOSCAN_MODE
 
 endif # INPUT_RTL87X2G_KSCAN

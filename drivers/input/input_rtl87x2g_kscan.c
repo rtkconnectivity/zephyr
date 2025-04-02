@@ -30,6 +30,7 @@
 #include "power_manager_unit_platform.h"
 #endif
 #include "rtl_keyscan.h"
+#include "rtl_pinmux.h"
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(kscan_rtl87x2g, CONFIG_INPUT_LOG_LEVEL);
 
@@ -53,9 +54,10 @@ typedef struct {
 
 struct kscan_rtl87x2g_data {
 	kscan_key_index keys[26];
-	uint32_t key_map[CONFIG_RTL87X2G_KEYSCAN_MAX_ROW_SIZE];
+	uint32_t key_map[CONFIG_RTL87X2G_INPUT_KEYSCAN_MAX_ROW_SIZE];
 	uint8_t press_num;
-
+	bool cb_en;
+	uint16_t press_rows;
 #ifdef CONFIG_PM_DEVICE
 	KEYSCANStoreReg_Typedef store_buf;
 #endif
@@ -65,6 +67,77 @@ struct kscan_rtl87x2g_data {
 static PMCheckResult kscan_pm_check_state = PM_CHECK_PASS;
 #endif
 
+static int kscan_rtl87x2g_init_driver(const struct device *dev, KEYSCANScanMode_TypeDef scanmode,
+				      KEYSCANManualMode_TypeDef manual_sel)
+{
+	LOG_DBG("dev %s init\n", dev->name);
+	const struct kscan_rtl87x2g_config *config = dev->config;
+	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
+
+	KEYSCAN_InitTypeDef kscan_init_struct;
+
+	KeyScan_StructInit(&kscan_init_struct);
+	kscan_init_struct.rowSize = config->row_size;
+	kscan_init_struct.colSize = config->col_size;
+
+	/* default scan clk is 2.5 MHz */
+	kscan_init_struct.clockdiv = 1;
+
+	/* default delay clk is 50 kHz */
+	kscan_init_struct.delayclk = 49;
+
+	kscan_init_struct.debouncecnt = (config->deb_us + 10) / 20;
+	kscan_init_struct.scanInterval = (config->scan_us + 10) / 20;
+	kscan_init_struct.releasecnt = (config->rel_us + 10) / 20;
+
+	kscan_init_struct.debounceEn = kscan_init_struct.debouncecnt ? ENABLE : DISABLE;
+	kscan_init_struct.scantimerEn = kscan_init_struct.scanInterval ? ENABLE : DISABLE;
+	kscan_init_struct.detecttimerEn = kscan_init_struct.releasecnt ? ENABLE : DISABLE;
+
+	kscan_init_struct.manual_sel = manual_sel;
+	kscan_init_struct.scanmode = scanmode;
+
+	kscan_init_struct.keylimit = 26;
+
+	KeyScan_Init(keyscan, &kscan_init_struct);
+
+	/* set pre guard time */
+	KEYSCAN_CLK_DIV_TypeDef keyscan_0x00 = {.d32 = keyscan->KEYSCAN_CLK_DIV};
+
+	keyscan_0x00.b.keyscan_gt_pre_sel = 6;
+	keyscan->KEYSCAN_CLK_DIV = keyscan_0x00.d32;
+
+	KeyScan_Cmd(keyscan, ENABLE);
+
+	KeyScan_INTConfig(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
+	KeyScan_INTConfig(keyscan, KEYSCAN_INT_ALL_RELEASE, ENABLE);
+
+	KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
+	KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_ALL_RELEASE);
+
+	KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+	KeyScan_INTMask(keyscan, KEYSCAN_INT_ALL_RELEASE, DISABLE);
+
+	return 0;
+}
+
+#if !CONFIG_RTL87X2G_INPUT_KEYSCAN_AUTOSCAN_MODE
+static void manual_kscan_timer_cb(struct k_timer *timer);
+static K_TIMER_DEFINE(manual_kscan_timer, manual_kscan_timer_cb, NULL);
+
+static void manual_kscan_timer_cb(struct k_timer *timer)
+{
+	const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(kscan));
+
+#ifdef CONFIG_PM_DEVICE
+	kscan_pm_check_state = PM_CHECK_FAIL;
+#endif
+	/* register trigger manual mode init */
+	kscan_rtl87x2g_init_driver(dev, KeyScan_Manual_Scan_Mode, KeyScan_Manual_Sel_Bit);
+}
+#endif
+
+#if CONFIG_RTL87X2G_INPUT_KEYSCAN_GHOST_KEY_FILTER
 static bool kscan_rtl87x2g_ghost_key_filter(kscan_key_index *new_keys, uint8_t new_press_num)
 {
 	const struct device *dev = DEVICE_DT_GET(DT_DRV_INST(0));
@@ -96,6 +169,7 @@ static bool kscan_rtl87x2g_ghost_key_filter(kscan_key_index *new_keys, uint8_t n
 
 	return false;
 }
+#endif
 
 static void kscan_rtl87x2g_isr(const struct device *dev)
 {
@@ -104,17 +178,50 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
 	uint32_t scan_debounce_cnt = config->scan_debounce_cnt;
 	static uint8_t press_cnt;
-	static kscan_key_index last_keys[26];
 	static bool all_release_flag = true;
-
+	static kscan_key_index last_keys[26] = {0};
 	kscan_key_index new_keys[26];
-	uint32_t new_key_map[CONFIG_RTL87X2G_KEYSCAN_MAX_ROW_SIZE];
+	uint32_t new_key_map[CONFIG_RTL87X2G_INPUT_KEYSCAN_MAX_ROW_SIZE];
 	uint8_t new_press_num = KeyScan_GetFifoDataNum(keyscan);
 
 	if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_SCAN_END) == SET) {
 		KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
+#if !CONFIG_RTL87X2G_INPUT_KEYSCAN_AUTOSCAN_MODE
+		if (new_press_num == 0) {
+#ifdef CONFIG_PM_DEVICE
+			kscan_pm_check_state = PM_CHECK_PASS;
+#endif
+			press_cnt = 0;
+
+			for (uint8_t i = 0; i < data->press_num; i++) {
+				uint8_t old_row = data->keys[i].row;
+				uint8_t old_col = data->keys[i].column;
+
+				input_report_abs(dev, INPUT_ABS_X, old_col, false, K_FOREVER);
+				input_report_abs(dev, INPUT_ABS_Y, old_row, false, K_FOREVER);
+				input_report_key(dev, INPUT_BTN_TOUCH, false, true, K_FOREVER);
+			}
+
+			data->press_num = 0;
+			data->press_rows = 0;
+			all_release_flag = true;
+
+			memset(data->keys, 0, sizeof(data->keys));
+			memset(data->key_map, 0, sizeof(data->key_map));
+			KeyScan_Cmd(keyscan, DISABLE);
+			k_timer_stop(&manual_kscan_timer);
+			kscan_rtl87x2g_init_driver(dev, KeyScan_Manual_Scan_Mode,
+						   KeyScan_Manual_Sel_Key);
+		} else {
+			KeyScan_Cmd(keyscan, DISABLE);
+			k_timer_start(&manual_kscan_timer,
+				      K_MSEC(CONFIG_RTL87X2G_KEYSCAN_MANUAL_SCAN_INTERVAL_MSEC),
+				      K_FOREVER);
+		}
+#endif
 
 		if (KeyScan_GetFlagState(keyscan, KEYSCAN_FLAG_EMPTY) != SET) {
+			data->press_rows = 0;
 			memset(new_keys, 0, sizeof(new_keys));
 			KeyScan_Read(keyscan, (uint16_t *)&new_keys, new_press_num);
 		}
@@ -130,9 +237,8 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 
 		if (!memcmp(last_keys, new_keys, sizeof(new_keys))) {
 			/* new_keys is same as last_keys */
-
 			if (press_cnt >= scan_debounce_cnt) {
-#if CONFIG_RTL87X2G_KEYSCAN_GHOST_KEY_FILTER
+#if CONFIG_RTL87X2G_INPUT_KEYSCAN_GHOST_KEY_FILTER
 				if (kscan_rtl87x2g_ghost_key_filter(new_keys, new_press_num)) {
 					return;
 				}
@@ -145,8 +251,10 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 					uint8_t new_row = new_keys[i].row;
 					uint8_t new_col = new_keys[i].column;
 
-					/* update new_key_map, set bit if related key pressed
-					 */
+					/* set row bit */
+					data->press_rows |= BIT(new_row);
+
+					/* update new_key_map, set bit if related key pressed */
 
 					new_key_map[new_row] |= BIT(new_col);
 
@@ -164,9 +272,6 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 
 					data->key_map[new_row] |= BIT(new_col);
 
-#ifdef CONFIG_PM_DEVICE
-					kscan_pm_check_state = PM_CHECK_FAIL;
-#endif
 					input_report_abs(dev, INPUT_ABS_X, new_col, false,
 							 K_FOREVER);
 					input_report_abs(dev, INPUT_ABS_Y, new_row, false,
@@ -212,13 +317,15 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 
 		} else {
 			/* new_keys is different from last_keys */
-
 			press_cnt = 0;
 			memcpy(last_keys, new_keys, sizeof(new_keys));
 		}
 
 		KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
 		KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+#ifdef CONFIG_PM_DEVICE
+		kscan_pm_check_state = PM_CHECK_PASS;
+#endif
 	}
 
 	if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_ALL_RELEASE) == SET) {
@@ -247,65 +354,6 @@ static void kscan_rtl87x2g_isr(const struct device *dev)
 }
 
 #ifdef CONFIG_PM_DEVICE
-static int kscan_rtl87x2g_pm_action(const struct device *dev, enum pm_device_action action)
-{
-	const struct kscan_rtl87x2g_config *config = dev->config;
-	struct kscan_rtl87x2g_data *data = dev->data;
-	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
-	int err;
-
-	extern void KEYSCAN_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void KEYSCAN_DLPSExit(void *PeriReg, void *StoreBuf);
-
-	switch (action) {
-	case PM_DEVICE_ACTION_SUSPEND:
-
-		KEYSCAN_DLPSEnter(keyscan, &data->store_buf);
-
-		/* Move pins to sleep state */
-		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
-		if ((err < 0) && (err != -ENOENT)) {
-			return err;
-		}
-		break;
-	case PM_DEVICE_ACTION_RESUME:
-		/* Set pins to active state */
-		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
-		if (err < 0) {
-			return err;
-		}
-
-		KEYSCAN_DLPSExit(keyscan, &data->store_buf);
-
-		/* check wakeup pin status */
-		int ret;
-		const struct pinctrl_state *state;
-
-		ret = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
-		if ((err < 0) && (err != -ENOENT)) {
-			/* no kscan wakeup pin is configured */
-			return ret;
-		}
-		/* there are kscan wakeup pins configured, check if they wakeup the system
-		 */
-		for (uint8_t i = 0U; i < state->pin_cnt; i++) {
-			if (state->pins[i].wakeup_low || state->pins[i].wakeup_high) {
-				if (System_WakeUpInterruptValue(state->pins[i].pin) == SET) {
-					System_WakeUpPinDisable(state->pins[i].pin);
-					Pad_ClearWakeupINTPendingBit(state->pins[i].pin);
-					kscan_pm_check_state = PM_CHECK_FAIL;
-				}
-			}
-		}
-
-		break;
-	default:
-		return -ENOTSUP;
-	}
-
-	return 0;
-}
-
 static PMCheckResult kscan_pm_check(void)
 {
 	return kscan_pm_check_state;
@@ -317,6 +365,130 @@ static void kscan_register_dlps_cb(void)
 							 1);
 }
 
+static void pm_suspend_process_press(const struct device *dev)
+{
+	const struct kscan_rtl87x2g_config *config = dev->config;
+	struct kscan_rtl87x2g_data *data = dev->data;
+	const struct pinctrl_state *state;
+	int ret;
+
+	ret = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		/* no kscan wakeup pin is configured */
+		return;
+	}
+
+	for (uint8_t i = 0; i < config->row_size + config->col_size; i++) {
+		uint8_t wakeup_flag = state->pins[i].wakeup_high || state->pins[i].wakeup_low;
+		uint8_t j = i >= config->col_size ? i - config->col_size : i;
+
+		if (wakeup_flag) {
+			if (data->press_rows & BIT(j)) {
+				if (state->pins[i].wakeup_high) {
+					Pad_SetControlMode(state->pins[i].pin, PAD_SW_MODE);
+					System_WakeUpPinEnable(state->pins[i].pin,
+							       PAD_WAKEUP_POL_LOW, DISABLE);
+				} else if (state->pins[i].wakeup_low) {
+					Pad_SetControlMode(state->pins[i].pin, PAD_SW_MODE);
+					System_WakeUpPinEnable(state->pins[i].pin,
+							       PAD_WAKEUP_POL_HIGH, DISABLE);
+				}
+			} else {
+				if (state->pins[i].wakeup_high) {
+					Pad_SetControlMode(state->pins[i].pin, PAD_SW_MODE);
+					System_WakeUpPinEnable(state->pins[i].pin,
+							       PAD_WAKEUP_POL_HIGH, DISABLE);
+				} else if (state->pins[i].wakeup_low) {
+					Pad_SetControlMode(state->pins[i].pin, PAD_SW_MODE);
+					System_WakeUpPinEnable(state->pins[i].pin,
+							       PAD_WAKEUP_POL_LOW, DISABLE);
+				}
+			}
+		} else {
+			Pad_Config(state->pins[i].pin, PAD_SW_MODE, PAD_IS_PWRON,
+				   state->pins[i].pull, state->pins[i].dir, state->pins[i].drive);
+		}
+	}
+}
+
+static int kscan_rtl87x2g_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct kscan_rtl87x2g_config *config = dev->config;
+	struct kscan_rtl87x2g_data *data = dev->data;
+	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
+	int err;
+	int ret;
+	bool pad_wakeup = false;
+
+	extern void KEYSCAN_DLPSEnter(void *PeriReg, void *StoreBuf);
+	extern void KEYSCAN_DLPSExit(void *PeriReg, void *StoreBuf);
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		KEYSCAN_DLPSEnter(keyscan, &data->store_buf);
+		const struct pinctrl_state *state;
+		/* Move pins to sleep state */
+		if (!data->press_rows) {
+			err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+			if ((err < 0) && (err != -ENOENT)) {
+				return err;
+			}
+		} else {
+			pm_suspend_process_press(dev);
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		(void)clock_control_on(RTL87X2G_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
+
+		/* check wakeup pin status */
+		ret = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			KEYSCAN_DLPSExit(keyscan, &data->store_buf);
+			/* no kscan wakeup pin is configured */
+			return ret;
+		}
+
+		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+		if (err < 0) {
+			return err;
+		}
+
+		/* there are kscan wakeup pins configured, check if they wakeup the system
+		 */
+		for (uint8_t i = 0U; i < state->pin_cnt; i++) {
+			if (state->pins[i].wakeup_low || state->pins[i].wakeup_high) {
+				System_WakeUpPinDisable(state->pins[i].pin);
+				if (System_WakeUpInterruptValue(state->pins[i].pin) == SET) {
+					pad_wakeup = true;
+					Pad_ClearWakeupINTPendingBit(state->pins[i].pin);
+				}
+			}
+		}
+
+		if (pad_wakeup) {
+			kscan_pm_check_state = PM_CHECK_FAIL;
+			/* register trigger manual mode init */
+			/* Set pins to active state */
+#if !CONFIG_RTL87X2G_INPUT_KEYSCAN_AUTOSCAN_MODE
+			kscan_rtl87x2g_init_driver(dev, KeyScan_Manual_Scan_Mode,
+						   KeyScan_Manual_Sel_Bit);
+#else
+			kscan_rtl87x2g_init_driver(dev, KeyScan_Auto_Scan_Mode,
+						   KeyScan_Manual_Sel_Key);
+#endif
+		} else {
+			KEYSCAN_DLPSExit(keyscan, &data->store_buf);
+		}
+
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+
 #endif /* CONFIG_PM_DEVICE */
 
 static int kscan_rtl87x2g_init(const struct device *dev)
@@ -324,60 +496,20 @@ static int kscan_rtl87x2g_init(const struct device *dev)
 	LOG_DBG("dev %s init\n", dev->name);
 	const struct kscan_rtl87x2g_config *config = dev->config;
 	struct kscan_rtl87x2g_data *data = dev->data;
-	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
-	int err;
 
 	memset(data->key_map, 0, sizeof(data->key_map));
 	memset(data->keys, 0, sizeof(data->keys));
 
 	(void)clock_control_on(RTL87X2G_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
-	err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
-	if (err < 0) {
-		return err;
-	}
+	pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 
-	KEYSCAN_InitTypeDef kscan_init_struct;
+#if !CONFIG_RTL87X2G_INPUT_KEYSCAN_AUTOSCAN_MODE
+	kscan_rtl87x2g_init_driver(dev, KeyScan_Manual_Scan_Mode, KeyScan_Manual_Sel_Key);
+#else
+	kscan_rtl87x2g_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
+#endif
 
-	KeyScan_StructInit(&kscan_init_struct);
-
-	kscan_init_struct.rowSize = config->row_size;
-	kscan_init_struct.colSize = config->col_size;
-
-	/* default scan clk is 2.5 MHz */
-	kscan_init_struct.clockdiv = 1;
-
-	/* default delay clk is 50 kHz */
-	kscan_init_struct.delayclk = 49;
-
-	kscan_init_struct.debouncecnt = (config->deb_us + 10) / 20;
-	kscan_init_struct.scanInterval = (config->scan_us + 10) / 20;
-	kscan_init_struct.releasecnt = (config->rel_us + 10) / 20;
-
-	kscan_init_struct.debounceEn = kscan_init_struct.debouncecnt ? ENABLE : DISABLE;
-	kscan_init_struct.scantimerEn = kscan_init_struct.scanInterval ? ENABLE : DISABLE;
-	kscan_init_struct.detecttimerEn = kscan_init_struct.releasecnt ? ENABLE : DISABLE;
-
-	kscan_init_struct.scanmode = KeyScan_Auto_Scan_Mode;
-	kscan_init_struct.keylimit = 26;
-
-	KeyScan_Init(keyscan, &kscan_init_struct);
-
-	/* set pre guard time */
-	KEYSCAN_CLK_DIV_TypeDef keyscan_0x00 = {.d32 = keyscan->KEYSCAN_CLK_DIV};
-
-	keyscan_0x00.b.keyscan_gt_pre_sel = 6;
-	keyscan->KEYSCAN_CLK_DIV = keyscan_0x00.d32;
-
-	KeyScan_INTConfig(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
-	KeyScan_INTConfig(keyscan, KEYSCAN_INT_ALL_RELEASE, ENABLE);
-
-	KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
-	KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_ALL_RELEASE);
-
-	KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
-	KeyScan_INTMask(keyscan, KEYSCAN_INT_ALL_RELEASE, DISABLE);
-	KeyScan_Cmd(keyscan, ENABLE);
 	config->irq_config_func();
 
 #ifdef CONFIG_PM_DEVICE
