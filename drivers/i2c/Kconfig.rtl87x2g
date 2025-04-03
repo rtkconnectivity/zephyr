@@ -10,3 +10,13 @@ config I2C_RTL87X2G
 	select USE_HAL_REALTEK_I2C
 	help
 	  Enable the RTL87X2G i2c driver.
+
+if I2C_RTL87X2G
+
+config I2C_RTL87X2G_INTERRUPT
+	bool
+	default n
+	help
+	  Do transfer with i2c interrupt.
+
+endif

@@ -44,11 +44,9 @@ TYPE_SECTION_START_EXTERN(const struct device *, pm_device_slots);
 /* Number of devices successfully suspended. */
 static size_t num_susp_rtk;
 
-volatile PINMUXStoreReg_Typedef Pinmux_StoreReg;
-extern void Pinmux_DLPSEnter(void *PeriReg, void *StoreBuf);
-extern void Pinmux_DLPSExit(void *PeriReg, void *StoreBuf);
 extern void NMI_Handler(void);
 extern void sys_clock_announce_process_timeout(void);
+extern void pad_short_pulse_wake_up(int Status);
 
 volatile uint32_t CPU_StoreReg[6];
 volatile uint8_t CPU_StoreReg_IPR[96];
@@ -119,9 +117,10 @@ void CPU_DLPS_Exit(void)
 
 static int pm_suspend_devices_rtk(void)
 {
+	pad_short_pulse_wake_up(1);
+	Pad_ClearAllWakeupINT();
+	System_WakeupDebounceClear(0);
 	CPU_DLPS_Enter();
-
-	Pinmux_DLPSEnter(PINMUX, (void *)&Pinmux_StoreReg);
 
 	const struct device *devs;
 	size_t devc;
@@ -159,7 +158,6 @@ static int pm_suspend_devices_rtk(void)
 
 void pm_resume_devices_rtk(void)
 {
-	Pinmux_DLPSExit(PINMUX, (void *)&Pinmux_StoreReg);
 	for (int i = (num_susp_rtk - 1); i >= 0; i--) {
 		pm_device_action_run(TYPE_SECTION_START(pm_device_slots)[i],
 				     PM_DEVICE_ACTION_RESUME);

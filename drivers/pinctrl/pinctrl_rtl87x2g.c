@@ -45,6 +45,8 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
         Pinmux_Config(cfg_pin, cfg_fun);
     }
 
+	System_WakeUpPinDisable(cfg_pin);
+
     if (cfg_wakeup_high)
     {
         System_WakeUpPinEnable(cfg_pin, PAD_WAKEUP_POL_HIGH, PAD_WAKEUP_DEB_DISABLE);

@@ -26,7 +26,7 @@
 #include <zephyr/pm/policy.h>
 #include <zephyr/input/input.h>
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_DEVICE
 #include "power_manager_unit_platform.h"
 #endif
 #include "rtl_keyscan.h"

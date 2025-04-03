@@ -80,7 +80,7 @@ struct rtc_rtl87x2g_config {
 static const uint32_t rtc_cmp_int_table[] = {RTC_INT_COMP0, RTC_INT_COMP1, RTC_INT_COMP2,
 					     RTC_INT_COMP3};
 #ifdef CONFIG_PM_DEVICE
-static const uint32_t rtc_cmp_wk_table[] = {RTC_WK_CMP0, RTC_WK_CMP1, RTC_WK_CMP2, RTC_WK_CMP3};
+static const uint32_t rtc_cmp_wk_table[] = {RTC_WK_COMP0, RTC_WK_COMP1, RTC_WK_COMP2, RTC_WK_COMP3};
 #endif
 #endif
 
@@ -420,6 +420,8 @@ static void alarm_irq_handle(const struct device *dev, uint32_t chan)
 		rtc_rtl87x2g_alarm_set_time(dev, chan, data->alarm[chan].mask,
 					    &(data->alarm[chan].orogin_time));
 		alarm->pending = true;
+		RTC_ClearCompINT(chan);
+		RTC_INTConfig(rtc_cmp_int_table[chan], DISABLE);
 		if (cb) {
 			cb(dev, chan, alarm->user_data);
 
@@ -428,7 +430,6 @@ static void alarm_irq_handle(const struct device *dev, uint32_t chan)
 		}
 	}
 
-	RTC_ClearCompINT(chan);
 }
 #endif
 
@@ -468,6 +469,7 @@ static void rtc_irq_handler(void)
 #ifdef CONFIG_PM_DEVICE
 		if (RTC_GetWakeupStatus(rtc_cmp_wk_table[i])) {
 			RTC_ClearWakeupStatusBit(rtc_cmp_wk_table[i]);
+			RTC_WKConfig(rtc_cmp_wk_table[i], DISABLE);
 		}
 #endif
 	}
