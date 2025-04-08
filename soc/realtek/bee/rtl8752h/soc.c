@@ -222,7 +222,6 @@ static void rtk_irq_restore_from_rom(void)
 		}
 		vector_n = irqn + 16;
 
-		RamVectorTable[Peripheral_IRQn + 16] = (void *)First_Peripheral_Handler;
 		/* rtk rom irq places vectors at RamVectorTable */
 		if (RamVectorTable[vector_n] != (uint32_t)_isr_wrapper) {
 			/* update zephyr irq dynamic */
@@ -285,6 +284,7 @@ static int rtk_platform_init(void)
 	os_zephyr_patch_init();
 	os_init();
 
+	RamVectorTableUpdate(Peripheral_IRQn + 16, (IRQ_Fun)First_Peripheral_Handler);
 	/**
 	 * SCB->VTOR points to zephyr's vector table which is placed in flash.
 	 * However, vector table place in flash will trigger hardfault when flash erasing.
