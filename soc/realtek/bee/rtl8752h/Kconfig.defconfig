@@ -32,6 +32,9 @@ config SYSTICK_USE_EXTERNAL_CLOCK
 	bool
 	default y
 
+config IDLE_STACK_SIZE
+	default 768
+
 rsource "Kconfig.defconfig.rtl87*"
 
 endif # SOC_SERIES_RTL8752H
