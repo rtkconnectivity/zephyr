@@ -251,6 +251,14 @@ static int rtl87x2g_update_systick_config(void)
 	NVIC_SetPriority(SysTick_IRQn, 0xff);
 	SysTick->CTRL &= ~SysTick_CTRL_CLKSOURCE_Msk;
 
+/*
+ * Unset SCB_CCR_DIV_0_TRP bit to avoid usagefault when dividing by zero.
+ * If this bit is set, ll_iso_generate_cis_unframed_parameters_from_host_info()
+ * in rom will trigger usage fault.
+ * WARNING: In Freertos, this bit will not be set.
+ */
+	SCB->CCR &= ~SCB_CCR_DIV_0_TRP_Msk;
+
 	return 0;
 }
 

@@ -26,6 +26,18 @@ void idle(void *unused1, void *unused2, void *unused3)
 
 	__ASSERT_NO_MSG(_current->base.prio >= 0);
 
+#ifdef CONFIG_SOC_SERIES_RTL87X2G
+	__enable_irq();
+	while (true) {
+		extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
+		extern void (*thermal_meter_read)(void);
+		extern void (*power_manager_slave_inact_action_handler)(void);
+
+		log_buffer_trigger_schedule_in_km4_idle_task();
+		thermal_meter_read();
+		power_manager_slave_inact_action_handler();
+	}
+#endif
 	while (true) {
 		/* SMP systems without a working IPI can't actual
 		 * enter an idle state, because they can't be notified

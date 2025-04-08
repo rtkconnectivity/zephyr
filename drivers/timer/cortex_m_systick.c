@@ -432,6 +432,13 @@ void sys_clock_idle_exit(void)
 	}
 }
 
+#ifdef CONFIG_SOC_SERIES_RTL87X2G
+void sys_clock_only_add_cycle_count(int32_t ticks)
+{
+	cycle_count += ticks * last_load;
+}
+#endif
+
 void sys_clock_disable(void)
 {
 	SysTick->CTRL &= ~SysTick_CTRL_ENABLE_Msk;

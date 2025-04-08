@@ -10,9 +10,8 @@
 #include <zephyr/ztest.h>
 #include <pm.h>
 
-#define DEVICE_NAME CONFIG_BT_DEVICE_NAME
+#define DEVICE_NAME     CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
-
 
 static uint32_t wakeup_count_before_test;
 static uint32_t wakeup_count_after_test;
@@ -27,8 +26,6 @@ static const struct bt_data sd[] = {
 	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
 };
 
-ZTEST_SUITE(btmac_wakeup, NULL, NULL, NULL, NULL, NULL);
-
 ZTEST(btmac_wakeup, test_adv_wakeup)
 {
 	int err;
@@ -42,8 +39,7 @@ ZTEST(btmac_wakeup, test_adv_wakeup)
 	printk("Bluetooth initialized\n");
 
 	/* Start advertising */
-	err = bt_le_adv_start(BT_LE_ADV_NCONN, ad, ARRAY_SIZE(ad),
-			      sd, ARRAY_SIZE(sd));
+	err = bt_le_adv_start(BT_LE_ADV_NCONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
 	zassert_equal(err, 0, "Advertising failed to start (err %d)\n", err);
 
 	printk("Advertising started\n");
@@ -54,8 +50,15 @@ ZTEST(btmac_wakeup, test_adv_wakeup)
 	uint32_t wakeup_count_btmac = wakeup_count_after_test - wakeup_count_before_test;
 
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n", wakeup_count_btmac,
-			last_wakeup_clk, last_sleep_clk);
+		 last_wakeup_clk, last_sleep_clk);
 
 	zassert_true(wakeup_count_btmac <= 650 && wakeup_count_btmac >= 550,
-			"failed, wakeup Count: %d\n", wakeup_count_btmac);
+		     "failed, wakeup Count: %d\n", wakeup_count_btmac);
 }
+
+void teardown_fn(void *data)
+{
+	power_mode_pause();
+}
+
+ZTEST_SUITE(btmac_wakeup, NULL, NULL, NULL, NULL, teardown_fn);

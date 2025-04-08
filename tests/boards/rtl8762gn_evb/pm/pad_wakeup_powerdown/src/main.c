@@ -8,7 +8,6 @@
 #include <zephyr/dt-bindings/gpio/realtek-rtl87x2g-gpio.h>
 #include <zephyr/ztest.h>
 #include <pm.h>
-#include <pmu_manager.h>
 
 static struct k_sem test_thread_sem;
 
@@ -20,16 +19,15 @@ static uint32_t key_press_num;
 #endif
 
 #if DT_NODE_EXISTS(BUTTON)
-#define BUTTON_DEV DT_PHANDLE(BUTTON, gpios)
-#define BUTTON_PIN DT_PHA(BUTTON, gpios, pin)
+#define BUTTON_DEV   DT_PHANDLE(BUTTON, gpios)
+#define BUTTON_PIN   DT_PHA(BUTTON, gpios, pin)
 #define BUTTON_FLAGS DT_PHA(BUTTON, gpios, flags)
 
 static const struct device *const button_dev = DEVICE_DT_GET(BUTTON_DEV);
 
 static struct k_work button_work;
 
-static void button_cb(const struct device *port, struct gpio_callback *cb,
-		      gpio_port_pins_t pins)
+static void button_cb(const struct device *port, struct gpio_callback *cb, gpio_port_pins_t pins)
 {
 	k_work_submit(&button_work);
 }
@@ -39,8 +37,9 @@ static void button_pressed(struct k_work *work)
 {
 	key_press_num++;
 	printk("button press tested, key_press_num:%d!\n", key_press_num);
-	if (key_press_num == KEY_PRESS_NUMBERS)
+	if (key_press_num == KEY_PRESS_NUMBERS) {
 		k_sem_give(&test_thread_sem);
+	}
 }
 
 void pm_verify_powerdown_is_entered(void)
@@ -52,13 +51,10 @@ void pm_verify_powerdown_is_entered(void)
 	AON_REG_WRITE(AON_NS_REG0X_APP, aon_0x1ae0.d32);
 }
 
-ZTEST_SUITE(pad_wakeup_powerdown, NULL, NULL, NULL, NULL, NULL);
-
 ZTEST(pad_wakeup_powerdown, test_gpio_wakeup_powerdown)
 {
 	printk("Starting gpio_wakeup_powerdown Test\n");
-	platform_pm_register_callback_func_with_priority(pm_verify_powerdown_is_entered,
-			PLATFORM_PM_STORE, 1);
+	power_stage_cb_register(pm_verify_powerdown_is_entered, POWER_STAGE_STORE);
 	/* overwrite the power_mode_set(POWER_DLPS_MODE) in rtl87x2g_power_init() */
 	power_mode_set(POWER_POWERDOWN_MODE);
 	k_work_init(&button_work, button_pressed);
@@ -66,16 +62,15 @@ ZTEST(pad_wakeup_powerdown, test_gpio_wakeup_powerdown)
 	int err;
 
 	err = gpio_pin_configure(button_dev, BUTTON_PIN,
-				BUTTON_FLAGS | GPIO_INPUT | GPIO_PULL_UP
-				| RTL87X2G_GPIO_INPUT_PM_WAKEUP);
+				 BUTTON_FLAGS | GPIO_INPUT | GPIO_PULL_UP |
+					 RTL87X2G_GPIO_INPUT_PM_WAKEUP);
 	if (err) {
 		TC_PRINT("gpio_pin_configure err!");
 	}
 
 	static struct gpio_callback gpio_cb;
 
-	err = gpio_pin_interrupt_configure(button_dev, BUTTON_PIN,
-					   GPIO_INT_LEVEL_INACTIVE);
+	err = gpio_pin_interrupt_configure(button_dev, BUTTON_PIN, GPIO_INT_LEVEL_INACTIVE);
 	if (err) {
 		TC_PRINT("gpio_pin_interrupt_configure err!");
 	}
@@ -96,3 +91,10 @@ ZTEST(pad_wakeup_powerdown, test_gpio_wakeup_powerdown)
 		k_sem_take(&test_thread_sem, K_FOREVER);
 	}
 }
+
+void teardown_fn(void *data)
+{
+	power_mode_pause();
+}
+
+ZTEST_SUITE(pad_wakeup_powerdown, NULL, NULL, NULL, NULL, teardown_fn);

@@ -9,7 +9,7 @@
 #include "rtl8762gn_evb-pinctrl.dtsi"
 
 / {
-	model = "RealTek rtl8762gn evb ";
+	model = "Realtek RTL8762GN Evaluation Board";
 	compatible = "realtek,rtl8762gn_evb";
 
 	chosen {

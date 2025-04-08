@@ -28,8 +28,8 @@ static uint32_t wakeup_count_before_test;
 static uint32_t wakeup_count_after_test;
 static uint32_t last_wakeup_clk, last_sleep_clk;
 
-#define TIMER_EXPIRE_NUMBERS 200
-#define THREAD_SLEEP_NUMBERS 100
+#define TIMER_EXPIRE_NUMBERS   200
+#define THREAD_SLEEP_NUMBERS   100
 #define DELAYABLE_WORK_NUMBERS 100
 #define TRIGGERED_WORK_NUMBERS 100
 
@@ -58,9 +58,8 @@ static void triggered_work_handler(struct k_work *work)
 	if (test_triggered_work_num == TRIGGERED_WORK_NUMBERS) {
 		k_sem_give(&test_thread_sem);
 	} else {
-		k_work_poll_submit(&test_triggered_item.work,
-						&test_triggered_item.event,
-						1, K_MSEC(100));
+		k_work_poll_submit(&test_triggered_item.work, &test_triggered_item.event, 1,
+				   K_MSEC(100));
 	}
 }
 
@@ -76,12 +75,11 @@ ZTEST(timeout_wakeup, test_k_timer_wakeup)
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
 	wakeup_count_timer = wakeup_count_after_test - wakeup_count_before_test;
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n", wakeup_count_timer,
-			last_wakeup_clk, last_sleep_clk);
+		 last_wakeup_clk, last_sleep_clk);
 
-	zassert_true(wakeup_count_timer <= TIMER_EXPIRE_NUMBERS + 1 && wakeup_count_timer >=
-			TIMER_EXPIRE_NUMBERS - 1, "test_k_timer_wakeup failed, wakeup Count:%d\n",
-			wakeup_count_timer);
-
+	zassert_true(wakeup_count_timer <= TIMER_EXPIRE_NUMBERS + 1 &&
+			     wakeup_count_timer >= TIMER_EXPIRE_NUMBERS - 1,
+		     "test_k_timer_wakeup failed, wakeup Count:%d\n", wakeup_count_timer);
 }
 
 ZTEST(timeout_wakeup, test_k_thread_wakeup)
@@ -96,11 +94,10 @@ ZTEST(timeout_wakeup, test_k_thread_wakeup)
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
 	wakeup_count_thread = wakeup_count_after_test - wakeup_count_before_test;
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n", wakeup_count_thread,
-	last_wakeup_clk, last_sleep_clk);
-	zassert_true(wakeup_count_thread <= THREAD_SLEEP_NUMBERS + 1 && wakeup_count_thread >=
-		THREAD_SLEEP_NUMBERS - 1, "test_k_timer_wakeup failed, wakeup Count: %d\n",
-		wakeup_count_thread);
-
+		 last_wakeup_clk, last_sleep_clk);
+	zassert_true(wakeup_count_thread <= THREAD_SLEEP_NUMBERS + 1 &&
+			     wakeup_count_thread >= THREAD_SLEEP_NUMBERS - 1,
+		     "test_k_timer_wakeup failed, wakeup Count: %d\n", wakeup_count_thread);
 }
 
 ZTEST(timeout_wakeup, test_delayable_work_wakeup)
@@ -116,43 +113,43 @@ ZTEST(timeout_wakeup, test_delayable_work_wakeup)
 	wakeup_count_delayable_work = wakeup_count_after_test - wakeup_count_before_test;
 
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n",
-		wakeup_count_delayable_work, last_wakeup_clk, last_sleep_clk);
+		 wakeup_count_delayable_work, last_wakeup_clk, last_sleep_clk);
 
 	zassert_true(wakeup_count_delayable_work <= DELAYABLE_WORK_NUMBERS + 1 &&
-		wakeup_count_delayable_work >= DELAYABLE_WORK_NUMBERS - 1,
-		"test_k_timer_wakeup failed, wakeup Count: %d\n", wakeup_count_delayable_work);
-
+			     wakeup_count_delayable_work >= DELAYABLE_WORK_NUMBERS - 1,
+		     "test_k_timer_wakeup failed, wakeup Count: %d\n", wakeup_count_delayable_work);
 }
 
 ZTEST(timeout_wakeup, test_triggered_work_wakeup)
 {
-/* The k_work_poll_submit() interface schedules a triggered work item in response to a poll event
- * (see Polling API),  that will call a user-defined function when a monitored resource becomes
- * available or poll signal is raised, or a timeout occurs.
- * This Test is testing the case that the work item is triggered by timeout occurs.
- * We acctually not use signal&event to trigger, we use timeout to trigger.
- */
+	/* The k_work_poll_submit() interface schedules a triggered work item in response to a poll
+	 * event (see Polling API),  that will call a user-defined function when a monitored
+	 * resource becomes available or poll signal is raised, or a timeout occurs. This Test is
+	 * testing the case that the work item is triggered by timeout occurs. We acctually not use
+	 * signal&event to trigger, we use timeout to trigger.
+	 */
 	uint32_t wakeup_count_triggered_work;
 
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
 	k_sem_init(&test_thread_sem, 0, UINT_MAX);
 	k_work_poll_init(&test_triggered_item.work, triggered_work_handler);
 	k_poll_signal_init(&test_triggered_item.signal);
-	k_poll_event_init(&test_triggered_item.event,
-				K_POLL_TYPE_SIGNAL,
-				K_POLL_MODE_NOTIFY_ONLY,
-				&test_triggered_item.signal);
-	k_work_poll_submit(&test_triggered_item.work,
-						&test_triggered_item.event,
-						1, K_MSEC(100));
+	k_poll_event_init(&test_triggered_item.event, K_POLL_TYPE_SIGNAL, K_POLL_MODE_NOTIFY_ONLY,
+			  &test_triggered_item.signal);
+	k_work_poll_submit(&test_triggered_item.work, &test_triggered_item.event, 1, K_MSEC(100));
 	k_sem_take(&test_thread_sem, K_FOREVER);
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
 	wakeup_count_triggered_work = wakeup_count_after_test - wakeup_count_before_test;
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n",
-		wakeup_count_triggered_work, last_wakeup_clk, last_sleep_clk);
-	zassert_true(wakeup_count_triggered_work <= TRIGGERED_WORK_NUMBERS + 1
-		&& wakeup_count_triggered_work >= TRIGGERED_WORK_NUMBERS - 1,
-		"test_k_timer_wakeup failed, wakeup Count: %d\n", wakeup_count_triggered_work);
+		 wakeup_count_triggered_work, last_wakeup_clk, last_sleep_clk);
+	zassert_true(wakeup_count_triggered_work <= TRIGGERED_WORK_NUMBERS + 1 &&
+			     wakeup_count_triggered_work >= TRIGGERED_WORK_NUMBERS - 1,
+		     "test_k_timer_wakeup failed, wakeup Count: %d\n", wakeup_count_triggered_work);
 }
 
-ZTEST_SUITE(timeout_wakeup, NULL, NULL, NULL, NULL, NULL);
+void teardown_fn(void *data)
+{
+	power_mode_pause();
+}
+
+ZTEST_SUITE(timeout_wakeup, NULL, NULL, NULL, NULL, teardown_fn);

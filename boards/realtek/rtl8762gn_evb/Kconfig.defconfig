@@ -5,18 +5,6 @@ if BOARD_RTL8762GN_EVB
 config BOARD
 	default "rtl8762gn_evb"
 
-config SERIAL
-	default y
-
-config UART_INTERRUPT_DRIVEN
-	default y
-
-config CONSOLE
-	default y
-
-config UART_CONSOLE
-	default CONSOLE
-
 if BT
 
 config MAIN_STACK_SIZE
@@ -24,10 +12,6 @@ config MAIN_STACK_SIZE
 
 config COMMON_LIBC_MALLOC_ARENA_SIZE
 	default 1024
-
-# choice BT_RECV_CONTEXT
-# 	default BT_RECV_BLOCKING
-# endchoice
 
 config BT_CTLR
 	default n

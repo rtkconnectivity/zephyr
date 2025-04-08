@@ -397,6 +397,7 @@ void sys_clock_announce_process_timeout(void)
 
 	curr_tick += pended_ticks;
 	pended_ticks = 0;
+
 	k_spin_unlock(&timeout_lock, key);
 }
 #endif /* CONFIG_SOC_FAMILY_REALTEK_BEE */

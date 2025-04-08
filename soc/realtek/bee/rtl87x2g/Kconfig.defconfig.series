@@ -43,4 +43,26 @@ config SYS_CLOCK_TICKS_PER_SEC
 config ARCH_HAS_CUSTOM_BUSY_WAIT
 	default y
 
+config RUNTIME_NMI
+	default y
+
+config TICKLESS_KERNEL
+	default n
+
+config TIMESLICE_SIZE
+	default 10
+
+config IDLE_STACK_SIZE
+	default 1024 if PM
+
+config INIT_STACKS
+	default y
+
+config PM_DEVICE
+	default y
+	depends on PM
+
+config REALTEK_USING_SDK_LIB
+	default y if PM
+
 endif # SOC_SERIES_RTL87X2G

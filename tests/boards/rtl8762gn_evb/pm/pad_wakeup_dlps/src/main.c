@@ -23,16 +23,15 @@ static uint32_t last_wakeup_clk, last_sleep_clk;
 #endif
 
 #if DT_NODE_EXISTS(BUTTON)
-#define BUTTON_DEV DT_PHANDLE(BUTTON, gpios)
-#define BUTTON_PIN DT_PHA(BUTTON, gpios, pin)
+#define BUTTON_DEV   DT_PHANDLE(BUTTON, gpios)
+#define BUTTON_PIN   DT_PHA(BUTTON, gpios, pin)
 #define BUTTON_FLAGS DT_PHA(BUTTON, gpios, flags)
 
 static const struct device *const button_dev = DEVICE_DT_GET(BUTTON_DEV);
 
 static struct k_work button_work;
 
-static void button_cb(const struct device *port, struct gpio_callback *cb,
-		      gpio_port_pins_t pins)
+static void button_cb(const struct device *port, struct gpio_callback *cb, gpio_port_pins_t pins)
 {
 	k_work_submit(&button_work);
 }
@@ -41,12 +40,11 @@ static void button_cb(const struct device *port, struct gpio_callback *cb,
 static void button_pressed(struct k_work *work)
 {
 	key_press_num++;
-	printk("button press tested, key_press_num:%d!\n", key_press_num);
-	if (key_press_num == KEY_PRESS_NUMBERS)
+	printk("KEY0 button press tested, key_press_num:%d!\n", key_press_num);
+	if (key_press_num == KEY_PRESS_NUMBERS) {
 		k_sem_give(&test_thread_sem);
+	}
 }
-
-ZTEST_SUITE(pad_wakeup_dlps, NULL, NULL, NULL, NULL, NULL);
 
 ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 {
@@ -56,16 +54,15 @@ ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 	int err;
 
 	err = gpio_pin_configure(button_dev, BUTTON_PIN,
-				BUTTON_FLAGS | GPIO_INPUT | GPIO_PULL_UP
-				| RTL87X2G_GPIO_INPUT_PM_WAKEUP);
+				 BUTTON_FLAGS | GPIO_INPUT | GPIO_PULL_UP |
+					 RTL87X2G_GPIO_INPUT_PM_WAKEUP);
 	if (err) {
 		TC_PRINT("gpio_pin_configure err!");
 	}
 
 	static struct gpio_callback gpio_cb;
 
-	err = gpio_pin_interrupt_configure(button_dev, BUTTON_PIN,
-					   GPIO_INT_LEVEL_INACTIVE);
+	err = gpio_pin_interrupt_configure(button_dev, BUTTON_PIN, GPIO_INT_LEVEL_INACTIVE);
 	if (err) {
 		TC_PRINT("gpio_pin_interrupt_configure err!");
 	}
@@ -76,14 +73,21 @@ ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 	printk("WARNING: Buttons not supported on this board.\n");
 #endif
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
-	printk("After %d times key-pressing, calculate the wake-up times!\n", KEY_PRESS_NUMBERS);
+	printk("Please press Key0 %d times!!\n", KEY_PRESS_NUMBERS);
 	k_sem_init(&test_thread_sem, 0, UINT_MAX);
 	k_sem_take(&test_thread_sem, K_FOREVER);
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
 	uint32_t wakeup_count_key_press = wakeup_count_after_test - wakeup_count_before_test;
 
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n", wakeup_count_key_press,
-			last_wakeup_clk, last_sleep_clk);
-	zassert_true(wakeup_count_key_press == KEY_PRESS_NUMBERS, "test_gpio_wakeup_dlps failed,
-			wakeup Count: %d\n", wakeup_count_key_press);
+		 last_wakeup_clk, last_sleep_clk);
+	zassert_true(wakeup_count_key_press == KEY_PRESS_NUMBERS,
+		     "test_gpio_wakeup_dlps failed, wakeup Count: %d\n", wakeup_count_key_press);
 }
+
+void teardown_fn(void *data)
+{
+	power_mode_pause();
+}
+
+ZTEST_SUITE(pad_wakeup_dlps, NULL, NULL, NULL, NULL, teardown_fn);
