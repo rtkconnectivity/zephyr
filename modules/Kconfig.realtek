@@ -39,6 +39,16 @@ config USE_HAL_REALTEK_I2C
 	help
 	  Enable HAL REALTEK I2C driver
 
+config USE_HAL_REALTEK_I2S
+	bool
+	help
+	  Enable HAL REALTEK I2S driver
+
+config USE_HAL_REALTEK_CODEC
+	bool
+	help
+	  Enable HAL REALTEK CODEC driver
+
 config USE_HAL_REALTEK_KEYSCAN
 	bool
 	help
@@ -58,6 +68,11 @@ config USE_HAL_REALTEK_SPI
 	bool
 	help
 	  Enable HAL REALTEK SPI driver
+
+config USE_HAL_REALTEK_IR
+	bool
+	help
+	  Enable HAL REALTEK IR driver
 
 config USE_HAL_REALTEK_USB
 	bool
