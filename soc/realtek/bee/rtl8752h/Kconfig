@@ -11,5 +11,6 @@ config SOC_SERIES_RTL8752H
 	select DYNAMIC_INTERRUPTS
 	select SYSTICK_USE_EXTERNAL_CLOCK
 	select THREAD_STACK_INFO
+	select HAS_PM
 	help
 	  Enable support for RTL8725H MCU series
