@@ -426,10 +426,10 @@ static int gpio_rtl8752h_pm_action(const struct device *port, enum pm_device_act
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
 		while (cur_output_pad_node->next_gpio_num != 0xff) {
-			Pad_SetOutputLevel(
+			Pad_OutputControlValue(
 				pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
 				GPIO_ReadOutputDataBit(BIT(cur_output_pad_node->next_gpio_num)));
-			Pad_SetControlMode(
+			Pad_ControlSelectValue(
 				pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
 				PAD_SW_MODE);
 			cur_output_pad_node =
@@ -441,14 +441,11 @@ static int gpio_rtl8752h_pm_action(const struct device *port, enum pm_device_act
 			 * 1. Configured RTL8752H_GPIO_INPUT_PM_WAKEUP flag;
 			 * 2. Enabled interrupt;
 			 */
-			if (port_base->GPIO_INT_EN & BIT(cur_wakeup_pad_node->next_gpio_num)) {
-				extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx,
-								   uint32_t GPIO_Pin);
-				uint32_t GPIO_Pin_Swap =
-					GPIO_SwapDebPinBit(BIT(cur_wakeup_pad_node->next_gpio_num));
-				bool high_trigger = port_base->GPIO_EXT_DEB_POL_CTL & GPIO_Pin_Swap;
+			if (port_base->INTEN & BIT(cur_wakeup_pad_node->next_gpio_num)) {
+				bool high_trigger = port_base->INTPOLARITY &
+						    BIT(cur_wakeup_pad_node->next_gpio_num);
 
-				Pad_SetControlMode(
+				Pad_ControlSelectValue(
 					pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]
 						.pad_num,
 					PAD_SW_MODE);
@@ -456,19 +453,19 @@ static int gpio_rtl8752h_pm_action(const struct device *port, enum pm_device_act
 					pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]
 						.pad_num,
 					high_trigger ? PAD_WAKEUP_POL_HIGH : PAD_WAKEUP_POL_LOW,
-					PAD_WAKEUP_DEB_DISABLE);
+					DISABLE, 0);
 			}
 			cur_wakeup_pad_node =
 				&(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]);
 		}
 
-		GPIO_DLPSEnter(&data->store_buf);
+		GPIO_DLPSEnter(port_base, &data->store_buf);
 
 		break;
 	case PM_DEVICE_ACTION_RESUME:
 
 		while (cur_output_pad_node->next_gpio_num != 0xff) {
-			Pad_SetControlMode(
+			Pad_ControlSelectValue(
 				pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
 				PAD_PINMUX_MODE);
 			cur_output_pad_node =
@@ -476,7 +473,7 @@ static int gpio_rtl8752h_pm_action(const struct device *port, enum pm_device_act
 		}
 
 		while (cur_wakeup_pad_node->next_gpio_num != 0xff) {
-			Pad_SetControlMode(
+			Pad_ControlSelectValue(
 				pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num,
 				PAD_PINMUX_MODE);
 			System_WakeUpPinDisable(
@@ -485,7 +482,7 @@ static int gpio_rtl8752h_pm_action(const struct device *port, enum pm_device_act
 				&(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]);
 		}
 
-		GPIO_DLPSExit(&data->store_buf);
+		GPIO_DLPSExit(port_base, &data->store_buf);
 
 		break;
 	default:
@@ -549,8 +546,8 @@ static int gpio_rtl8752h_init(const struct device *dev)
 	int ret = 0;
 
 	(void)clock_control_on(RTL8752H_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
-
 	for (uint8_t i = 0; i < config->irq_info->num_irq; ++i) {
+		irq_disable(config->irq_info->gpio_irqs[i].irq);
 		irq_connect_dynamic(config->irq_info->gpio_irqs[i].irq,
 				    config->irq_info->gpio_irqs[i].priority,
 				    (const void *)gpio_rtl8752h_isr, dev, 0);

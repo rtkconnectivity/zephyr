@@ -11,6 +11,13 @@ bool z_spin_lock_valid(struct k_spinlock *l)
 	uintptr_t thread_cpu = l->thread_cpu;
 
 	if (thread_cpu != 0U) {
+#if (CONFIG_SOC_SERIES_RTL8752H && CONFIG_PM)
+		/* __DSB and __ISB is needed by rtl8752h when `CONFIG_PM=y`,
+		 * otherwise it will trigger `invalid spin lock` fault
+		 */
+		__DSB();
+		__ISB();
+#endif
 		if ((thread_cpu & 3U) == _current_cpu->id) {
 			return false;
 		}

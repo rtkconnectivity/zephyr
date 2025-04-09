@@ -15,7 +15,9 @@
 #include <ksched.h>
 #include <kswap.h>
 #include <wait_q.h>
-
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+#include "trace.h"
+#endif
 LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
 
 void idle(void *unused1, void *unused2, void *unused3)
@@ -25,7 +27,10 @@ void idle(void *unused1, void *unused2, void *unused3)
 	ARG_UNUSED(unused3);
 
 	__ASSERT_NO_MSG(_current->base.prio >= 0);
-
+#if (CONFIG_PM && CONFIG_SOC_FAMILY_REALTEK_BEE)
+	/* sync with realtek pm flow */
+	__enable_irq();
+#endif
 	while (true) {
 		/* SMP systems without a working IPI can't actual
 		 * enter an idle state, because they can't be notified
@@ -42,12 +47,28 @@ void idle(void *unused1, void *unused2, void *unused3)
 			z_swap_unlocked();
 		}
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+		/* sync with realtek pm flow */
+		extern void log_buffer_trigger_schedule_in_km4_idle_task(void);
+		log_buffer_trigger_schedule_in_km4_idle_task();
+
+		extern void (*thermal_meter_read)(void);
+
+		thermal_meter_read();
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+		extern void LogUartDMAIdleHook(void);
+		extern void (*thermal_meter_read)(void);
+
+		LogUartDMAIdleHook();
+		thermal_meter_read();
+#else
 		/* Note weird API: k_cpu_idle() is called with local
 		 * CPU interrupts masked, and returns with them
 		 * unmasked.  It does not take a spinlock or other
 		 * higher level construct.
 		 */
-		(void) arch_irq_lock();
+		(void)arch_irq_lock();
+#endif
 
 #ifdef CONFIG_PM
 		_kernel.idle = z_get_next_timeout_expiry();
@@ -67,15 +88,35 @@ void idle(void *unused1, void *unused2, void *unused3)
 		 * which is essential for the kernel's scheduling
 		 * logic.
 		 */
+#ifdef CONFIG_SOC_FAMILY_REALTEK_BEE
+		extern void (*power_manager_slave_inact_action_handler)(void);
+
+		if (k_is_pre_kernel()) {
+			k_cpu_idle();
+		} else {
+			power_manager_slave_inact_action_handler();
+
+			extern int platform_pm_get_error_code(void);
+			extern uint32_t *platform_pm_get_refuse_reason(void);
+			extern int btmac_pm_get_error_code(void);
+
+			DBG_DIRECT("Platform fail to enter dlps, error 0x%x, reason 0x%x\r\n",
+				platform_pm_get_error_code(), platform_pm_get_refuse_reason());
+			DBG_DIRECT("btmac pm error code, 0x%x\r\n", btmac_pm_get_error_code());
+
+		}
+#else
 		if (k_is_pre_kernel() || !pm_system_suspend(_kernel.idle)) {
 			k_cpu_idle();
 		}
+#endif
+
 #else
 		k_cpu_idle();
 #endif /* CONFIG_PM */
 
 #if !defined(CONFIG_PREEMPT_ENABLED)
-# if !defined(CONFIG_USE_SWITCH) || defined(CONFIG_SPARC)
+#if !defined(CONFIG_USE_SWITCH) || defined(CONFIG_SPARC)
 		/* A legacy mess: the idle thread is by definition
 		 * preemptible as far as the modern scheduler is
 		 * concerned, but older platforms use

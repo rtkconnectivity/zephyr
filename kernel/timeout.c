@@ -341,22 +341,18 @@ void z_vrfy_sys_clock_tick_set(uint64_t tick)
 
 #ifdef CONFIG_SOC_FAMILY_REALTEK_BEE
 /* To support RTK PM */
-static int32_t pended_ticks;
-
+extern void sys_clock_only_add_cycle_count(int32_t ticks);
 struct _timeout *get_first_timeout(void)
 {
-	sys_dnode_t *t = sys_dlist_peek_head(&timeout_list);
-
-	return t == NULL ? NULL : CONTAINER_OF(t, struct _timeout, node);
+	return first();
 }
 
 struct _timeout *get_next_timeout(struct _timeout *t)
 {
-	sys_dnode_t *n = sys_dlist_peek_next(&timeout_list, &t->node);
-
-	return n == NULL ? NULL : CONTAINER_OF(n, struct _timeout, node);
+	return next(t);
 }
-
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+static int32_t pended_ticks;
 void sys_clock_announce_only_add_ticks(int32_t ticks)
 {
 	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
@@ -366,7 +362,6 @@ void sys_clock_announce_only_add_ticks(int32_t ticks)
 	k_spin_unlock(&timeout_lock, key);
 }
 
-extern void sys_clock_only_add_cycle_count(int32_t ticks);
 
 void sys_clock_announce_process_timeout(void)
 {
@@ -399,4 +394,50 @@ void sys_clock_announce_process_timeout(void)
 	pended_ticks = 0;
 	k_spin_unlock(&timeout_lock, key);
 }
+
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+void sys_clock_announce_only_add_ticks(int32_t ticks)
+{
+	int ticks_remaining = ticks;
+
+	sys_clock_only_add_cycle_count(ticks_remaining);
+
+	struct _timeout *t;
+
+	for (t = first();
+		 (t != NULL) && (t->dticks <= ticks_remaining);
+		 t = next(t)) {
+		int dt = t->dticks;
+
+		curr_tick += dt;
+		t->dticks = 0;
+		ticks_remaining -= dt;
+	}
+
+	if (t != NULL) {
+		t->dticks -= ticks_remaining;
+	}
+	curr_tick += ticks_remaining;
+}
+
+void sys_clock_announce_process_timeout(void)
+{
+	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
+
+	struct _timeout *t;
+
+	for (t = first();
+		 (t != NULL) && (t->dticks == 0);
+		 t = first()) {
+		remove_timeout(t);
+		k_spin_unlock(&timeout_lock, key);
+
+		t->fn(t);
+		key = k_spin_lock(&timeout_lock);
+	}
+
+	k_spin_unlock(&timeout_lock, key);
+}
+#endif
+
 #endif /* CONFIG_SOC_FAMILY_REALTEK_BEE */
