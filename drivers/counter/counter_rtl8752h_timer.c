@@ -300,6 +300,7 @@ static int counter_rtl8752h_timer_pm_action(const struct device *dev, enum pm_de
 			TIM_DLPSEnter(timer_base, &data->store_buf);
 		}
 
+		break;
 	case PM_DEVICE_ACTION_RESUME:
 		if (cfg->enhanced) {
 			ENHTIM_DLPSExit(timer_base, &data->store_buf);

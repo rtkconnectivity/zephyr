@@ -24,7 +24,7 @@
 #endif
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(pwm_rtl8752h, 4);
+LOG_MODULE_REGISTER(pwm_rtl8752h, CONFIG_PWM_LOG_LEVEL);
 
 /** PWM data. */
 struct pwm_rtl8752h_data {

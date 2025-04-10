@@ -24,10 +24,10 @@
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
+#include <zephyr/input/input.h>
 
 #ifdef CONFIG_PM_DEVICE
 #include "power_manager_unit_platform.h"
-#include "dlps.h"
 #endif
 #include "rtl876x_keyscan.h"
 #include "rtl876x_pinmux.h"
@@ -38,7 +38,7 @@
 #include "trace.h"
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(kscan_rtl8752h, CONFIG_KSCAN_LOG_LEVEL);
+LOG_MODULE_REGISTER(kscan_rtl8752h, CONFIG_INPUT_LOG_LEVEL);
 
 struct kscan_rtl8752h_config {
 	uint32_t reg;
@@ -60,9 +60,8 @@ typedef struct {
 
 struct kscan_rtl8752h_data {
 	kscan_key_index keys[26];
-	uint32_t key_map[CONFIG_RTL8752H_KEYSCAN_MAX_ROW_SIZE];
+	uint32_t key_map[CONFIG_RTL8752H_INPUT_KEYSCAN_MAX_ROW_SIZE];
 	uint8_t press_num;
-	kscan_callback_t callback;
 	bool cb_en;
 	uint16_t press_rows;
 #ifdef CONFIG_PM_DEVICE
@@ -130,7 +129,7 @@ static int kscan_rtl8752h_init_driver(const struct device *dev, uint32_t scanmod
 	return 0;
 }
 
-#if !CONFIG_RTL8752H_KEYSCAN_AUTOSCAN_MODE
+#if !CONFIG_RTL8752H_INPUT_KEYSCAN_AUTOSCAN_MODE
 static void manual_kscan_timer_cb(struct k_timer *timer);
 static K_TIMER_DEFINE(manual_kscan_timer, manual_kscan_timer_cb, NULL);
 
@@ -146,7 +145,7 @@ static void manual_kscan_timer_cb(struct k_timer *timer)
 }
 #endif
 
-#if CONFIG_RTL8752H_KEYSCAN_GHOST_KEY_FILTER
+#if CONFIG_RTL8752H_INPUT_KEYSCAN_GHOST_KEY_FILTER
 static bool kscan_rtl8752h_ghost_key_filter(kscan_key_index *new_keys, uint8_t new_press_num)
 {
 	const struct device *dev = DEVICE_DT_GET(DT_DRV_INST(0));
@@ -180,39 +179,6 @@ static bool kscan_rtl8752h_ghost_key_filter(kscan_key_index *new_keys, uint8_t n
 }
 #endif
 
-static int kscan_rtl8752h_configure(const struct device *dev, kscan_callback_t callback)
-{
-	struct kscan_rtl8752h_data *data = dev->data;
-
-	if (!callback) {
-		return -EINVAL;
-	}
-
-	data->callback = callback;
-	LOG_DBG("dev %s: configure cb %p", dev->name, callback);
-
-	return 0;
-}
-
-static int kscan_rtl8752h_disable_callback(const struct device *dev)
-{
-	struct kscan_rtl8752h_data *data = dev->data;
-
-	LOG_DBG("dev %s: disable cb", dev->name);
-	data->cb_en = false;
-	return 0;
-}
-
-static int kscan_rtl8752h_enable_callback(const struct device *dev)
-{
-	struct kscan_rtl8752h_data *data = dev->data;
-
-	LOG_DBG("dev %s: enable cb", dev->name);
-	data->cb_en = true;
-
-	return 0;
-}
-
 static void kscan_rtl8752h_isr(void)
 {
 	const struct device *dev = DEVICE_DT_GET(DT_DRV_INST(0));
@@ -220,17 +186,16 @@ static void kscan_rtl8752h_isr(void)
 	struct kscan_rtl8752h_data *data = dev->data;
 	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
 	uint32_t scan_debounce_cnt = config->scan_debounce_cnt;
-	kscan_callback_t callback = data->callback;
 	static uint8_t press_cnt;
 	static bool all_release_flag = true;
 	static kscan_key_index last_keys[26] = {0};
 	kscan_key_index new_keys[26];
-	uint32_t new_key_map[CONFIG_RTL8752H_KEYSCAN_MAX_ROW_SIZE];
+	uint32_t new_key_map[CONFIG_RTL8752H_INPUT_KEYSCAN_MAX_ROW_SIZE];
 	uint8_t new_press_num = KeyScan_GetFifoDataNum(keyscan);
 
 	if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_SCAN_END) == SET) {
 		KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
-#if !CONFIG_RTL8752H_KEYSCAN_AUTOSCAN_MODE
+#if !CONFIG_RTL8752H_INPUT_KEYSCAN_AUTOSCAN_MODE
 		if (new_press_num == 0) {
 #ifdef CONFIG_PM_DEVICE
 			kscan_pm_check_state = PM_CHECK_PASS;
@@ -241,9 +206,9 @@ static void kscan_rtl8752h_isr(void)
 				uint8_t old_row = data->keys[i].row;
 				uint8_t old_col = data->keys[i].column;
 
-				if (callback && data->cb_en) {
-					callback(dev, old_row, old_col, false);
-				}
+				input_report_abs(dev, INPUT_ABS_X, old_col, false, K_FOREVER);
+				input_report_abs(dev, INPUT_ABS_Y, old_row, false, K_FOREVER);
+				input_report_key(dev, INPUT_BTN_TOUCH, false, true, K_FOREVER);
 			}
 
 			data->press_num = 0;
@@ -282,7 +247,7 @@ static void kscan_rtl8752h_isr(void)
 		if (!memcmp(last_keys, new_keys, sizeof(new_keys))) {
 			/* new_keys is same as last_keys */
 			if (press_cnt >= scan_debounce_cnt) {
-#if CONFIG_RTL8752H_KEYSCAN_GHOST_KEY_FILTER
+#if CONFIG_RTL8752H_INPUT_KEYSCAN_GHOST_KEY_FILTER
 				if (kscan_rtl8752h_ghost_key_filter(new_keys, new_press_num)) {
 					return;
 				}
@@ -316,9 +281,12 @@ static void kscan_rtl8752h_isr(void)
 
 					data->key_map[new_row] |= BIT(new_col);
 
-					if (callback && data->cb_en) {
-						callback(dev, new_row, new_col, true);
-					}
+					input_report_abs(dev, INPUT_ABS_X, new_col, false,
+							 K_FOREVER);
+					input_report_abs(dev, INPUT_ABS_Y, new_row, false,
+							 K_FOREVER);
+					input_report_key(dev, INPUT_BTN_TOUCH, true, true,
+							 K_FOREVER);
 				}
 
 				/* update release keys */
@@ -341,9 +309,12 @@ static void kscan_rtl8752h_isr(void)
 
 					data->key_map[old_row] &= ~BIT(old_col);
 
-					if (callback && data->cb_en) {
-						callback(dev, old_row, old_col, false);
-					}
+					input_report_abs(dev, INPUT_ABS_X, old_col, false,
+							 K_FOREVER);
+					input_report_abs(dev, INPUT_ABS_Y, old_row, false,
+							 K_FOREVER);
+					input_report_key(dev, INPUT_BTN_TOUCH, false, true,
+							 K_FOREVER);
 				}
 
 				memcpy(data->keys, new_keys, sizeof(new_keys));
@@ -376,9 +347,9 @@ static void kscan_rtl8752h_isr(void)
 			uint8_t old_row = data->keys[i].row;
 			uint8_t old_col = data->keys[i].column;
 
-			if (callback && data->cb_en) {
-				callback(dev, old_row, old_col, false);
-			}
+			input_report_abs(dev, INPUT_ABS_X, old_col, false, K_FOREVER);
+			input_report_abs(dev, INPUT_ABS_Y, old_row, false, K_FOREVER);
+			input_report_key(dev, INPUT_BTN_TOUCH, false, true, K_FOREVER);
 		}
 
 		data->press_num = 0;
@@ -508,7 +479,7 @@ static int kscan_rtl8752h_pm_action(const struct device *dev, enum pm_device_act
 			kscan_pm_check_state = PM_CHECK_FAIL;
 			/* register trigger manual mode init */
 			/* Set pins to active state */
-#if !CONFIG_RTL8752H_KEYSCAN_AUTOSCAN_MODE
+#if !CONFIG_RTL8752H_INPUT_KEYSCAN_AUTOSCAN_MODE
 			kscan_rtl8752h_init_driver(dev, KeyScan_Manual_Scan_Mode,
 						   KeyScan_Manual_Sel_Bit);
 #else
@@ -542,7 +513,7 @@ static int kscan_rtl8752h_init(const struct device *dev)
 
 	pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 
-#if !CONFIG_RTL8752H_KEYSCAN_AUTOSCAN_MODE
+#if !CONFIG_RTL8752H_INPUT_KEYSCAN_AUTOSCAN_MODE
 	kscan_rtl8752h_init_driver(dev, KeyScan_Manual_Scan_Mode, KeyScan_Manual_Sel_Key);
 #else
 	kscan_rtl8752h_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
@@ -555,12 +526,6 @@ static int kscan_rtl8752h_init(const struct device *dev)
 #endif
 	return 0;
 }
-
-static const struct kscan_driver_api kscan_rtl8752h_driver_api = {
-	.config = kscan_rtl8752h_configure,
-	.disable_callback = kscan_rtl8752h_disable_callback,
-	.enable_callback = kscan_rtl8752h_enable_callback,
-};
 
 #define RTL8752H_KSCAN_IRQ_HANDLER_DECL(index)                                                     \
 	static void kscan_rtl8752h_irq_config_func_##index(void);
@@ -595,14 +560,11 @@ static const struct kscan_driver_api kscan_rtl8752h_driver_api = {
 		.scan_debounce_cnt = DT_INST_PROP(index, scan_debounce_cnt),                       \
 		RTL8752H_KSCAN_IRQ_HANDLER_FUNC(index)};                                           \
                                                                                                    \
-	static struct kscan_rtl8752h_data kscan_rtl8752h_data_##index = {                          \
-		.callback = NULL,                                                                  \
-	};                                                                                         \
+	static struct kscan_rtl8752h_data kscan_rtl8752h_data_##index = {};                        \
 	PM_DEVICE_DT_INST_DEFINE(index, kscan_rtl8752h_pm_action);                                 \
 	DEVICE_DT_INST_DEFINE(index, &kscan_rtl8752h_init, PM_DEVICE_DT_INST_GET(index),           \
 			      &kscan_rtl8752h_data_##index, &kscan_rtl8752h_cfg_##index,           \
-			      APPLICATION, CONFIG_KSCAN_INIT_PRIORITY,                             \
-			      &kscan_rtl8752h_driver_api);                                         \
+			      POST_KERNEL, CONFIG_INPUT_INIT_PRIORITY, NULL);                      \
                                                                                                    \
 	RTL8752H_KSCAN_IRQ_HANDLER(index)
 
