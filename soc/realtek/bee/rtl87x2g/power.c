@@ -47,6 +47,7 @@ static size_t num_susp_rtk;
 extern void NMI_Handler(void);
 extern void sys_clock_announce_process_timeout(void);
 extern void pad_short_pulse_wake_up(int Status);
+extern void sys_clock_restore_tick_and_cycle(void);
 
 volatile uint32_t CPU_StoreReg[6];
 volatile uint8_t CPU_StoreReg_IPR[96];
@@ -186,6 +187,14 @@ void device_resume_handler(struct k_work *item)
 
 void submit_items_to_rtk_pm_workq(void)
 {
+/* Restore cur_ticks and cycle_count at this point rather than waiting until
+ * work_timeout_process. This is because if you wait until work_timeout_process to
+ * restore them, there might be a situation where after restoring nvic in
+ * work_device_resume, an interrupt is triggered that enters the isr. At this point, ticks
+ * and cycle have not been restored, and if the timing API is called, it will return the
+ * values from when entering DLPS.
+ */
+	sys_clock_restore_tick_and_cycle();
 	k_work_submit_to_queue(&rtk_pm_workq, &work_device_resume);
 	k_work_submit_to_queue(&rtk_pm_workq, &work_timeout_process);
 }
