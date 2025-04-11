@@ -362,12 +362,17 @@ void sys_clock_announce_only_add_ticks(int32_t ticks)
 	k_spin_unlock(&timeout_lock, key);
 }
 
+void sys_clock_restore_tick_and_cycle(void)
+{
+	/* restore cycle_count. */
+	sys_clock_only_add_cycle_count(pended_ticks);
+	/* restore cur_ticks. */
+	curr_tick += pended_ticks;
+}
 
 void sys_clock_announce_process_timeout(void)
 {
 	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
-
-	sys_clock_only_add_cycle_count(pended_ticks);
 
 	struct _timeout *t;
 
@@ -376,7 +381,6 @@ void sys_clock_announce_process_timeout(void)
 	     t = first()) {
 		int dt = t->dticks;
 
-		curr_tick += dt;
 		t->dticks = 0;
 		remove_timeout(t);
 
@@ -390,7 +394,6 @@ void sys_clock_announce_process_timeout(void)
 		t->dticks -= pended_ticks;
 	}
 
-	curr_tick += pended_ticks;
 	pended_ticks = 0;
 
 	k_spin_unlock(&timeout_lock, key);
