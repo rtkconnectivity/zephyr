@@ -282,6 +282,8 @@ static int gpio_rtl8752h_pin_interrupt_configure(const struct device *port, gpio
 		gpio_init_struct.GPIO_ITPolarity = GPIO_INT_POLARITY_ACTIVE_HIGH;
 		break;
 	case GPIO_INT_TRIG_BOTH:
+		gpio_init_struct.GPIO_ITTrigger = GPIO_INT_BOTH_EDGE;
+		break;
 	default:
 		return -ENOTSUP;
 	}
@@ -442,18 +444,50 @@ static int gpio_rtl8752h_pm_action(const struct device *port, enum pm_device_act
 			 * 2. Enabled interrupt;
 			 */
 			if (port_base->INTEN & BIT(cur_wakeup_pad_node->next_gpio_num)) {
-				bool high_trigger = port_base->INTPOLARITY &
-						    BIT(cur_wakeup_pad_node->next_gpio_num);
+				if (port_base->INTBOTHEDGE &
+				    BIT(cur_wakeup_pad_node->next_gpio_num)) {
+					port_base->DATAIN;
+					bool high_trigger =
+						!(port_base->DATAIN &
+						  BIT(cur_wakeup_pad_node->next_gpio_num));
 
-				Pad_ControlSelectValue(
-					pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]
-						.pad_num,
-					PAD_SW_MODE);
-				System_WakeUpPinEnable(
-					pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]
-						.pad_num,
-					high_trigger ? PAD_WAKEUP_POL_HIGH : PAD_WAKEUP_POL_LOW,
-					DISABLE, 0);
+					Pad_ControlSelectValue(
+						pm_pad_node_array[cur_wakeup_pad_node
+									  ->next_gpio_num]
+							.pad_num,
+						PAD_SW_MODE);
+					System_WakeUpPinEnable(
+						pm_pad_node_array[cur_wakeup_pad_node
+									  ->next_gpio_num]
+							.pad_num,
+						high_trigger ? PAD_WAKEUP_POL_HIGH
+							     : PAD_WAKEUP_POL_LOW,
+						DISABLE, 0);
+					if (high_trigger) {
+						port_base->INTPOLARITY |=
+							BIT(cur_wakeup_pad_node->next_gpio_num);
+
+					} else {
+						port_base->INTPOLARITY &=
+							(~BIT(cur_wakeup_pad_node->next_gpio_num));
+					}
+				} else {
+					bool high_trigger = port_base->INTPOLARITY &
+							    BIT(cur_wakeup_pad_node->next_gpio_num);
+
+					Pad_ControlSelectValue(
+						pm_pad_node_array[cur_wakeup_pad_node
+									  ->next_gpio_num]
+							.pad_num,
+						PAD_SW_MODE);
+					System_WakeUpPinEnable(
+						pm_pad_node_array[cur_wakeup_pad_node
+									  ->next_gpio_num]
+							.pad_num,
+						high_trigger ? PAD_WAKEUP_POL_HIGH
+							     : PAD_WAKEUP_POL_LOW,
+						DISABLE, 0);
+				}
 			}
 			cur_wakeup_pad_node =
 				&(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]);
