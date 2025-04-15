@@ -28,9 +28,17 @@
 
 #define BUFFER_SIZE  6
 #ifdef CONFIG_TEST_USERSPACE
+#if CONFIG_SOC_FAMILY_REALTEK_BEE
+static ZTEST_BMEM int32_t m_sample_buffer[BUFFER_SIZE];
+#else
 static ZTEST_BMEM int16_t m_sample_buffer[BUFFER_SIZE];
+#endif
+#else
+#if CONFIG_SOC_FAMILY_REALTEK_BEE
+static __aligned(32) int32_t m_sample_buffer[BUFFER_SIZE] __NOCACHE;
 #else
 static __aligned(32) int16_t m_sample_buffer[BUFFER_SIZE] __NOCACHE;
+#endif
 #endif
 
 #define DT_SPEC_AND_COMMA(node_id, prop, idx) ADC_DT_SPEC_GET_BY_IDX(node_id, idx),
@@ -102,7 +110,11 @@ static void check_samples(int expected_count)
 
 	TC_PRINT("Samples read: ");
 	for (i = 0; i < BUFFER_SIZE; i++) {
+#if CONFIG_SOC_FAMILY_REALTEK_BEE
+		int32_t sample_value = m_sample_buffer[i];
+#else
 		int16_t sample_value = m_sample_buffer[i];
+#endif
 
 		TC_PRINT("0x%04hx ", sample_value);
 		if (i < expected_count) {

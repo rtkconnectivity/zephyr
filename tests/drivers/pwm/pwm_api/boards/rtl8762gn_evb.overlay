@@ -26,7 +26,7 @@
 &pinctrl {
 	pwm8_default: pwm8_default {
 		group1 {
-			psels = <RTL87X2G_PSEL(ENPWM0_P, P0_1,DIR_OUT, DRV_LOW, PULL_DOWN)>;
+			psels = <RTL87X2G_PSEL(ENPWM0_P, P0_2, DIR_OUT, DRV_LOW, PULL_DOWN)>;
 		};
 	};
 };

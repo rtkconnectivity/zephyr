@@ -249,11 +249,6 @@ static int adc_rtl87x2g_init(const struct device *dev)
 
 	data->dev = dev;
 
-	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
-	if (ret < 0) {
-		return ret;
-	}
-
 	(void)clock_control_on(RTL87X2G_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);

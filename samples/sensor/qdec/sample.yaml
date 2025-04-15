@@ -55,3 +55,14 @@ tests:
       regex:
         - "Quadrature decoder sensor test"
         - "Position = -[45678]\\d degrees"
+
+  sample.sensor.rtl87x2g:
+    filter: dt_alias_exists("qdec0")
+    extra_args: "DTC_OVERLAY_FILE=boards/rtl8762gn_evb.overlay"
+    harness_config:
+      fixture: rtl87x2g_qdec
+      type: multi_line
+      ordered: true
+      regex:
+        - "Quadrature decoder sensor test"
+        - "Position = (.*) degrees"
