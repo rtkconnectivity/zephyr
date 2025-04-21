@@ -1,0 +1,50 @@
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  BEE GPIO.
+  Note that some of different pins could be mapped to the same gpio number.
+
+  For RTL8762GTU and RTL8762GTH,
+  P6_2 and P9_0 are both mapped to gpiob_21,
+  P6_3 and P9_1 are both mapped to gpiob_22,
+  P6_5 and P9_3 are both mapped to gpiob_24,
+  P6_7 and P9_5 are both mapped to gpiob_26.
+  P9_0 and P9_1 could be configured as qdec pin and any other pinmux.
+  So if users want to use qdec with P9_0 and P9_1, users should avoid configuring
+  P9_0, P9_1 as gpio, and should use P6_2, P6_3 as gpiob_21, gpiob_22.
+
+  For RTL8752H,
+  P4_1 and P3_5 are both mapped to gpiob_29,
+  P4_2 and P3_6 are both mapped to gpiob_30.
+
+compatible: "realtek,bee-gpio"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+  "#gpio-cells":
+    const: 2
+
+  port:
+    type: int
+    required: true
+    description: |
+      The GPIO port number.
+      GPIO port GPIOA has:
+
+        port = <0>;
+
+      And GPIO port GPIOB has:
+
+        port = <1>;
+
+gpio-cells:
+  - pin
+  - flags

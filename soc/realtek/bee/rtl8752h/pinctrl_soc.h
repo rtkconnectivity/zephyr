@@ -1,12 +1,12 @@
 /*
- * Copyright(c) 2024, Realtek Semiconductor Corporation.
+ * Copyright (c) 2025 Realtek Semiconductor Corp.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
  * @file
- * rtl8752h SoC specific helpers for pinctrl driver
+ * Bee SoC specific helpers for pinctrl driver
  */
 
 #ifndef ZEPHYR_SOC_ARM_REALTEK_RTL_COMMON_PINCTRL_SOC_H_
@@ -44,12 +44,12 @@ typedef pinctrl_soc_pin pinctrl_soc_pin_t;
  */
 #define Z_PINCTRL_STATE_PIN_INIT(node_id, prop, idx)                                               \
 	{                                                                                          \
-		.pin = RTL8752H_GET_PIN(DT_PROP_BY_IDX(node_id, prop, idx)),                       \
-		.pull = RTL8752H_GET_PULL(DT_PROP_BY_IDX(node_id, prop, idx)),                     \
-		.drive = RTL8752H_GET_DRIVE(DT_PROP_BY_IDX(node_id, prop, idx)),                   \
-		.dir = RTL8752H_GET_DIR(DT_PROP_BY_IDX(node_id, prop, idx)),                       \
+		.pin = BEE_GET_PIN(DT_PROP_BY_IDX(node_id, prop, idx)),                            \
+		.pull = BEE_GET_PULL(DT_PROP_BY_IDX(node_id, prop, idx)),                          \
+		.drive = BEE_GET_DRIVE(DT_PROP_BY_IDX(node_id, prop, idx)),                        \
+		.dir = BEE_GET_DIR(DT_PROP_BY_IDX(node_id, prop, idx)),                            \
 		.pull_strength = DT_PROP(node_id, bias_pull_strong),                               \
-		.fun = RTL8752H_GET_FUN(DT_PROP_BY_IDX(node_id, prop, idx)),                       \
+		.fun = BEE_GET_FUN(DT_PROP_BY_IDX(node_id, prop, idx)),                            \
 		.wakeup_high = DT_PROP(node_id, wakeup_high),                                      \
 		.wakeup_low = DT_PROP(node_id, wakeup_low),                                        \
 	},
@@ -69,35 +69,35 @@ typedef pinctrl_soc_pin pinctrl_soc_pin_t;
  *
  * @param pincfg Pin configuration bit field.
  */
-#define RTL8752H_GET_FUN(pincfg) (((pincfg) >> RTL8752H_FUN_POS) & RTL8752H_FUN_MSK)
+#define BEE_GET_FUN(pincfg) (((pincfg) >> BEE_FUN_POS) & BEE_FUN_MSK)
 
 /**
  * @brief Utility macro to obtain pin drive mode.
  *
  * @param pincfg Pin configuration bit field.
  */
-#define RTL8752H_GET_DIR(pincfg) (((pincfg) >> RTL8752H_DIR_POS) & RTL8752H_DIR_MSK)
+#define BEE_GET_DIR(pincfg) (((pincfg) >> BEE_DIR_POS) & BEE_DIR_MSK)
 
 /**
  * @brief Utility macro to obtain pin drive mode.
  *
  * @param pincfg Pin configuration bit field.
  */
-#define RTL8752H_GET_DRIVE(pincfg) (((pincfg) >> RTL8752H_DRIVE_POS) & RTL8752H_DRIVE_MSK)
+#define BEE_GET_DRIVE(pincfg) (((pincfg) >> BEE_DRIVE_POS) & BEE_DRIVE_MSK)
 
 /**
  * @brief Utility macro to obtain pin pull configuration.
  *
  * @param pincfg Pin configuration bit field.
  */
-#define RTL8752H_GET_PULL(pincfg) (((pincfg) >> RTL8752H_PULL_POS) & RTL8752H_PULL_MSK)
+#define BEE_GET_PULL(pincfg) (((pincfg) >> BEE_PULL_POS) & BEE_PULL_MSK)
 
 /**
  * @brief Utility macro to obtain port and pin combination.
  *
  * @param pincfg Pin configuration bit field.
  */
-#define RTL8752H_GET_PIN(pincfg) (((pincfg) >> RTL8752H_PIN_POS) & RTL8752H_PIN_MSK)
+#define BEE_GET_PIN(pincfg) (((pincfg) >> BEE_PIN_POS) & BEE_PIN_MSK)
 
 /** @endcond */
 

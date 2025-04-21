@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2024, Realtek Semiconductor Corporation.
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -38,9 +38,9 @@
 &pinctrl {
 	spi0_default: spi0_default {
 		group1 {
-			psels = <RTL8752H_PSEL(SPI0_CLK_MASTER, P4_0,DIR_OUT, DRV_HIGH, PULL_UP)>,
-				<RTL8752H_PSEL(SPI0_MO_MASTER, P4_1,DIR_OUT, DRV_HIGH, PULL_UP)>,
-				<RTL8752H_PSEL(SPI0_MI_MASTER, P4_2,DIR_OUT, DRV_HIGH, PULL_UP)>;
+			psels = <BEE_PSEL(SPI0_CLK_MASTER, P4_0,DIR_OUT, DRV_HIGH, PULL_UP)>,
+				<BEE_PSEL(SPI0_MO_MASTER, P4_1,DIR_OUT, DRV_HIGH, PULL_UP)>,
+				<BEE_PSEL(SPI0_MI_MASTER, P4_2,DIR_OUT, DRV_HIGH, PULL_UP)>;
 		};
 	};
 };

@@ -226,6 +226,7 @@ static void rtk_irq_restore_from_rom(void)
 		}
 		vector_n = irqn + 16;
 
+		RamVectorTable[Peripheral_IRQn + 16] = (uint32_t)First_Peripheral_Handler;
 		/* rtk rom irq places vectors at RamVectorTable */
 		if (RamVectorTable[vector_n] != (uint32_t)_isr_wrapper) {
 			/* update zephyr irq dynamic */

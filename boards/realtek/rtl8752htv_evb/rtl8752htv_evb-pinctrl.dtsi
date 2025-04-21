@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2024, Realtek Semiconductor Corporation.
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,8 +8,8 @@
 &pinctrl {
 	uart2_default: uart2_default {
 		group1 {
-			psels = <RTL8752H_PSEL(UART2_TX, P3_0, DIR_OUT, DRV_HIGH, PULL_UP)>,
-			<RTL8752H_PSEL(UART2_RX, P3_1, DIR_IN, DRV_HIGH, PULL_UP)>;
+			psels = <BEE_PSEL(UART2_TX, P3_0, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(UART2_RX, P3_1, DIR_IN, DRV_HIGH, PULL_UP)>;
 		};
 	};
 };

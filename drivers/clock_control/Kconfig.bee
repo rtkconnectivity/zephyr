@@ -1,0 +1,12 @@
+# BEE clock control configuration
+
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config CLOCK_CONTROL_BEE
+	bool "Bee clock control"
+	default y
+	depends on DT_HAS_REALTEK_BEE_CCTL_ENABLED
+	select USE_HAL_REALTEK_RCC
+	help
+	  Enable driver for Bee Reset Clock Unit (RCU).

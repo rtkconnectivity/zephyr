@@ -1,0 +1,35 @@
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  BEE AON_QDEC.
+
+compatible: "realtek,bee-aon_qdec"
+
+include: [sensor-device.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  x-counts-per-revolution:
+    type: int
+    default: 4
+    description: |
+      This is a number that is used to determine how many revolutions
+      were done based on the current counter's value.
+    enum:
+      - 2
+      - 4
+
+  x-debounce-time-ms:
+    type: int
+    default: 4
+    description: |
+      Set the debounce time of x axis. The unit is ms.

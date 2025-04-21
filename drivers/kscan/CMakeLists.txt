@@ -5,7 +5,6 @@ zephyr_syscall_header(${ZEPHYR_BASE}/include/zephyr/drivers/kscan.h)
 zephyr_library()
 
 zephyr_library_sources_ifdef(CONFIG_KSCAN_INPUT		kscan_input.c)
-zephyr_library_sources_ifdef(CONFIG_KSCAN_RTL87X2G  	kscan_rtl87x2g.c)
-zephyr_library_sources_ifdef(CONFIG_KSCAN_RTL8752H  	kscan_rtl8752h.c)
+zephyr_library_sources_ifdef(CONFIG_KSCAN_BEE		kscan_bee.c)
 
 zephyr_library_sources_ifdef(CONFIG_USERSPACE	    kscan_handlers.c)

@@ -76,8 +76,6 @@ source "drivers/dma/Kconfig.emul"
 
 source "drivers/dma/Kconfig.nxp_edma"
 
-source "drivers/dma/Kconfig.rtl87x2g"
-
-source "drivers/dma/Kconfig.rtl8752h"
+source "drivers/dma/Kconfig.bee"
 
 endif # DMA

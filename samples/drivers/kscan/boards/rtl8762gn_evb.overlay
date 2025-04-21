@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -25,12 +25,12 @@
 &pinctrl {
 	kscan_default: kscan_default {
 		group1 {
-			psels = <RTL87X2G_PSEL(KEY_COL_0, P0_6, DIR_OUT, DRV_LOW, PULL_NONE)>,
-			<RTL87X2G_PSEL(KEY_COL_1, P0_7, DIR_OUT, DRV_LOW, PULL_NONE)>;
+			psels = <BEE_PSEL(KEY_COL_0, P0_6, DIR_OUT, DRV_LOW, PULL_NONE)>,
+			<BEE_PSEL(KEY_COL_1, P0_7, DIR_OUT, DRV_LOW, PULL_NONE)>;
 		};
 		group2 {
-			psels = <RTL87X2G_PSEL(KEY_ROW_0, P2_6, DIR_IN, DRV_LOW, PULL_UP)>,
-			<RTL87X2G_PSEL(KEY_ROW_1, P2_7, DIR_IN, DRV_LOW, PULL_UP)>;
+			psels = <BEE_PSEL(KEY_ROW_0, P2_6, DIR_IN, DRV_LOW, PULL_UP)>,
+			<BEE_PSEL(KEY_ROW_1, P2_7, DIR_IN, DRV_LOW, PULL_UP)>;
 			bias-pull-strong;
 		};
 	};

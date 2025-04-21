@@ -106,23 +106,17 @@ static const struct device *const devices[] = {
 #ifdef CONFIG_COUNTER_TIMER_RPI_PICO
 	DEVS_FOR_DT_COMPAT(raspberrypi_pico_timer)
 #endif
-#ifdef CONFIG_COUNTER_TIMER_RTL87X2G
-	DEVS_FOR_DT_COMPAT(realtek_rtl87x2g_timer)
+#ifdef CONFIG_COUNTER_TIMER_BEE
+	DEVS_FOR_DT_COMPAT(realtek_bee_timer)
 #endif
-#ifdef CONFIG_COUNTER_RTC_RTL87X2G
-	DEVS_FOR_DT_COMPAT(realtek_rtl87x2g_rtc)
+#ifdef CONFIG_COUNTER_RTC_BEE
+	DEVS_FOR_DT_COMPAT(realtek_bee_rtc)
 #endif
 #ifdef CONFIG_COUNTER_AMBIQ
 	DEVS_FOR_DT_COMPAT(ambiq_counter)
 #endif
 #ifdef CONFIG_COUNTER_MCUX_LPTMR
 	DEVS_FOR_DT_COMPAT(nxp_lptmr)
-#endif
-#ifdef CONFIG_COUNTER_TIMER_RTL8752H
-	DEVS_FOR_DT_COMPAT(realtek_rtl8752h_timer)
-#endif
-#ifdef CONFIG_COUNTER_RTC_RTL8752H
-	DEVS_FOR_DT_COMPAT(realtek_rtl8752h_rtc)
 #endif
 };
 
@@ -135,9 +129,6 @@ static const struct device *const period_devs[] = {
 #endif
 #ifdef CONFIG_COUNTER_RTC_STM32
 	DEVS_FOR_DT_COMPAT(st_stm32_rtc)
-#endif
-#ifdef CONFIG_COUNTER_RTC_RTL8752H
-	DEVS_FOR_DT_COMPAT(realtek_rtl8752h_rtc)
 #endif
 };
 
@@ -998,22 +989,12 @@ static bool reliable_cancel_capable(const struct device *dev)
 		return true;
 	}
 #endif
-#ifdef CONFIG_COUNTER_TIMER_RTL87X2G
+#ifdef CONFIG_COUNTER_TIMER_BEE
 	if (single_channel_alarm_capable(dev)) {
 		return true;
 	}
 #endif
-#ifdef CONFIG_COUNTER_RTC_RTL87X2G
-	if (single_channel_alarm_capable(dev)) {
-		return true;
-	}
-#endif
-#ifdef CONFIG_COUNTER_TIMER_RTL8752H
-	if (single_channel_alarm_capable(dev)) {
-		return true;
-	}
-#endif
-#ifdef CONFIG_COUNTER_RTC_RTL8752H
+#ifdef CONFIG_COUNTER_RTC_BEE
 	if (single_channel_alarm_capable(dev)) {
 		return true;
 	}

@@ -16,3 +16,7 @@ tests:
     platform_allow: rtl8762gn_evb
     extra_args: "DTC_OVERLAY_FILE=boards/rtl8762gn_evb.overlay"
     timeout: 90
+  drivers.rtc.rtc_api.rtl8752h:
+    platform_allow: rtl8752htv_evb
+    extra_args: "DTC_OVERLAY_FILE=boards/rtl8752htv_evb.overlay"
+    timeout: 90

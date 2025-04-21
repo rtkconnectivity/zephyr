@@ -1,0 +1,63 @@
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+        BEE COUNTER TIMER.
+        Each Timer is part of a Timer Group and the number of available Timers
+        is SoC-dependent.
+        RTL87X2G has 12 Timers available, 8 normal timer and 4 advanced timer.
+        RTL8752H has 6 Timers available, 4 normal timer and 2 advanced timer.
+
+        In order to use one of the available timers on your application add
+        a <board>.overlay file with contents as below
+
+          &timer2 {
+                  status = "okay";
+                  prescaler = <1>;
+          };
+
+        From the above, setting 'status' is required while the prescaler is
+        optional. Check below for more information on the prescaler.
+
+compatible: "realtek,bee-timer"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  clocks:
+    required: true
+
+  channels:
+    required: true
+    type:
+      int
+
+  is-enhanced:
+    type:
+      boolean
+
+  prescaler:
+    description: |
+      The prescaler value defines the factor by which the clock will be
+      divided.
+      RTL87X2G supports 1/2/4/8/16/32/40/64.
+      RTL8752H supports 1/2/4/8/40/125.
+
+    type: int
+    default: 1
+    enum:
+      - 1
+      - 2
+      - 4
+      - 8
+      - 16
+      - 32
+      - 40
+      - 64
+      - 125

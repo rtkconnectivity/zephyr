@@ -1,0 +1,12 @@
+# BEE PINCTRL configuration
+
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config PINCTRL_BEE
+	bool "BEE pin controller driver"
+	default y
+	depends on DT_HAS_REALTEK_BEE_PINCTRL_ENABLED
+	select USE_HAL_REALTEK_PINMUX
+	help
+	  Enable the BEE pin controller driver.

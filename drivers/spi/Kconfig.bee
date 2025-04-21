@@ -1,0 +1,32 @@
+# BEE spi configuration
+
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config SPI_BEE
+	bool "BEE SPI driver"
+	default y
+	depends on DT_HAS_REALTEK_BEE_SPI_ENABLED
+	select USE_HAL_REALTEK_SPI
+	help
+	  Enables the bee spi driver.
+
+if SPI_BEE
+
+config SPI_BEE_INTERRUPT
+	bool "BEE MCU SPI Interrupt Support"
+	default y if SPI_ASYNC
+	default y if SPI_BEE_DMA
+	help
+	  Enable the interrupt driven mode for SPI instances
+
+config SPI_BEE_DMA
+	bool "BEE MCU SPI DMA Support"
+	select DMA
+	select SPI_BEE_INTERRUPT
+	select USE_HAL_REALTEK_DMA
+	help
+	  Use the DMA for SPI transfer
+	  that enable dma channels in their device tree node.
+
+endif # SPI_BEE

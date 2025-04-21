@@ -22,7 +22,7 @@ zephyr_library_sources_ifdef(CONFIG_I2C_LPC11U6X        i2c_lpc11u6x.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_XEC		i2c_mchp_xec.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_MCUX		i2c_mcux.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_MCUX_FLEXCOMM	i2c_mcux_flexcomm.c)
-zephyr_library_sources_ifdef(CONFIG_I2C_RTL87X2G		i2c_rtl87x2g.c)
+zephyr_library_sources_ifdef(CONFIG_I2C_BEE				i2c_bee.c)
 
 if(CONFIG_I2C_RTIO)
   zephyr_library_sources_ifdef(CONFIG_I2C_MCUX_LPI2C	i2c_mcux_lpi2c_rtio.c)
@@ -81,8 +81,6 @@ zephyr_library_sources_ifdef(CONFIG_I2C_ENE_KB1200	i2c_ene_kb1200.c)
 zephyr_library_sources_ifdef(CONFIG_GPIO_I2C_SWITCH	gpio_i2c_switch.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_NUMAKER		i2c_numaker.c)
 zephyr_library_sources_ifdef(CONFIG_I2C_MAX32		i2c_max32.c)
-zephyr_library_sources_ifdef(CONFIG_I2C_RTL87X2G		i2c_rtl87x2g.c)
-zephyr_library_sources_ifdef(CONFIG_I2C_RTL8752H		i2c_rtl8752h.c)
 
 zephyr_library_sources_ifdef(CONFIG_I2C_STM32_V1
 	i2c_ll_stm32_v1.c

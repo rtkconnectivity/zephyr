@@ -1,0 +1,48 @@
+# BEE kscan configuration
+
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config INPUT_BEE_KSCAN
+	bool "BEE MCU kscan driver"
+	default n
+	depends on DT_HAS_REALTEK_BEE_KSCAN_ENABLED
+	select USE_HAL_REALTEK_KEYSCAN
+	help
+	  Enable the BEE kscan driver.
+
+if INPUT_BEE_KSCAN
+config BEE_INPUT_KEYSCAN_MAX_ROW_SIZE
+	int "Max row size for bee kscan"
+	default 12
+	help
+	  Max row size for bee kscan.
+
+config BEE_INPUT_KEYSCAN_MAX_COL_SIZE
+	int "Max column size for bee kscan"
+	default 20
+	help
+	  Max column size for bee kscan.
+
+config BEE_INPUT_KEYSCAN_GHOST_KEY_FILTER
+	bool "Ghost key filter for bee kscan"
+	default y
+	help
+	  Ghost key filter for bee kscan.
+
+config BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
+	bool "Config scanmode for bee kscan"
+	default y
+	help
+	  default is autoscan, else is manual scan.
+
+if !BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
+config BEE_KEYSCAN_MANUAL_SCAN_INTERVAL_MSEC
+	int "Scan Interval when using manual mode"
+	default 50
+	help
+	  Scan Interval when using manual mode.
+
+endif # BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
+
+endif # INPUT_BEE_KSCAN

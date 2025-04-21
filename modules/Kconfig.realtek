@@ -57,7 +57,7 @@ config USE_HAL_REALTEK_KEYSCAN
 config USE_HAL_REALTEK_AON_QDEC
 	bool
 	help
-	  Enable HAL REALTEK AON QDEC driver
+	  Enable HAL REALTEK AON_QDEC driver
 
 config USE_HAL_REALTEK_UART
 	bool

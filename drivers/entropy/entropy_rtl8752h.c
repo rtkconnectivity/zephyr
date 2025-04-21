@@ -7,11 +7,9 @@
 
 #include <zephyr/drivers/entropy.h>
 #include <string.h>
+#include <platform_utils.h>
 
-
-static int entropy_rtl8752h_get_entropy(const struct device *dev,
-										uint8_t *buffer,
-										uint16_t length)
+static int entropy_rtl8752h_get_entropy(const struct device *dev, uint8_t *buffer, uint16_t length)
 {
 	ARG_UNUSED(dev);
 
@@ -46,8 +44,5 @@ static const struct entropy_driver_api entropy_rtl8752h_trng_api_funcs = {
 	.get_entropy = entropy_rtl8752h_get_entropy,
 };
 
-DEVICE_DT_INST_DEFINE(0,
-					  entropy_rtl8752h_trng_init, NULL,
-					  NULL, NULL,
-					  PRE_KERNEL_1, CONFIG_ENTROPY_INIT_PRIORITY,
-					  &entropy_rtl8752h_trng_api_funcs);
+DEVICE_DT_INST_DEFINE(0, entropy_rtl8752h_trng_init, NULL, NULL, NULL, PRE_KERNEL_1,
+		      CONFIG_ENTROPY_INIT_PRIORITY, &entropy_rtl8752h_trng_api_funcs);

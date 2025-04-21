@@ -129,8 +129,7 @@ source "drivers/i2c/Kconfig.numaker"
 source "drivers/i2c/Kconfig.mcux"
 source "drivers/i2c/Kconfig.ene"
 source "drivers/i2c/Kconfig.max32"
-source "drivers/i2c/Kconfig.rtl87x2g"
-source "drivers/i2c/Kconfig.rtl8752h"
+source "drivers/i2c/Kconfig.bee"
 
 config I2C_INIT_PRIORITY
 	int "Init priority"
