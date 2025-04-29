@@ -1,0 +1,32 @@
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config QDEC_BEE
+	bool "BEE MCU qdec driver"
+	default y
+	depends on DT_HAS_REALTEK_BEE_QDEC_ENABLED
+	select USE_HAL_REALTEK_QDEC
+	help
+	  Enable support for qdec driver for BEE MCU series.
+
+if QDEC_BEE
+
+config BEE_QDEC_X_AXIS_ENABLE
+	bool "x axis for bee qdec"
+	default y
+	help
+	  If true, enable x aix for bee qdec.
+
+config BEE_QDEC_Y_AXIS_ENABLE
+	bool "y axis for bee qdec"
+	default n
+	help
+	  If true, enable y aix for bee qdec.
+
+config BEE_QDEC_Z_AXIS_ENABLE
+	bool "z axis for bee qdec"
+	default n
+	help
+	  If true, enable z aix for bee qdec.
+
+endif # QDEC_BEE

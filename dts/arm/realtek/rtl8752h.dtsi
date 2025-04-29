@@ -299,6 +299,14 @@
 			status = "disabled";
 		};
 
+		qdec: qdec@40004000 {
+			compatible = "realtek,bee-qdec";
+			clocks = <&cctl APB_CLK(QDEC)>;
+			reg = <0x40004000 0x30>;
+			interrupts = <19 0>;
+			status = "disabled";
+		};
+
 		spi0: spi@40013000 {
 			compatible = "realtek,bee-spi";
 			reg = <0x40013000 0xf0>;

@@ -59,6 +59,11 @@ config USE_HAL_REALTEK_AON_QDEC
 	help
 	  Enable HAL REALTEK AON_QDEC driver
 
+config USE_HAL_REALTEK_QDEC
+	bool
+	help
+	  Enable HAL REALTEK QDEC driver
+
 config USE_HAL_REALTEK_UART
 	bool
 	help
