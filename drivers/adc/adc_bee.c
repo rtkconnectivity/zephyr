@@ -43,8 +43,8 @@ struct adc_bee_config {
 struct adc_bee_data {
 	struct adc_context ctx;
 	const struct device *dev;
-	uint8_t is_bypass_mode;
-	uint8_t seq_map;
+	uint32_t is_bypass_mode;
+	uint32_t seq_map;
 	int32_t *buffer;
 	int32_t *repeat_buffer;
 #ifdef CONFIG_PM_DEVICE
@@ -62,6 +62,13 @@ static int adc_bee_start_read(const struct device *dev, const struct adc_sequenc
 		LOG_ERR("resolution is not valid");
 		return -ENOTSUP;
 	}
+
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+	if (sequence->channels & BIT(6)) {
+		LOG_ERR("adc channel 6 is not available on rtl8752h!");
+		return -ENOTSUP;
+	}
+#endif
 
 	data->seq_map = sequence->channels;
 
@@ -274,6 +281,8 @@ static int adc_bee_init(const struct device *dev)
 #if defined(CONFIG_SOC_SERIES_RTL8752H)
 	adc_init_struct.ADC_SchIndex[6] = 0;
 #endif
+
+	adc_init_struct.ADC_SchIndex[cfg->channels - 1] = INTERNAL_VBAT_MODE;
 
 	ADC_Init(ADC, &adc_init_struct);
 

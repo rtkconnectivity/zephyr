@@ -183,7 +183,7 @@
 			reg = <0x40010000 0x60>;
 			interrupts = <18 0>;
 			clocks = <&cctl APB_CLK(ADC)>;
-			channels = <8>;
+			channels = <9>;
 			status = "disabled";
 			#io-channel-cells = <1>;
 		};
