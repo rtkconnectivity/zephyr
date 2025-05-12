@@ -341,9 +341,9 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 				cur_block->block_size / dma_cfg->source_data_size;
 
 			if (dma_cfg->cyclic) {
-				data->channels[channel].total_size += cur_block->block_size;
-			} else {
 				data->channels[channel].total_size = cur_block->block_size;
+			} else {
+				data->channels[channel].total_size += cur_block->block_size;
 			}
 
 			cur_block = cur_block->next_block;
