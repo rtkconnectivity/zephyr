@@ -14,4 +14,3 @@ config SOC_SERIES_RTL87X2G
 	select XIP
 	select HAS_PM
 	select THREAD_STACK_INFO
-	select BUILTIN_STACK_GUARD
