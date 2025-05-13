@@ -773,6 +773,7 @@ static const struct dma_driver_api dma_bee_driver_api = {
 		dma_bee_##index##_channels[DT_INST_PROP(index, dma_channels)];                     \
 	ATOMIC_DEFINE(dma_bee_atomic##index, DT_INST_PROP(index, dma_channels));                   \
 	static struct dma_bee_data dma_bee_##index##_data = {                                      \
+		.ctx.magic = 0x47494749,                                                           \
 		.channels = dma_bee_##index##_channels,                                            \
 	};                                                                                         \
                                                                                                    \

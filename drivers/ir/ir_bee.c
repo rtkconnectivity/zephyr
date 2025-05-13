@@ -601,6 +601,9 @@ static int ir_bee_init(const struct device *dev)
 	config->irq_config_func(dev);
 
 #if IR_HAS_TX_DMA
+	atomic_set_bit(((struct dma_context *)data->dma_tx.dma_dev->data)->atomic,
+		       data->dma_tx.dma_channel);
+
 	memset(&data->dma_tx.blk_cfg, 0, sizeof(data->dma_tx.blk_cfg));
 
 	data->dma_tx.blk_cfg.dest_address = (uint32_t)(&(ir->TX_FIFO));
@@ -614,6 +617,9 @@ static int ir_bee_init(const struct device *dev)
 #endif
 
 #if IR_HAS_RX_DMA
+	atomic_set_bit(((struct dma_context *)data->dma_rx.dma_dev->data)->atomic,
+		       data->dma_rx.dma_channel);
+
 	memset(&data->dma_rx.blk_cfg[0], 0, sizeof(data->dma_rx.blk_cfg[0]));
 	memset(&data->dma_rx.blk_cfg[1], 0, sizeof(data->dma_rx.blk_cfg[1]));
 

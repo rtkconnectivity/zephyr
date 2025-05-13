@@ -830,6 +830,8 @@ static int i2s_bee_init(const struct device *dev)
 
 	/* Initialize the buffer queues */
 #if defined(CONFIG_I2S_BEE_TX)
+	atomic_set_bit(((struct dma_context *)dev_data->dma_tx.dma_dev->data)->atomic,
+		       dev_data->dma_tx.dma_channel);
 	k_msgq_init(&dev_data->dma_tx.in_queue, (char *)dev_data->tx_in_msgs, sizeof(void *),
 		    CONFIG_I2S_BEE_TX_BLOCK_COUNT);
 	k_msgq_init(&dev_data->dma_tx.out_queue, (char *)dev_data->tx_out_msgs, sizeof(void *),
@@ -853,6 +855,8 @@ static int i2s_bee_init(const struct device *dev)
 	dev_data->dma_tx.state = I2S_STATE_NOT_READY;
 #endif
 #if defined(CONFIG_I2S_BEE_RX)
+	atomic_set_bit(((struct dma_context *)dev_data->dma_rx.dma_dev->data)->atomic,
+		       dev_data->dma_rx.dma_channel);
 	k_msgq_init(&dev_data->dma_rx.in_queue, (char *)dev_data->rx_in_msgs, sizeof(void *),
 		    CONFIG_I2S_BEE_RX_BLOCK_COUNT);
 	k_msgq_init(&dev_data->dma_rx.out_queue, (char *)dev_data->rx_out_msgs, sizeof(void *),

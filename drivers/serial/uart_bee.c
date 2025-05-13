@@ -1046,6 +1046,11 @@ static int uart_bee_async_init(const struct device *dev)
 		}
 	}
 
+	atomic_set_bit(((struct dma_context *)data->dma_rx.dma_dev->data)->atomic,
+		       data->dma_rx.dma_channel);
+	atomic_set_bit(((struct dma_context *)data->dma_tx.dma_dev->data)->atomic,
+		       data->dma_tx.dma_channel);
+
 	/* Disable both TX and RX DMA requests */
 	uart_bee_dma_rx_disable(dev);
 	uart_bee_dma_tx_disable(dev);
@@ -1289,7 +1294,7 @@ static int uart_bee_init(const struct device *dev)
 			.dest_burst_length = BEE_DMA_CONFIG_DESTINATION_MSIZE(                     \
 				BEE_DMA_CHANNEL_CONFIG(index, dir)),                               \
 			.block_count = 1,                                                          \
-			.cyclic = false,                                                          \
+			.cyclic = false,                                                           \
 			.complete_callback_en = 1,                                                 \
 			.dma_callback = uart_bee_dma_##dir##_cb,                                   \
 	},                                                                                         \

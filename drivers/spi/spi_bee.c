@@ -359,6 +359,11 @@ static int spi_bee_configure(const struct device *dev, const struct spi_config *
 	if (data->dma_tx.dma_dev != NULL) {
 		spi_init_struct.SPI_TxDmaEn = ENABLE;
 	}
+
+	atomic_set_bit(((struct dma_context *)data->dma_rx.dma_dev->data)->atomic,
+		       data->dma_rx.dma_channel);
+	atomic_set_bit(((struct dma_context *)data->dma_tx.dma_dev->data)->atomic,
+		       data->dma_tx.dma_channel);
 #endif
 	SPI_Init(spi, &spi_init_struct);
 
