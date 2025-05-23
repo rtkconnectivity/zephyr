@@ -74,11 +74,27 @@ typedef struct {
 } kscan_key_index;
 
 struct kscan_bee_data {
-	kscan_key_index keys[26];
-	uint32_t key_map[CONFIG_BEE_KEYSCAN_MAX_ROW_SIZE];
-	uint8_t press_num;
 	kscan_callback_t callback;
 	bool cb_en;
+	/* To record all released status, if all key released, the next scan
+	 * will start a software debounce
+	 */
+	bool all_release_flag;
+	/* To record rows and cols of all pressed keys after software debounce */
+	kscan_key_index keys[26];
+	/* To record rows and cols of all pressed keys during last scan, then compared with all
+	 * pressed keys during current scan
+	 */
+	kscan_key_index last_keys[26];
+	/* To record rows and cols of all pressed keys after software debounce, bit[i] of
+	 * new_key_map[j] setting to 1 means row[i] col[j] is pressed.
+	 */
+	uint32_t key_map[CONFIG_BEE_KSCAN_MAX_ROW_SIZE];
+	/* Total number of pressed pins after software debounce */
+	uint8_t press_num;
+	/* To count several scan for software debounce */
+	uint8_t sw_deb_press_cnt;
+	/* Row of pins to configure wakeup pins */
 	uint16_t press_rows;
 #ifdef CONFIG_PM_DEVICE
 	KEYSCANStoreReg_Typedef store_buf;
@@ -136,21 +152,22 @@ static int kscan_bee_init_driver(const struct device *dev, uint32_t scanmode, ui
 	/* set pre guard time */
 	keyscan->BEE_KSCAN_REG_CLKDIV = (keyscan->BEE_KSCAN_REG_CLKDIV & ~(0x7 << 26)) | (6 << 26);
 
-	KeyScan_Cmd(keyscan, ENABLE);
-
 	KeyScan_INTConfig(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
-	KeyScan_INTConfig(keyscan, KEYSCAN_INT_ALL_RELEASE, ENABLE);
-
 	KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
-	KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_ALL_RELEASE);
-
 	KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+
+#if CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+	KeyScan_INTConfig(keyscan, KEYSCAN_INT_ALL_RELEASE, ENABLE);
+	KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_ALL_RELEASE);
 	KeyScan_INTMask(keyscan, KEYSCAN_INT_ALL_RELEASE, DISABLE);
+#endif
+
+	KeyScan_Cmd(keyscan, ENABLE);
 
 	return 0;
 }
 
-#if !CONFIG_BEE_KEYSCAN_AUTOSCAN_MODE
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 static void manual_kscan_timer_cb(struct k_timer *timer);
 static K_TIMER_DEFINE(manual_kscan_timer, manual_kscan_timer_cb, NULL);
 
@@ -166,13 +183,9 @@ static void manual_kscan_timer_cb(struct k_timer *timer)
 }
 #endif
 
-#if CONFIG_BEE_KEYSCAN_GHOST_KEY_FILTER
-static bool kscan_bee_ghost_key_filter(kscan_key_index *new_keys, uint8_t new_press_num)
+#if CONFIG_BEE_KSCAN_GHOST_KEY_FILTER
+static bool kscan_bee_ghost_key_filter(uint8_t new_press_num, kscan_key_index *new_keys)
 {
-	const struct device *dev = DEVICE_DT_GET(DT_DRV_INST(0));
-	const struct kscan_bee_config *config = dev->config;
-	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
-
 	/* filter ghost key */
 	if (new_press_num >= 4) {
 		for (uint8_t i = 0; i < new_press_num - 2; i++) {
@@ -185,10 +198,6 @@ static bool kscan_bee_ghost_key_filter(kscan_key_index *new_keys, uint8_t new_pr
 					if (new_keys[i].row == new_keys[j].row) {
 						LOG_ERR("ghost key "
 							"detected!\n");
-						KeyScan_ClearINTPendingBit(keyscan,
-									   KEYSCAN_INT_SCAN_END);
-						KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END,
-								DISABLE);
 						return true;
 					}
 				}
@@ -233,170 +242,115 @@ static int kscan_bee_enable_callback(const struct device *dev)
 	return 0;
 }
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-static void kscan_bee_isr(const struct device *dev)
+#if CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+static void kscan_bee_all_release_process(const struct device *dev)
 {
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-static void kscan_bee_isr(void)
-{
-	const struct device *dev = DEVICE_DT_GET(DT_DRV_INST(0));
-#endif
-	const struct kscan_bee_config *config = dev->config;
 	struct kscan_bee_data *data = dev->data;
-	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
-	uint32_t scan_debounce_cnt = config->scan_debounce_cnt;
 	kscan_callback_t callback = data->callback;
-	static uint8_t press_cnt;
-	static bool all_release_flag = true;
-	static kscan_key_index last_keys[26] = {0};
-	kscan_key_index new_keys[26];
-	uint32_t new_key_map[CONFIG_BEE_KEYSCAN_MAX_ROW_SIZE];
-	uint8_t new_press_num = KeyScan_GetFifoDataNum(keyscan);
 
-	if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_SCAN_END) == SET) {
-		KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
-#if !CONFIG_BEE_KEYSCAN_AUTOSCAN_MODE
-		if (new_press_num == 0) {
 #ifdef CONFIG_PM_DEVICE
-			kscan_pm_check_state = PM_CHECK_PASS;
+	kscan_pm_check_state = PM_CHECK_PASS;
 #endif
-			press_cnt = 0;
+	data->sw_deb_press_cnt = 0;
 
-			for (uint8_t i = 0; i < data->press_num; i++) {
-				uint8_t old_row = data->keys[i].row;
-				uint8_t old_col = data->keys[i].column;
+	for (uint8_t i = 0; i < data->press_num; i++) {
+		uint8_t old_row = data->keys[i].row;
+		uint8_t old_col = data->keys[i].column;
 
-				if (callback && data->cb_en) {
-					callback(dev, old_row, old_col, false);
-				}
-			}
-
-			data->press_num = 0;
-			data->press_rows = 0;
-			all_release_flag = true;
-
-			memset(data->keys, 0, sizeof(data->keys));
-			memset(data->key_map, 0, sizeof(data->key_map));
-			KeyScan_Cmd(keyscan, DISABLE);
-			k_timer_stop(&manual_kscan_timer);
-			kscan_bee_init_driver(dev, KeyScan_Manual_Scan_Mode,
-					      KeyScan_Manual_Sel_Key);
-		} else {
-			KeyScan_Cmd(keyscan, DISABLE);
-			k_timer_start(&manual_kscan_timer,
-				      K_MSEC(CONFIG_BEE_KEYSCAN_MANUAL_SCAN_INTERVAL_MSEC),
-				      K_FOREVER);
+		if (callback && data->cb_en) {
+			callback(dev, old_row, old_col, false);
 		}
-#endif
-
-		if (KeyScan_GetFlagState(keyscan, KEYSCAN_FLAG_EMPTY) != SET) {
-			data->press_rows = 0;
-			memset(new_keys, 0, sizeof(new_keys));
-			KeyScan_Read(keyscan, (uint16_t *)&new_keys, new_press_num);
-		}
-
-		if (all_release_flag) {
-			press_cnt = 0;
-
-			memcpy(last_keys, new_keys, sizeof(new_keys));
-			all_release_flag = false;
-		}
-
-		/* compare scan result between new_keys and last_keys */
-
-		if (!memcmp(last_keys, new_keys, sizeof(new_keys))) {
-			/* new_keys is same as last_keys */
-			if (press_cnt >= scan_debounce_cnt) {
-#if CONFIG_BEE_KEYSCAN_GHOST_KEY_FILTER
-				if (kscan_bee_ghost_key_filter(new_keys, new_press_num)) {
-					return;
-				}
-#endif
-				memset(new_key_map, 0, sizeof(new_key_map));
-
-				/* update press keys */
-
-				for (uint8_t i = 0; i < new_press_num; i++) {
-					uint8_t new_row = new_keys[i].row;
-					uint8_t new_col = new_keys[i].column;
-
-					/* set row bit */
-					data->press_rows |= BIT(new_row);
-
-					/* update new_key_map, set bit if related key pressed */
-
-					new_key_map[new_row] |= BIT(new_col);
-
-					/* do nothing if the pressed key has been detected pressed
-					 * during last scan
-					 */
-
-					if (data->key_map[new_row] & BIT(new_col)) {
-						continue;
-					}
-
-					/* update key_map, set bit if the key is detected pressed
-					 * first time
-					 */
-
-					data->key_map[new_row] |= BIT(new_col);
-
-					if (callback && data->cb_en) {
-						callback(dev, new_row, new_col, true);
-					}
-				}
-
-				/* update release keys */
-
-				for (uint8_t i = 0; i < data->press_num; i++) {
-					uint8_t old_row = data->keys[i].row;
-					uint8_t old_col = data->keys[i].column;
-
-					/* do nothing if key detected pressed during last scan still
-					 * pressed
-					 */
-
-					if (new_key_map[old_row] & BIT(old_col)) {
-						continue;
-					}
-
-					/* update key_map, clear bit if the key is detected released
-					 * first time
-					 */
-
-					data->key_map[old_row] &= ~BIT(old_col);
-
-					if (callback && data->cb_en) {
-						callback(dev, old_row, old_col, false);
-					}
-				}
-
-				memcpy(data->keys, new_keys, sizeof(new_keys));
-				data->press_num = new_press_num;
-				press_cnt = 0;
-			}
-
-			press_cnt++;
-
-		} else {
-			/* new_keys is different from last_keys */
-			press_cnt = 0;
-			memcpy(last_keys, new_keys, sizeof(new_keys));
-		}
-
-		KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
-		KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
-#ifdef CONFIG_PM_DEVICE
-		kscan_pm_check_state = PM_CHECK_PASS;
-#endif
 	}
 
-	if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_ALL_RELEASE) == SET) {
-#ifdef CONFIG_PM_DEVICE
-		kscan_pm_check_state = PM_CHECK_PASS;
-#endif
-		press_cnt = 0;
+	data->press_num = 0;
+	data->all_release_flag = true;
 
+	memset(data->keys, 0, sizeof(data->keys));
+	memset(data->key_map, 0, sizeof(data->key_map));
+	memset(data->last_keys, 0, sizeof(data->last_keys));
+}
+#endif
+
+static void kscan_bee_process(const struct device *dev, uint8_t new_press_num,
+			      kscan_key_index *new_keys)
+{
+	const struct kscan_bee_config *config = dev->config;
+	struct kscan_bee_data *data = dev->data;
+	KEYSCAN_TypeDef *keyscan;
+	kscan_callback_t callback = data->callback;
+
+	keyscan = (KEYSCAN_TypeDef *)config->reg;
+
+	/* Total debounce count for software debounce.
+	 * If all key released, the next scan will start a software debounce,
+	 * It is determined to be a valid key press only when the same key press is detected
+	 * consecutively for scan_debounce_cnt times.
+	 */
+	uint32_t scan_debounce_cnt = config->scan_debounce_cnt;
+
+	/* To record rows and cols of all pressed keys during current scan,
+	 * bit[i] of new_key_map[j] setting to 1 means row[i] col[j] is pressed.
+	 */
+	uint32_t new_key_map[CONFIG_BEE_KSCAN_MAX_ROW_SIZE];
+
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+	KeyScan_Cmd(keyscan, DISABLE);
+#endif
+
+#ifdef CONFIG_PM_DEVICE
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+	/* If use manual scan mode, enter pm during two scan */
+	kscan_pm_check_state = PM_CHECK_PASS;
+#else
+	/* If use auto scan mode, enter pm only when all key released */
+	kscan_pm_check_state = PM_CHECK_FAIL;
+#endif
+#endif
+
+#if CONFIG_BEE_KSCAN_GHOST_KEY_FILTER
+	/* filter ghost keys */
+	if (kscan_bee_ghost_key_filter(new_press_num, new_keys)) {
+		goto start_timer;
+	}
+#endif
+
+	/* software debounce */
+	if (data->all_release_flag) {
+		data->sw_deb_press_cnt = 0;
+
+		data->all_release_flag = false;
+	}
+
+	if (!memcmp(data->last_keys, new_keys, sizeof(data->last_keys))) {
+		/* new_keys is same as last_keys */
+		if (data->sw_deb_press_cnt >= scan_debounce_cnt) {
+			/* after sofeware debounce */
+			memset(new_key_map, 0, sizeof(new_key_map));
+		} else {
+			/* debouncing */
+			data->sw_deb_press_cnt++;
+			goto start_timer;
+		}
+	} else {
+		/* new_keys is different from last_keys, start a new software debounce */
+		data->sw_deb_press_cnt = 0;
+		memcpy(data->last_keys, new_keys, sizeof(data->last_keys));
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+		data->press_rows = 0;
+		for (uint8_t i = 0; i < new_press_num; i++) {
+			if (new_keys[i].row) {
+				data->press_rows |= BIT(new_keys[i].row);
+			}
+		}
+#endif
+		goto start_timer;
+	}
+
+	/* after software debounce, process scan result */
+	if (new_press_num == 0) {
+		/* all key release */
+
+		/* call all cbs for released keys */
 		for (uint8_t i = 0; i < data->press_num; i++) {
 			uint8_t old_row = data->keys[i].row;
 			uint8_t old_col = data->keys[i].column;
@@ -407,13 +361,126 @@ static void kscan_bee_isr(void)
 		}
 
 		data->press_num = 0;
-		all_release_flag = true;
+		data->press_rows = 0;
+		data->all_release_flag = true;
 
 		memset(data->keys, 0, sizeof(data->keys));
 		memset(data->key_map, 0, sizeof(data->key_map));
+		memset(data->last_keys, 0, sizeof(data->last_keys));
 
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+		k_timer_stop(&manual_kscan_timer);
+		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
+					(clock_control_subsys_t)&config->clkid);
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
+		kscan_bee_init_driver(dev, KeyScan_Manual_Scan_Mode, KeyScan_Manual_Sel_Key);
+		return;
+#endif
+	} else {
+		/* some key pressed */
+
+		/* update press keys */
+		for (uint8_t i = 0; i < new_press_num; i++) {
+			uint8_t new_row = new_keys[i].row;
+			uint8_t new_col = new_keys[i].column;
+
+			/* update new_key_map, set bit if related key pressed */
+
+			new_key_map[new_row] |= BIT(new_col);
+
+			/* do nothing if the pressed key has been detected pressed
+			 * during last scan
+			 */
+
+			if (data->key_map[new_row] & BIT(new_col)) {
+				continue;
+			}
+
+			/* update key_map, set bit if the key is detected pressed
+			 * first time
+			 */
+
+			data->key_map[new_row] |= BIT(new_col);
+
+			if (callback && data->cb_en) {
+				callback(dev, new_row, new_col, true);
+			}
+		}
+
+		/* update release keys */
+		for (uint8_t i = 0; i < data->press_num; i++) {
+			uint8_t old_row = data->keys[i].row;
+			uint8_t old_col = data->keys[i].column;
+
+			/* do nothing if key detected pressed during last scan still
+			 * pressed
+			 */
+
+			if (new_key_map[old_row] & BIT(old_col)) {
+				continue;
+			}
+
+			/* update key_map, clear bit if the key is detected released
+			 * first time
+			 */
+
+			data->key_map[old_row] &= ~BIT(old_col);
+
+			if (callback && data->cb_en) {
+				callback(dev, old_row, old_col, false);
+			}
+		}
+
+		memcpy(data->keys, new_keys, sizeof(data->keys));
+		data->press_num = new_press_num;
+	}
+
+start_timer:
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+	k_timer_start(&manual_kscan_timer, K_MSEC(CONFIG_BEE_KSCAN_MANUAL_SCAN_INTERVAL_MSEC),
+		      K_FOREVER);
+#endif
+}
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+static void kscan_bee_isr(const struct device *dev)
+{
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+static void kscan_bee_isr(void)
+{
+	const struct device *dev = DEVICE_DT_GET(DT_DRV_INST(0));
+#endif
+
+	const struct kscan_bee_config *config = dev->config;
+	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
+
+	kscan_key_index new_keys[26];
+
+	uint8_t new_press_num = KeyScan_GetFifoDataNum(keyscan);
+
+	memset(new_keys, 0, sizeof(new_keys));
+
+	if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_SCAN_END) == SET) {
+		KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
+
+		if (KeyScan_GetFlagState(keyscan, KEYSCAN_FLAG_EMPTY) != SET) {
+			KeyScan_Read(keyscan, (uint16_t *)&new_keys, new_press_num);
+		}
+
+		KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);
+		KeyScan_INTMask(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+
+		kscan_bee_process(dev, new_press_num, new_keys);
+	}
+
+#if CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+	if (KeyScan_GetFlagState(keyscan, KEYSCAN_INT_FLAG_ALL_RELEASE) == SET) {
+
+		kscan_bee_all_release_process(dev);
 		KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_ALL_RELEASE);
 	}
+#endif
 }
 
 #ifdef CONFIG_PM_DEVICE
@@ -428,6 +495,7 @@ static void kscan_register_dlps_cb(void)
 							 1);
 }
 
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 static void pm_suspend_process_press(const struct device *dev)
 {
 	const struct kscan_bee_config *config = dev->config;
@@ -447,6 +515,7 @@ static void pm_suspend_process_press(const struct device *dev)
 
 		if (wakeup_flag) {
 			if (data->press_rows & BIT(j)) {
+				/* invert the wakeup level */
 				if (state->pins[i].wakeup_high) {
 					BEE_Pad_SetControlMode(state->pins[i].pin, PAD_SW_MODE);
 					BEE_System_WakeUpPinEnable(state->pins[i].pin,
@@ -473,32 +542,35 @@ static void pm_suspend_process_press(const struct device *dev)
 		}
 	}
 }
+#endif
 
 static int kscan_bee_pm_action(const struct device *dev, enum pm_device_action action)
 {
 	const struct kscan_bee_config *config = dev->config;
 	struct kscan_bee_data *data = dev->data;
-	KEYSCAN_TypeDef *keyscan = (KEYSCAN_TypeDef *)config->reg;
-	int err;
 	int ret;
-	bool pad_wakeup = false;
-
-	extern void KEYSCAN_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void KEYSCAN_DLPSExit(void *PeriReg, void *StoreBuf);
+	bool is_pad_wakeup = false;
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-		KEYSCAN_DLPSEnter(keyscan, &data->store_buf);
 		const struct pinctrl_state *state;
 		/* Move pins to sleep state */
+
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 		if (!data->press_rows) {
-			err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
-			if ((err < 0) && (err != -ENOENT)) {
-				return err;
+			ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+			if ((ret < 0) && (ret != -ENOENT)) {
+				return ret;
 			}
 		} else {
 			pm_suspend_process_press(dev);
 		}
+#else
+		ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			return ret;
+		}
+#endif
 		break;
 	case PM_DEVICE_ACTION_RESUME:
 		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
@@ -507,40 +579,40 @@ static int kscan_bee_pm_action(const struct device *dev, enum pm_device_action a
 		/* check wakeup pin status */
 		ret = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
 		if ((ret < 0) && (ret != -ENOENT)) {
-			KEYSCAN_DLPSExit(keyscan, &data->store_buf);
 			/* no kscan wakeup pin is configured */
+			kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
 			return ret;
 		}
 
-		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
-		if (err < 0) {
-			return err;
+		/* Set pins to active state */
+		ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+		if (ret < 0) {
+			return ret;
 		}
 
 		/* there are kscan wakeup pins configured, check if they wakeup the system
 		 */
+
 		for (uint8_t i = 0U; i < state->pin_cnt; i++) {
 			if (state->pins[i].wakeup_low || state->pins[i].wakeup_high) {
 				System_WakeUpPinDisable(state->pins[i].pin);
 				if (System_WakeUpInterruptValue(state->pins[i].pin) == SET) {
-					pad_wakeup = true;
+					is_pad_wakeup = true;
 					Pad_ClearWakeupINTPendingBit(state->pins[i].pin);
 				}
 			}
 		}
 
-		if (pad_wakeup) {
+		if (is_pad_wakeup) {
 			kscan_pm_check_state = PM_CHECK_FAIL;
-			/* register trigger manual mode init */
-			/* Set pins to active state */
-#if !CONFIG_BEE_KEYSCAN_AUTOSCAN_MODE
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 			kscan_bee_init_driver(dev, KeyScan_Manual_Scan_Mode,
 					      KeyScan_Manual_Sel_Bit);
 #else
 			kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
 #endif
 		} else {
-			KEYSCAN_DLPSExit(keyscan, &data->store_buf);
+			kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
 		}
 
 		break;
@@ -566,11 +638,13 @@ static int kscan_bee_init(const struct device *dev)
 
 	pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 
-#if !CONFIG_BEE_KEYSCAN_AUTOSCAN_MODE
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 	kscan_bee_init_driver(dev, KeyScan_Manual_Scan_Mode, KeyScan_Manual_Sel_Key);
 #else
 	kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
 #endif
+
+	data->all_release_flag = true;
 
 	config->irq_config_func();
 

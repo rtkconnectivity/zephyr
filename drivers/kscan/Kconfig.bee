@@ -13,37 +13,37 @@ config KSCAN_BEE
 	  Enable the bee kscan driver.
 
 if KSCAN_BEE
-config BEE_KEYSCAN_MAX_ROW_SIZE
+config BEE_KSCAN_MAX_ROW_SIZE
 	int "Max row size for bee kscan"
 	default 12
 	help
 	  Max row size for BEE kscan.
 
-config BEE_KEYSCAN_MAX_COL_SIZE
+config BEE_KSCAN_MAX_COL_SIZE
 	int "Max column size for BEE kscan"
 	default 20
 	help
 	  Max column size for BEE kscan.
 
-config BEE_KEYSCAN_GHOST_KEY_FILTER
+config BEE_KSCAN_GHOST_KEY_FILTER
 	bool "Ghost key filter for BEE kscan"
 	default y
 	help
 	  Ghost key filter for BEE kscan.
 
-config BEE_KEYSCAN_AUTOSCAN_MODE
+config BEE_KSCAN_AUTOSCAN_MODE
 	bool "Config scanmode for BEE kscan"
 	default y
 	help
 	  default is autoscan, else is manual scan.
 
-if !BEE_KEYSCAN_AUTOSCAN_MODE
-config BEE_KEYSCAN_MANUAL_SCAN_INTERVAL_MSEC
+if !BEE_KSCAN_AUTOSCAN_MODE
+config BEE_KSCAN_MANUAL_SCAN_INTERVAL_MSEC
 	int "Scan Interval when using manual mode"
 	default 50
 	help
 	  Scan Interval when using manual mode.
 
-endif # BEE_KEYSCAN_AUTOSCAN_MODE
+endif # BEE_KSCAN_AUTOSCAN_MODE
 
 endif # KSCAN_BEE
