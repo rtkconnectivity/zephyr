@@ -45,11 +45,9 @@
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define BEE_UART_REG_RB_THR UART_RBR_THR
 #define BEE_UART_REG_MISCR  UART_MISCR
-#define BEE_UART_REG_RB_THR UART_RBR_THR
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define BEE_UART_REG_RB_THR RB_THR
 #define BEE_UART_REG_MISCR  MISCR
-#define BEE_UART_REG_RB_THR RB_THR
 #endif
 
 #include <zephyr/logging/log.h>

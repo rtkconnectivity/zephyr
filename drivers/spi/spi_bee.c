@@ -484,13 +484,9 @@ static int spi_bee_pm_action(const struct device *dev, enum pm_device_action act
 	const struct spi_bee_config *config = dev->config;
 	SPI_TypeDef *spi = (SPI_TypeDef *)config->reg;
 	int err;
-	extern void SPI_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void SPI_DLPSExit(void *PeriReg, void *StoreBuf);
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-
-		SPI_DLPSEnter(spi, &data->store_buf);
 
 		/* Move pins to sleep state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
@@ -499,13 +495,17 @@ static int spi_bee_pm_action(const struct device *dev, enum pm_device_action act
 		}
 		break;
 	case PM_DEVICE_ACTION_RESUME:
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
 		/* Set pins to active state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 		if (err < 0) {
 			return err;
 		}
 
-		SPI_DLPSExit(spi, &data->store_buf);
+		data->initialized = false;
+
+		spi_bee_configure(dev, data->ctx.config);
 
 		break;
 	default:

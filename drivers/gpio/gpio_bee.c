@@ -679,14 +679,13 @@ static int gpio_bee_pm_action(const struct device *port, enum pm_device_action a
 		}
 
 		while (cur_wakeup_pad_node->next_gpio_num != 0xff) {
+			System_WakeUpPinDisable(
+				pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num);
 			Pinmux_Config(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num,
 				      DWGPIO);
-
 			BEE_Pad_SetControlMode(
 				pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num,
 				PAD_PINMUX_MODE);
-			System_WakeUpPinDisable(
-				pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num);
 			cur_wakeup_pad_node =
 				&(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]);
 		}

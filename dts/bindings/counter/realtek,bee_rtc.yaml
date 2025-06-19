@@ -23,6 +23,14 @@ properties:
     type:
       int
 
+  src-clk-freq:
+    type: int
+    description: |
+      Frequency of rtc source clock. Default is 32000, can be 32768 if use external crystal.
+    enum:
+      - 32000
+      - 32768
+
   prescaler:
     description: |
       The prescaler value defines the factor by which the clock will be

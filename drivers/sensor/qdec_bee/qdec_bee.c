@@ -161,7 +161,9 @@ static int qdec_bee_channel_get(const struct device *dev, enum sensor_channel ch
 static int qdec_bee_trigger_set(const struct device *dev, const struct sensor_trigger *trig,
 				sensor_trigger_handler_t handler)
 {
+	const struct qdec_bee_config *config = dev->config;
 	struct qdec_bee_data *data = dev->data;
+	QDEC_TypeDef *qdec = (QDEC_TypeDef *)config->reg;
 	unsigned int key;
 
 	if (trig->type != SENSOR_TRIG_DATA_READY) {
@@ -188,21 +190,64 @@ static int qdec_bee_trigger_set(const struct device *dev, const struct sensor_tr
 		if ((enum sensor_attribute_qdec_bee)(trig->chan) == SENSOR_ATTR_QDEC_X_ROTATION) {
 			data->x.data_ready_handler = handler;
 			data->x.data_ready_trigger = trig;
+			QDEC_INTMask(qdec, QDEC_X_CT_INT_MASK, DISABLE);
+			QDEC_INTMask(qdec, QDEC_X_ILLEGAL_INT_MASK, DISABLE);
+			QDEC_INTConfig(qdec, QDEC_X_INT_NEW_DATA, ENABLE);
+			QDEC_INTConfig(qdec, QDEC_X_INT_ILLEGAL, ENABLE);
 		}
 #endif
 #if CONFIG_BEE_QDEC_Y_AXIS_ENABLE
 		if ((enum sensor_attribute_qdec_bee)(trig->chan) == SENSOR_ATTR_QDEC_Y_ROTATION) {
 			data->y.data_ready_handler = handler;
 			data->y.data_ready_trigger = trig;
+			QDEC_INTMask(qdec, QDEC_Y_CT_INT_MASK, DISABLE);
+			QDEC_INTMask(qdec, QDEC_Y_ILLEGAL_INT_MASK, DISABLE);
+			QDEC_INTConfig(qdec, QDEC_Y_INT_NEW_DATA, ENABLE);
+			QDEC_INTConfig(qdec, QDEC_Y_INT_ILLEGAL, ENABLE);
 		}
 #endif
 #if CONFIG_BEE_QDEC_Z_AXIS_ENABLE
 		if ((enum sensor_attribute_qdec_bee)(trig->chan) == SENSOR_ATTR_QDEC_Z_ROTATION) {
 			data->z.data_ready_handler = handler;
 			data->z.data_ready_trigger = trig;
+			QDEC_INTMask(qdec, QDEC_Z_CT_INT_MASK, DISABLE);
+			QDEC_INTMask(qdec, QDEC_Z_ILLEGAL_INT_MASK, DISABLE);
+			QDEC_INTConfig(qdec, QDEC_Z_INT_NEW_DATA, ENABLE);
+			QDEC_INTConfig(qdec, QDEC_Z_INT_ILLEGAL, ENABLE);
 		}
 #endif
 		irq_unlock(key);
+	} else {
+#if CONFIG_BEE_QDEC_X_AXIS_ENABLE
+		if ((enum sensor_attribute_qdec_bee)(trig->chan) == SENSOR_ATTR_QDEC_X_ROTATION) {
+			data->x.data_ready_handler = NULL;
+			data->x.data_ready_trigger = trig;
+			QDEC_INTMask(qdec, QDEC_X_CT_INT_MASK, ENABLE);
+			QDEC_INTMask(qdec, QDEC_X_ILLEGAL_INT_MASK, ENABLE);
+			QDEC_INTConfig(qdec, QDEC_X_INT_NEW_DATA, DISABLE);
+			QDEC_INTConfig(qdec, QDEC_X_INT_ILLEGAL, DISABLE);
+		}
+#endif
+#if CONFIG_BEE_QDEC_Y_AXIS_ENABLE
+		if ((enum sensor_attribute_qdec_bee)(trig->chan) == SENSOR_ATTR_QDEC_Y_ROTATION) {
+			data->y.data_ready_handler = NULL;
+			data->y.data_ready_trigger = trig;
+			QDEC_INTMask(qdec, QDEC_Y_CT_INT_MASK, ENABLE);
+			QDEC_INTMask(qdec, QDEC_Y_ILLEGAL_INT_MASK, ENABLE);
+			QDEC_INTConfig(qdec, QDEC_Y_INT_NEW_DATA, DISABLE);
+			QDEC_INTConfig(qdec, QDEC_Y_INT_ILLEGAL, DISABLE);
+		}
+#endif
+#if CONFIG_BEE_QDEC_Z_AXIS_ENABLE
+		if ((enum sensor_attribute_qdec_bee)(trig->chan) == SENSOR_ATTR_QDEC_Z_ROTATION) {
+			data->z.data_ready_handler = NULL;
+			data->z.data_ready_trigger = trig;
+			QDEC_INTMask(qdec, QDEC_Z_CT_INT_MASK, ENABLE);
+			QDEC_INTMask(qdec, QDEC_Z_ILLEGAL_INT_MASK, ENABLE);
+			QDEC_INTConfig(qdec, QDEC_Z_INT_NEW_DATA, DISABLE);
+			QDEC_INTConfig(qdec, QDEC_Z_INT_ILLEGAL, DISABLE);
+		}
+#endif
 	}
 
 	return 0;

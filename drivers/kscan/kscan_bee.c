@@ -27,7 +27,9 @@
 
 #ifdef CONFIG_PM_DEVICE
 #include "power_manager_unit_platform.h"
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
 #include "dlps.h"
+#endif
 #endif
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)

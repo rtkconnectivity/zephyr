@@ -43,6 +43,7 @@ struct counter_bee_rtc_data {
 struct counter_bee_rtc_config {
 	struct counter_config_info counter_info;
 	uint32_t reg;
+	uint32_t src_clk_freq;
 	uint8_t prescaler;
 	void (*irq_config)(const struct device *dev);
 	void (*set_irq_pending)(void);
@@ -113,25 +114,30 @@ static int counter_bee_rtc_set_alarm(const struct device *dev, uint8_t chan,
 	}
 
 	counter_bee_rtc_get_value(dev, &now);
-	if (alarm_cfg->ticks > now) {
+	if (!(alarm_cfg->flags & COUNTER_ALARM_CFG_ABSOLUTE)) {
 		RTC_INTConfig(rtc_cmp_int_table[chan], ENABLE);
-		RTC_SetCompValue(chan, alarm_cfg->ticks);
+		RTC_SetCompValue(chan, alarm_cfg->ticks + now);
 		return 0;
-	}
-
-	if (alarm_cfg->flags & COUNTER_ALARM_CFG_EXPIRE_WHEN_LATE) {
-		diff = now - alarm_cfg->ticks;
-		LOG_DBG("diff=%d, guard_period=%d\n", diff, data->guard_period);
-		if (diff < data->guard_period) {
-			rtc_late_int_table[chan] = true;
-			cfg->set_irq_pending();
-			RTC_INTConfig(rtc_cmp_int_table[chan], DISABLE);
-			return -ETIME;
+	} else {
+		if (alarm_cfg->ticks > now) {
+			RTC_INTConfig(rtc_cmp_int_table[chan], ENABLE);
+			RTC_SetCompValue(chan, alarm_cfg->ticks);
+			return 0;
 		}
+		if (alarm_cfg->flags & COUNTER_ALARM_CFG_EXPIRE_WHEN_LATE) {
+			diff = now - alarm_cfg->ticks;
+			LOG_DBG("diff=%d, guard_period=%d\n", diff, data->guard_period);
+			if (diff < data->guard_period) {
+				rtc_late_int_table[chan] = true;
+				cfg->set_irq_pending();
+				RTC_INTConfig(rtc_cmp_int_table[chan], DISABLE);
+				return -ETIME;
+			}
+		}
+		chdata->callback = NULL;
+		RTC_INTConfig(rtc_cmp_int_table[chan], DISABLE);
+		return -ETIME;
 	}
-	chdata->callback = NULL;
-	RTC_INTConfig(rtc_cmp_int_table[chan], DISABLE);
-	return -ETIME;
 }
 
 static int counter_bee_rtc_cancel_alarm(const struct device *dev, uint8_t chan)
@@ -242,9 +248,7 @@ static int counter_bee_rtc_init(const struct device *dev)
 	struct counter_bee_rtc_data *data = dev->data;
 
 	/* use clock_control_get_rate if clock driver is available */
-	uint32_t pclk = 32000;
-
-	data->freq = pclk / cfg->prescaler;
+	data->freq = cfg->src_clk_freq / cfg->prescaler;
 
 	cfg->irq_config(dev);
 
@@ -321,6 +325,7 @@ static const struct counter_driver_api counter_bee_rtc_driver_api = {
 				.channels = DT_INST_PROP(index, channels),                         \
 			},                                                                         \
 		.reg = DT_INST_REG_ADDR(index),                                                    \
+		.src_clk_freq = DT_INST_PROP_OR(index, src_clk_freq, 32000),                       \
 		.prescaler = DT_INST_PROP(index, prescaler),                                       \
 		.irq_config = irq_config_##index,                                                  \
 		.set_irq_pending = set_irq_pending_##index,                                        \

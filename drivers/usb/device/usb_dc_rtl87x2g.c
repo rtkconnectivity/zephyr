@@ -17,7 +17,7 @@
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/drivers/usb/usb_dc.h>
 #include <zephyr/drivers/clock_control.h>
-#include <zephyr/drivers/clock_control/rtl87x2g_clock_control.h>
+#include <zephyr/drivers/clock_control/bee_clock_control.h>
 
 #include <usb_dwc2_hw.h>
 
@@ -1847,7 +1847,7 @@ int usb_dc_wakeup_request(void)
 	SoC_VENDOR->u_004.REG_LOW_PRI_INT_STATUS |= BIT31;
 	struct usb_dwc2_reg *const base = usb_dwc2_cfg.base;
 
-	if (!(base->dsts & USB_DWC2_DSTS_SUSPSTS)) {
+	if (!(base->dsts & BIT0)) {
 		LOG_ERR("Remote wakeup while is not in suspend state, or while is not allowed by "
 			"host.");
 		return -EAGAIN;
