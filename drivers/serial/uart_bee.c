@@ -1044,6 +1044,10 @@ static int uart_bee_async_init(const struct device *dev)
 		}
 	}
 
+	if (data->dma_tx.dma_dev == NULL && data->dma_rx.dma_dev == NULL) {
+		return 0;
+	}
+
 	atomic_set_bit(((struct dma_context *)data->dma_rx.dma_dev->data)->atomic,
 		       data->dma_rx.dma_channel);
 	atomic_set_bit(((struct dma_context *)data->dma_tx.dma_dev->data)->atomic,
