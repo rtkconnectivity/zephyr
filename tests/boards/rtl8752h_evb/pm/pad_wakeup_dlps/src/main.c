@@ -9,7 +9,7 @@
 #include <zephyr/ztest.h>
 
 #if (CONFIG_SOC_SERIES_RTL8752H) /* CONFIG_SOC_SERIES_RTL8752H */
-#include <zephyr/dt-bindings/gpio/realtek-rtl8752h-gpio.h>
+#include <zephyr/dt-bindings/gpio/realtek-bee-gpio.h>
 #include <dlps.h>
 #include <trace.h>
 #include <rtl876x_pinmux.h>
@@ -57,8 +57,6 @@ static void button_pressed(struct k_work *work)
 	}
 }
 
-ZTEST_SUITE(pad_wakeup_dlps, NULL, NULL, NULL, NULL, NULL);
-
 ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 {
 	printk("Starting gpio_wakeup_dlps Test\n");
@@ -67,8 +65,7 @@ ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 
 	err = gpio_pin_configure(button_dev, BUTTON_PIN,
 				 BUTTON_FLAGS | GPIO_INPUT | GPIO_PULL_UP | GPIO_ACTIVE_LOW |
-					 RTL8752H_GPIO_INPUT_PM_WAKEUP |
-					 RTL8752H_GPIO_INPUT_DEBOUNCE_MS(1));
+					 BEE_GPIO_INPUT_PM_WAKEUP | BEE_GPIO_INPUT_DEBOUNCE_MS(1));
 
 	if (err) {
 		TC_PRINT("gpio_pin_configure err!");
@@ -92,7 +89,7 @@ ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 	gpio_add_callback(button_dev, &gpio_cb);
 
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
-	printk("After %d times key-pressing, calculate the wake-up times!\n", KEY_PRESS_NUMBERS);
+	printk("Please press KEY2 %d times!\n", KEY_PRESS_NUMBERS);
 	k_sem_init(&test_thread_sem, 0, UINT_MAX);
 	k_sem_take(&test_thread_sem, K_FOREVER);
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
@@ -104,3 +101,10 @@ ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 	zassert_true(wakeup_count_key_press == KEY_PRESS_NUMBERS,
 		     "test_gpio_wakeup_dlps failed, wakeup Count: %d\n", wakeup_count_key_press);
 }
+
+void teardown_fn(void *data)
+{
+	lps_mode_pause();
+}
+
+ZTEST_SUITE(pad_wakeup_dlps, NULL, NULL, NULL, NULL, teardown_fn);

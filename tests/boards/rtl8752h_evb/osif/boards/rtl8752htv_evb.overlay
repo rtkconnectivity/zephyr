@@ -1,0 +1,22 @@
+/*
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/delete-node/ &app_ram_data;
+/delete-node/ &heap0;
+/ {
+	data_ram {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		app_ram_data: memory@208800 {
+			compatible = "mmio-sram";
+			reg  = <0x00208800 DT_SIZE_K(25)>;
+		};
+		heap0: memory@20ec00 {
+			compatible = "mmio-sram";
+			reg  = <0x0020ec00 DT_SIZE_K(45)>;
+		};
+	};
+};

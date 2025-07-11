@@ -16,6 +16,8 @@
 #include <pm.h>
 #endif
 
+#include "trace.h"
+
 #define LE_ADV_DURATION_SECONDS 20
 #define DEVICE_NAME             CONFIG_BT_DEVICE_NAME
 #define DEVICE_NAME_LEN         (sizeof(DEVICE_NAME) - 1)
@@ -33,9 +35,6 @@ static const struct bt_data sd[] = {
 	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
 };
 
-ZTEST_SUITE(btmac_wakeup, NULL, NULL, NULL, NULL, NULL);
-
-#include "trace.h"
 ZTEST(btmac_wakeup, test_adv_wakeup)
 {
 	int err;
@@ -67,9 +66,15 @@ ZTEST(btmac_wakeup, test_adv_wakeup)
 
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n", wakeup_count_btmac,
 		 last_wakeup_clk, last_sleep_clk);
-	zassert_true(wakeup_count_btmac <=
-			LE_ADV_DURATION_SECONDS * 1000 / 100 &&
-			wakeup_count_btmac >=
-			LE_ADV_DURATION_SECONDS * 1000 / (150 + 10), /* 0~10ms random delay */
+	zassert_true(wakeup_count_btmac <= LE_ADV_DURATION_SECONDS * 1000 / 100 &&
+			     wakeup_count_btmac >= LE_ADV_DURATION_SECONDS * 1000 /
+							   (150 + 10), /* 0~10ms random delay */
 		     "failed, wakeup Count: %d\n", wakeup_count_btmac);
 }
+
+void teardown_fn(void *data)
+{
+	lps_mode_pause();
+}
+
+ZTEST_SUITE(btmac_wakeup, NULL, NULL, NULL, NULL, teardown_fn);

@@ -9,7 +9,8 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/sys/printk.h>
 #include <dlps.h>
-
+#include <os_pm.h>
+#include <os_timer.h>
 struct triggered_test_item {
 	int key;
 	struct k_work_poll work;
@@ -47,6 +48,10 @@ volatile uint64_t delta_time;
 
 static uint32_t kc_start_time;
 static uint32_t kc_spend_time;
+
+static uint16_t test_exclude_timer_cnt;
+void *test_exclude_timer;
+static struct k_timer test_timer;
 
 static inline void get_start_time_cyc2(void)
 {
@@ -193,4 +198,79 @@ ZTEST(timeout_wakeup, test_triggered_work_wakeup)
 		     "test_k_timer_wakeup failed, wakeup Count: %d\n", wakeup_count_triggered_work);
 }
 
-ZTEST_SUITE(timeout_wakeup, NULL, NULL, NULL, NULL, NULL);
+ZTEST(timeout_wakeup, test_timing_apis)
+{
+	int64_t ms1 = k_uptime_get();
+	uint32_t cyc1 = k_cycle_get_32();
+
+	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
+	k_msleep(3000);
+	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
+	int64_t ms2 = k_uptime_get();
+	uint32_t cyc2 = k_cycle_get_32();
+	int64_t time_diff_ms = ms2 - ms1;
+	uint32_t time_diff_cyc = cyc2 - cyc1;
+
+	uint32_t wakeup_count_timing_apis = wakeup_count_after_test - wakeup_count_before_test;
+
+	TC_PRINT("test_timing_apis: wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n",
+		 wakeup_count_timing_apis, last_wakeup_clk, last_sleep_clk);
+	zassert_true(wakeup_count_timing_apis == 1, "test_timing_apis failed, wakeup Count: %d\n",
+		     wakeup_count_timing_apis);
+	TC_PRINT("sleep time, ms:%lld, cycle:%d\n", time_diff_ms, time_diff_cyc);
+	zassert_true(time_diff_ms >= 3000 && time_diff_ms <= 3010,
+		     "k_uptime_get is not accurated after exiting dlps!");
+	zassert_true(k_cyc_to_ms_floor32(time_diff_cyc) >= 3000 &&
+			     k_cyc_to_ms_floor32(time_diff_cyc) <= 3010,
+		     "k_cycle_get_32 is not accurated after exiting dlps!");
+}
+
+void test_exclude_timer_handler(void *dummy)
+{
+	test_exclude_timer_cnt = 44;
+}
+
+void test_timer_handler_oneshot(struct k_timer *dummy)
+{
+	k_timer_stop(&test_timer);
+	k_sem_give(&test_thread_sem);
+}
+
+ZTEST(timeout_wakeup, test_exclude_timer)
+{
+	uint32_t wakeup_count_timer;
+	bool status;
+
+	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
+	status = os_timer_create(&test_exclude_timer, "exclude_timer", 1, 1000, false,
+				 test_exclude_timer_handler);
+	zassert_true(status != false, "error creating one-shot timer!");
+	status = os_register_pm_excluded_handle(&test_exclude_timer, PLATFORM_PM_EXCLUDED_TIMER);
+	zassert_true(status != false, "error register exclude timer!");
+	status = os_timer_start(&test_exclude_timer);
+	zassert_true(status != false, "error start exclude timer!");
+
+	k_sem_init(&test_thread_sem, 0, UINT_MAX);
+	k_timer_init(&test_timer, test_timer_handler_oneshot, NULL);
+	k_timer_start(&test_timer, K_SECONDS(3), K_SECONDS(3));
+	k_sem_take(&test_thread_sem, K_FOREVER);
+	zassert_true(test_exclude_timer_cnt == 44,
+		     "exclude timer is not executed, which is wrong!");
+	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
+	wakeup_count_timer = wakeup_count_after_test - wakeup_count_before_test;
+
+	TC_PRINT("test_exclude_timer: wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n",
+		 wakeup_count_timer, last_wakeup_clk, last_sleep_clk);
+
+	status = os_unregister_pm_excluded_handle(&test_exclude_timer, PLATFORM_PM_EXCLUDED_TIMER);
+	zassert_true(status != false, "error unregister exclude timer!");
+	zassert_true(wakeup_count_timer == 1, "test_exclude_timer failed, wakeup Count:%d\n",
+		     wakeup_count_timer);
+}
+
+void teardown_fn(void *data)
+{
+	lps_mode_pause();
+}
+
+ZTEST_SUITE(timeout_wakeup, NULL, NULL, NULL, NULL, teardown_fn);
