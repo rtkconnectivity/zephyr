@@ -281,7 +281,7 @@ static int rtk_task_init(void)
 	return 0;
 }
 
-static int rtk_platform_init(void)
+static int rtk_platform_init_stage_1(void)
 {
 	DBG_DIRECT("%s...", __func__);
 
@@ -326,7 +326,6 @@ static int rtk_platform_init(void)
 	share_cache_ram();
 
 	/* boot_error_code_print(); */
-
 	set_active_mode_clk_src();
 
 	pmu_apply_voltage_tune();
@@ -370,7 +369,6 @@ static int rtk_platform_init(void)
 
 	hal_setup_cpu();
 
-	os_timer_init();
 	if (check_hci_mode_flag()) {
 		/* clear otp_upper.stack_en flag */
 		sys_init_cfg.stack_en = 0;
@@ -378,6 +376,12 @@ static int rtk_platform_init(void)
 		set_hci_mode_flag(false);
 		BOOT_PRINT_WARN0("Switch to HCI Mode\n");
 	}
+
+	return 0;
+}
+
+static int rtk_platform_init_stage_2(void)
+{
 	platform_rtc_aon_init();
 
 	/* power management init */
@@ -420,6 +424,9 @@ static int rtk_platform_init(void)
 
 	hw_aes_create_mutex();
 
+	AON_FAST_REG_REG0X_FW_GENERAL_TYPE aon_fast_reg_0x0 = {
+		.d16 = btaon_fast_read(AON_FAST_REG_REG0X_FW_GENERAL)};
+
 	aon_fast_reg_0x0.d16 = btaon_fast_read(AON_FAST_REG_REG0X_FW_GENERAL);
 	aon_fast_reg_0x0.pon_boot_done = 1;
 	btaon_fast_write(AON_FAST_REG_REG0X_FW_GENERAL, aon_fast_reg_0x0.d16);
@@ -452,5 +459,6 @@ static int rtk_register_update(void)
 	return 0;
 }
 
-SYS_INIT(rtk_platform_init, EARLY, 0);
+SYS_INIT(rtk_platform_init_stage_1, EARLY, 0);
 SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
+SYS_INIT(rtk_platform_init_stage_2, APPLICATION, 0);

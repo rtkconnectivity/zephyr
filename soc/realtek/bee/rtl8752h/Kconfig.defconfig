@@ -19,11 +19,18 @@ config SYS_CLOCK_TICKS_PER_SEC
 	default 100
 	#1s = 100 ticks
 
-# config ARCH_HAS_CUSTOM_BUSY_WAIT
-# 	default y
+config RUNTIME_NMI
+	default y
 
-# config IDLE_STACK_SIZE
-#     default 1024
+config PM_DEVICE
+	default y
+	depends on PM
+
+config TICKLESS_KERNEL
+	default n
+
+config TIMESLICE_SIZE
+	default 10
 
 config NUM_METAIRQ_PRIORITIES
 	default 1
@@ -34,6 +41,12 @@ config SYSTICK_USE_EXTERNAL_CLOCK
 
 config IDLE_STACK_SIZE
 	default 768
+
+config MULTI_HEAP
+	default y
+
+config STACK_SENTINEL
+	default y
 
 rsource "Kconfig.defconfig.rtl87*"
 

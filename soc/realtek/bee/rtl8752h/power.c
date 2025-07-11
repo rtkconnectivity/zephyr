@@ -295,4 +295,4 @@ static int rtl87x2x_power_init(void)
 }
 
 /* do it after lowerstack entry */
-SYS_INIT(rtl87x2x_power_init, POST_KERNEL, 1);
+SYS_INIT(rtl87x2x_power_init, APPLICATION, 1);

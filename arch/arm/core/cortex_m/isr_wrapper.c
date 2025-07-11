@@ -36,6 +36,7 @@ void _isr_wrapper(void)
 	sys_trace_isr_enter();
 #endif /* CONFIG_TRACING_ISR */
 
+#ifndef CONFIG_SOC_FAMILY_REALTEK_BEE
 #ifdef CONFIG_PM
 	/*
 	 * All interrupts are disabled when handling idle wakeup.  For tickless
@@ -64,6 +65,7 @@ void _isr_wrapper(void)
 	/* re-enable interrupts */
 	__enable_irq();
 #endif /* CONFIG_PM */
+#endif
 
 #if defined(CONFIG_ARM_CUSTOM_INTERRUPT_CONTROLLER)
 	int32_t irq_number = z_soc_irq_get_active();
