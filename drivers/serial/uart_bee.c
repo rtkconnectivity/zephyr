@@ -277,7 +277,7 @@ static int uart_bee_fifo_fill(const struct device *dev, const uint8_t *tx_data, 
 	uint8_t num_tx = 0U;
 	unsigned int key;
 
-	if (!UART_GetFlagStatus(uart, UART_FLAG_TX_EMPTY)) {
+	if (!(UART_GetTxFIFODataLen(uart) < UART_TX_FIFO_SIZE)) {
 		return num_tx;
 	}
 
@@ -285,7 +285,7 @@ static int uart_bee_fifo_fill(const struct device *dev, const uint8_t *tx_data, 
 
 	key = irq_lock();
 
-	while ((size - num_tx > 0) && UART_GetFlagStatus(uart, UART_FLAG_TX_EMPTY)) {
+	while ((size - num_tx > 0) && (UART_GetTxFIFODataLen(uart) < UART_TX_FIFO_SIZE)) {
 		UART_SendByte(uart, (uint8_t)tx_data[num_tx++]);
 	}
 
