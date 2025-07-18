@@ -63,6 +63,7 @@ struct dma_bee_channel {
 	void *user_data;
 	bool busy;
 	struct dma_config cfg;
+	bool cyclic;
 	uint32_t total_size;
 	GDMA_LLIDef *p_dma_lli;
 };
@@ -340,6 +341,7 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 			data->channels[channel].p_dma_lli[i].CTL_HIGH =
 				cur_block->block_size / dma_cfg->source_data_size;
 
+			data->channels[channel].cyclic = dma_cfg->cyclic;
 			if (dma_cfg->cyclic) {
 				data->channels[channel].total_size = cur_block->block_size;
 			} else {
@@ -704,7 +706,7 @@ static void dma_bee_isr(const struct device *dev)
 				data->channels[i].busy = false;
 			}
 
-			if (blockflag) {
+			if (blockflag && (!data->channels[i].cyclic)) {
 				data->channels[i].total_size -= GDMA_GetTransferLen(dma_channel);
 			}
 
