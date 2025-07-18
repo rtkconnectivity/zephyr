@@ -73,6 +73,9 @@ struct ir_bee_data {
 	uint32_t *rx_buf[2];
 	uint8_t rx_buf_index;
 	uint32_t rx_len;
+#if !(IR_HAS_RX_DMA)
+	uint32_t cur_rx_len;
+#endif
 	uint32_t rx_idle_cnt;
 	ir_callback_t cb;
 	void *cb_usr_data;
@@ -312,7 +315,11 @@ static int ir_bee_rx_init(const struct device *dev)
 	IR_InitStruct.IR_Mode = IR_MODE_RX;
 	IR_InitStruct.IR_RxStartMode = IR_RX_AUTO_MODE;
 #if !IR_HAS_RX_DMA
-	IR_InitStruct.IR_RxFIFOThrLevel = data->rx_len;
+	if (data->rx_len <= IR_RX_FIFO_SIZE) {
+		IR_InitStruct.IR_RxFIFOThrLevel = data->rx_len - 1;
+	} else {
+		IR_InitStruct.IR_RxFIFOThrLevel = 15;
+	}
 #else
 	IR_InitStruct.IR_RxFIFOThrLevel = 20;
 #endif
@@ -374,6 +381,7 @@ static int ir_bee_rx_enable(const struct device *dev, ir_callback_t callback, vo
 	data->cb = callback;
 	data->cb_usr_data = user_data;
 	data->rx_len = rx_len;
+	data->cur_rx_len = 0;
 	data->rx_idle_cnt = idle_cnt;
 	data->is_tx_mode = false;
 
@@ -467,6 +475,7 @@ static void ir_bee_isr(const struct device *dev)
 	struct ir_bee_data *data = dev->data;
 	uint8_t tx_len = data->tx_len;
 	struct ir_event evt;
+	uint8_t rx_len;
 
 	memset(&evt, 0, sizeof(evt));
 
@@ -497,20 +506,32 @@ static void ir_bee_isr(const struct device *dev)
 #if !IR_HAS_RX_DMA
 	if (IR_GetINTStatus(IR_INT_RF_LEVEL)) {
 		IR_ClearINTPendingBit(IR_INT_RF_LEVEL_CLR);
-		evt.type = IR_RX_RECEIVED;
-		evt.data.rx.len = IR_GetRxDataLen();
-		evt.data.rx.buf = data->rx_buf[0];
-		IR_ReceiveBuf(evt.data.rx.buf, evt.data.rx.len);
-		if (data->cb) {
-			data->cb(dev, &evt, data->cb_usr_data);
+
+		rx_len = IR_GetRxDataLen();
+
+		if (data->cur_rx_len <= data->rx_len - rx_len) {
+			IR_ReceiveBuf(&data->rx_buf[0][data->cur_rx_len], rx_len);
+			data->cur_rx_len += rx_len;
+		} else {
+			IR_ReceiveBuf(&data->rx_buf[0][data->cur_rx_len],
+				      data->rx_len - data->cur_rx_len);
+			data->cur_rx_len = data->rx_len;
+		}
+
+		if (data->cur_rx_len == data->rx_len) {
+			evt.type = IR_RX_RECEIVED;
+			evt.data.rx.len = data->rx_len;
+			evt.data.rx.buf = data->rx_buf[0];
+			if (data->cb) {
+				data->cb(dev, &evt, data->cb_usr_data);
+			}
+			data->cur_rx_len = 0;
 		}
 	}
 #endif
 
 	if (IR_GetINTStatus(IR_INT_RX_CNT_THR)) {
 		IR_ClearINTPendingBit(IR_INT_RX_CNT_THR_CLR);
-		evt.type = IR_RX_STOPPED;
-
 #if IR_HAS_RX_DMA
 		struct dma_status stat;
 		uint8_t remain_rx_len;
@@ -523,19 +544,55 @@ static void ir_bee_isr(const struct device *dev)
 			evt.data.rx.buf = data->rx_buf[1];
 		}
 
+		evt.type = IR_RX_STOPPED;
 		evt.data.rx.len = data->rx_len - stat.pending_length / 4;
 		remain_rx_len = IR_GetRxDataLen();
 		IR_ReceiveBuf(&evt.data.rx.buf[evt.data.rx.len], remain_rx_len);
 		evt.data.rx.len += remain_rx_len;
-#else
-		evt.data.rx.len = IR_GetRxDataLen();
-		evt.data.rx.buf = data->rx_buf[0];
-		IR_ReceiveBuf(evt.data.rx.buf, evt.data.rx.len);
-#endif
 
 		if (data->cb) {
 			data->cb(dev, &evt, data->cb_usr_data);
 		}
+
+#else
+
+		rx_len = IR_GetRxDataLen();
+
+		/* set rx 256 bytes, actual rx 257 bytes, rcv_evt 256bytes + stop_evt 1 bytes;
+		 * set rx 256 bytes, actual rx 256 bytes, stop_evt 256 bytes;
+		 * set rx 256 bytes, actual rx 255 bytes, stop_evt 255 bytes
+		 */
+		if (data->cur_rx_len <= data->rx_len - rx_len) {
+			IR_ReceiveBuf(&data->rx_buf[0][data->cur_rx_len], rx_len);
+			data->cur_rx_len += rx_len;
+		} else {
+			IR_ReceiveBuf(&data->rx_buf[0][data->cur_rx_len],
+				      data->rx_len - data->cur_rx_len);
+			data->cur_rx_len = data->rx_len;
+			evt.type = IR_RX_RECEIVED;
+			evt.data.rx.len = data->cur_rx_len;
+			evt.data.rx.buf = data->rx_buf[0];
+			if (data->cb) {
+				data->cb(dev, &evt, data->cb_usr_data);
+			}
+			data->cur_rx_len = 0;
+
+			rx_len = IR_GetRxDataLen();
+			IR_ReceiveBuf(&data->rx_buf[0][data->cur_rx_len], rx_len);
+			data->cur_rx_len += rx_len;
+		}
+
+		evt.type = IR_RX_STOPPED;
+		evt.data.rx.len = data->cur_rx_len;
+		evt.data.rx.buf = data->rx_buf[0];
+
+		if (data->cb) {
+			data->cb(dev, &evt, data->cb_usr_data);
+		}
+
+		data->cur_rx_len = 0;
+
+#endif
 	}
 }
 
