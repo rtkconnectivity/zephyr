@@ -24,6 +24,7 @@ config RUNTIME_NMI
 
 config PM_DEVICE
 	default y
+	select CODE_DATA_RELOCATION
 	depends on PM
 
 config TICKLESS_KERNEL
