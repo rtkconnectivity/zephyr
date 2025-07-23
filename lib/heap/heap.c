@@ -265,11 +265,11 @@ void *sys_heap_alloc(struct sys_heap *heap, size_t bytes)
 	struct z_heap *h = heap->heap;
 	void *mem;
 
-	if ((bytes == 0U) || size_too_big(h, bytes)) {
+	if (bytes == 0U) {
 		return NULL;
 	}
 
-	chunksz_t chunk_sz = bytes_to_chunksz(h, bytes);
+	chunksz_t chunk_sz = bytes_to_chunksz(h, bytes, 0);
 	chunkid_t c = alloc_chunk(h, chunk_sz);
 	if (c == 0U) {
 		return NULL;
@@ -323,7 +323,7 @@ void *sys_heap_aligned_alloc(struct sys_heap *heap, size_t align, size_t bytes)
 	}
 	__ASSERT((align & (align - 1)) == 0, "align must be a power of 2");
 
-	if ((bytes == 0) || size_too_big(h, bytes)) {
+	if (bytes == 0) {
 		return NULL;
 	}
 
@@ -332,7 +332,7 @@ void *sys_heap_aligned_alloc(struct sys_heap *heap, size_t align, size_t bytes)
 	 * We over-allocate to account for alignment and then free
 	 * the extra allocations afterwards.
 	 */
-	chunksz_t padded_sz = bytes_to_chunksz(h, bytes + align - gap);
+	chunksz_t padded_sz = bytes_to_chunksz(h, bytes, align - gap);
 	chunkid_t c0 = alloc_chunk(h, padded_sz);
 
 	if (c0 == 0) {
@@ -392,14 +392,10 @@ void *sys_heap_aligned_realloc(struct sys_heap *heap, void *ptr,
 
 	__ASSERT((align & (align - 1)) == 0, "align must be a power of 2");
 
-	if (size_too_big(h, bytes)) {
-		return NULL;
-	}
-
 	chunkid_t c = mem_to_chunkid(h, ptr);
 	chunkid_t rc = right_chunk(h, c);
 	size_t align_gap = (uint8_t *)ptr - (uint8_t *)chunk_mem(h, c);
-	chunksz_t chunks_need = bytes_to_chunksz(h, bytes + align_gap);
+	chunksz_t chunks_need = bytes_to_chunksz(h, bytes, align_gap);
 
 	if (align && ((uintptr_t)ptr & (align - 1))) {
 		/* ptr is not sufficiently aligned */
