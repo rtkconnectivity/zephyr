@@ -43,6 +43,19 @@ void idle(void *unused1, void *unused2, void *unused3)
 		power_manager_slave_inact_action_handler();
 	}
 #endif
+
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+	while (true) {
+		extern void LogUartDMAIdleHook(void);
+		extern void (*thermal_meter_read)(void);
+		extern void (*power_manager_slave_inact_action_handler)(void);
+
+		LogUartDMAIdleHook();
+		thermal_meter_read();
+		power_manager_slave_inact_action_handler();
+	}
+#endif
+
 	while (true) {
 		/* SMP systems without a working IPI can't actual
 		 * enter an idle state, because they can't be notified
@@ -59,21 +72,12 @@ void idle(void *unused1, void *unused2, void *unused3)
 			z_swap_unlocked();
 		}
 
-
-#if defined(CONFIG_SOC_SERIES_RTL8752H)
-		extern void LogUartDMAIdleHook(void);
-		extern void (*thermal_meter_read)(void);
-
-		LogUartDMAIdleHook();
-		thermal_meter_read();
-#else
 		/* Note weird API: k_cpu_idle() is called with local
 		 * CPU interrupts masked, and returns with them
 		 * unmasked.  It does not take a spinlock or other
 		 * higher level construct.
 		 */
 		(void)arch_irq_lock();
-#endif
 
 #ifdef CONFIG_PM
 		_kernel.idle = z_get_next_timeout_expiry();
@@ -93,29 +97,9 @@ void idle(void *unused1, void *unused2, void *unused3)
 		 * which is essential for the kernel's scheduling
 		 * logic.
 		 */
-#ifdef CONFIG_SOC_SERIES_RTL8752H
-		extern void (*power_manager_slave_inact_action_handler)(void);
-
-		if (k_is_pre_kernel()) {
-			k_cpu_idle();
-		} else {
-			power_manager_slave_inact_action_handler();
-
-			extern int platform_pm_get_error_code(void);
-			extern uint32_t *platform_pm_get_refuse_reason(void);
-			extern int btmac_pm_get_error_code(void);
-
-			DBG_DIRECT("Platform fail to enter dlps, error 0x%x, reason 0x%x\r\n",
-				platform_pm_get_error_code(), platform_pm_get_refuse_reason());
-			DBG_DIRECT("btmac pm error code, 0x%x\r\n", btmac_pm_get_error_code());
-
-		}
-#else
 		if (k_is_pre_kernel() || !pm_system_suspend(_kernel.idle)) {
 			k_cpu_idle();
 		}
-#endif
-
 #else
 		k_cpu_idle();
 #endif /* CONFIG_PM */
@@ -134,7 +118,7 @@ void idle(void *unused1, void *unused2, void *unused3)
 		if (_kernel.ready_q.cache != _current) {
 			z_swap_unlocked();
 		}
-# endif /* !defined(CONFIG_USE_SWITCH) || defined(CONFIG_SPARC) */
+#endif /* !defined(CONFIG_USE_SWITCH) || defined(CONFIG_SPARC) */
 #endif /* !defined(CONFIG_PREEMPT_ENABLED) */
 	}
 }

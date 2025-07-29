@@ -10,8 +10,6 @@
 #include "trace.h"
 #include <zephyr/init.h>
 #include <zephyr/linker/linker-defs.h>
-#include <zephyr/sys/sys_heap.h>
-#include <zephyr/sys/multi_heap.h>
 #include "bee3plus_rom_defines.h"
 #include "mem_config.h"
 #include "mem_types.h"
@@ -43,8 +41,6 @@
 LOG_MODULE_REGISTER(soc, CONFIG_SOC_LOG_LEVEL);
 extern bool if_os_init_done;
 
-extern struct sys_multi_heap multi_heap;
-
 enum {
 	START_TO_RUN_C_CODE = 3,
 	AFTER_CHECK_PAD_BOOT_FROM_FLASH_I = 4,
@@ -66,202 +62,71 @@ extern void flash_nor_dump_flash_info(void);
 extern void os_zephyr_patch_init(void);
 extern void report_cache_info(void);
 
-/**
- * first stage vector(IRQn<=31),
- * not include such as FLASH_SEC_IRQn, WDT_IRQn
- */
-static const IRQn_Type irq_restore_num[] = {
-	BTMAC_IRQn,  BTMAC_WRAP_AROUND_IRQn, Timer4_5_IRQn,      ZIGBEE_IRQn,
-	PF_RTC_IRQn, Peripheral_IRQn,        GDMA0_Channel3_IRQn};
+extern void z_arm_nmi(void);
+extern void _isr_wrapper(void);
+extern void z_arm_svc(void);
 
-static uint32_t irq_restore_priority[sizeof(irq_restore_num) / sizeof(IRQn_Type)];
+typedef void (*ISR_HANDLER)(const void *);
 
-uint32_t PeriIrqStatus_SW;
-
-void NVIC_SetPendingSubIRQ(uint32_t status)
+static void restore_isr_registered_before_zephyr(void)
 {
-	PeriIrqStatus_SW |= status;
-}
-
-void First_Peripheral_Handler(void)
-{
-	IRQ_Fun pFun;
-	uint32_t PeriIrqStatus, ExactIrqStatus;
-	IRQ_Fun *Vectors = (IRQ_Fun *)vector_table_level_two;
-
-	PeriIrqStatus = PERIPHINT->STATUS;
-	/* Save exact IRQ status */
-	ExactIrqStatus = (PeriIrqStatus & (PERIPHINT->EN)) | PeriIrqStatus_SW;
-
-	PeriIrqStatus_SW = 0;
-
-	/* Check exact IRQ function */
-	/* SPIC0 */
-	if (ExactIrqStatus & BIT0) {
-		pFun = Vectors[SPIC0_VECTORn];
-		pFun();
-	}
-	/* Q-decode */
-	if (ExactIrqStatus & BIT1) {
-		pFun = Vectors[Qdecode_VECTORn];
-		pFun();
-	}
-	/* Keyscan */
-	if (ExactIrqStatus & BIT2) {
-		pFun = Vectors[Keyscan_VECTORn];
-		pFun();
-	}
-	/* SPI2W */
-	if (ExactIrqStatus & BIT3) {
-		pFun = Vectors[SPI2W_VECTORn];
-		pFun();
-	}
-	/* Low Power Comparator */
-	if (ExactIrqStatus & BIT4) {
-		pFun = Vectors[LPCOMP_VECTORn];
-		pFun();
-	}
-	/* PTA Mailbox */
-	if (ExactIrqStatus & BIT5) {
-		pFun = Vectors[PTA_Mailbox_VECTORn];
-		pFun();
-	}
-	/* SPIC1 */
-	if (ExactIrqStatus & BIT6) {
-		pFun = Vectors[SPIC1_VECTORn];
-		pFun();
-	}
-	/* SHA256 */
-	if (ExactIrqStatus & BIT7) {
-		pFun = Vectors[SHA256_VECTORn];
-		pFun();
-	}
-	/* Platform */
-	if (ExactIrqStatus & BIT8) {
-		pFun = Vectors[Platform_VECTORn];
-		pFun();
-	}
-	/* TRNG */
-	if (ExactIrqStatus & BIT9) {
-		pFun = Vectors[TRNG_VECTORn];
-		pFun();
-	}
-	/* FLASH_SEC */
-	if (ExactIrqStatus & BIT10) {
-		pFun = Vectors[FLASH_SEC_VECTORn];
-		pFun();
-	}
-	/* RTC */
-	if (ExactIrqStatus & BIT11) {
-		pFun = Vectors[RTC_VECTORn];
-		pFun();
-	}
-	/* WDT */
-	if (ExactIrqStatus & BIT12) {
-		pFun = Vectors[WDT_VECTORn];
-		pFun();
-	}
-
-	/* Clear sub-rout IRQ */
-	HAL_WRITE32(PERI_INT_REG_BASE, 0, PeriIrqStatus);
-}
-
-#if (CONFIG_PRINT_RTK_RAM_VECTOR_TABLE)
-static void print_vtor_table(uint32_t *addr)
-{
-	VECTORn_Type vector_n = InitialSP_VECTORn;
+	VECTORn_Type vector_n = System_VECTORn;
 	IRQn_Type irqn;
-	uint32_t *RamVectorTable = addr;
+	ISR_HANDLER *RamVectorTable = (ISR_HANDLER *)DATA_RAM_START_ADDR;
+	ISR_HANDLER isr_handler;
 
-	for (; vector_n <= WDT_VECTORn; ++vector_n) {
-		if (vector_n <= UART2_VECTORn) {
+	for (; vector_n <= UART2_VECTORn; ++vector_n) {
+		isr_handler = RamVectorTable[(uint32_t)vector_n];
+		if (RamVectorTable[(uint32_t)vector_n] != (ISR_HANDLER)ROM_Default_Handler) {
 			irqn = vector_n - 16;
-			DBG_DIRECT("vector_n:%d irqn:%d isr_addr:%x", vector_n, irqn,
-				   RamVectorTable[(uint32_t)vector_n]);
-		} else {
-			DBG_DIRECT("vector_n:%d irqn:multiplexed isr_addr:%x", vector_n,
-				   RamVectorTable[(uint32_t)vector_n]);
-		}
-	}
-}
-#endif /* CONFIG_PRINT_RTK_RAM_VECTOR_TABLE */
-
-static void rtk_load_irq_priority(void)
-{
-	uint32_t irqn;
-	/* save selected irq priority from rom */
-	for (int i = 0; i < sizeof(irq_restore_num) / sizeof(IRQn_Type); ++i) {
-		irqn = irq_restore_num[i];
-		/*RTK IRQn multiplexing */
-		if (irqn >= Peripheral_First_IRQn) {
-			irqn = Peripheral_IRQn;
-		}
-		irq_restore_priority[i] = NVIC_GetPriority(irqn);
-	}
-}
-#ifdef CONFIG_PLATFORM_SPECIFIC_INIT
-void z_arm_platform_init(void)
-{
-	DBG_DIRECT("%s...", __func__);
-
-#if (CONFIG_PRINT_RTK_RAM_VECTOR_TABLE)
-	print_vtor_table((uint32_t *)DATA_RAM_START_ADDR);
-#endif
-
-	rtk_load_irq_priority();
-}
-#endif
-
-static void rtk_irq_restore_from_rom(void)
-{
-	uint32_t *RamVectorTable = (uint32_t *)DATA_RAM_START_ADDR;
-	uint32_t vector_n;
-	int irqn;
-	/* set external irq from rtk rom project to isq_wrapper */
-	for (int i = 0; i < sizeof(irq_restore_num) / sizeof(IRQn_Type); ++i) {
-		irqn = irq_restore_num[i];
-		/* RTK IRQn multiplexing */
-		if (irqn >= Peripheral_First_IRQn) {
-			irqn = Peripheral_IRQn;
-		}
-		vector_n = irqn + 16;
-
-		RamVectorTable[Peripheral_IRQn + 16] = (uint32_t)First_Peripheral_Handler;
-		/* rtk rom irq places vectors at RamVectorTable */
-		if (RamVectorTable[vector_n] != (uint32_t)_isr_wrapper) {
-			/* update zephyr irq dynamic */
 			if (irq_is_enabled(irqn)) {
 				irq_disable(irqn);
-				irq_connect_dynamic(irqn, irq_restore_priority[i],
-						    (void *)RamVectorTable[vector_n], NULL, 0);
+				z_isr_install(irqn, isr_handler, NULL);
 				irq_enable(irqn);
 			} else {
-				irq_connect_dynamic(irqn, irq_restore_priority[i],
-						    (void *)RamVectorTable[vector_n], NULL, 0);
+				z_isr_install(irqn, isr_handler, NULL);
 			}
-			DBG_DIRECT("restore vector_n:%d isr_addr:%x _isr_wrapper:%x", vector_n,
-				   RamVectorTable[vector_n], _isr_wrapper);
-#ifdef REALTEK_VTOR_RELOCATE
-			/* update to rtk ram vector table */
-			RamVectorTableUpdate(vector_n, (IRQ_Fun)_isr_wrapper);
-#endif
-			DBG_DIRECT("restore irqn:%d priority:%x", irqn, irq_restore_priority[i]);
+			DBG_DIRECT("Restore ISR registered before zephyr: restore vector_n:%d "
+				   "isr_addr:%x",
+				   vector_n, isr_handler);
 		}
 	}
-}
 
-static void rtk_irq_restore_and_relocate(void)
-{
-	/* only recover irq from rtk rom project, system exception not included */
-	rtk_irq_restore_from_rom();
-#ifdef REALTEK_VTOR_RELOCATE
 	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
-	/* copy *all* vector(exception + irq) to relocate */
+
 	memcpy((void *)DATA_RAM_START_ADDR, _vector_start, vector_size);
 	SCB->VTOR = (uint32_t)DATA_RAM_START_ADDR;
-#endif
 }
 
+static void restore_isr_registered_in_zephyr(void)
+{
+	VECTORn_Type vector_n = System_VECTORn;
+	IRQn_Type irqn;
+	ISR_HANDLER *RamVectorTable = (ISR_HANDLER *)DATA_RAM_START_ADDR;
+	ISR_HANDLER isr_handler;
+
+	for (; vector_n <= UART2_VECTORn; ++vector_n) {
+		isr_handler = RamVectorTable[(uint32_t)vector_n];
+		if (isr_handler != (ISR_HANDLER)_isr_wrapper) {
+			irqn = vector_n - 16;
+			if (irq_is_enabled(irqn)) {
+				irq_disable(irqn);
+				z_isr_install(irqn, isr_handler, NULL);
+				RamVectorTableUpdate(vector_n, (IRQ_Fun)_isr_wrapper);
+				irq_enable(irqn);
+			} else {
+				z_isr_install(irqn, isr_handler, NULL);
+				RamVectorTableUpdate(vector_n, (IRQ_Fun)_isr_wrapper);
+			}
+			DBG_DIRECT("Restore ISR registered in SYS_INIT: vector_n:%d irqn:%d "
+				   "isr_addr:%x",
+				   vector_n, irqn, isr_handler);
+		}
+	}
+
+	RamVectorTableUpdate(SVC_VECTORn, (IRQ_Fun)z_arm_svc);
+	RamVectorTableUpdate(NMI_VECTORn, (IRQ_Fun)z_arm_nmi);
+}
 static int rtk_task_init(void)
 {
 	char c_rom_uuid[16] = DEFINE_symboltable_uuid;
@@ -272,9 +137,6 @@ static int rtk_task_init(void)
 		lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
 		printk("Successfully loaded Realtek Lowerstack ROM!\n");
 		lowerstack_entry();
-		/* keep irq restore operation before lowstack_thread be scheduled */
-		rtk_load_irq_priority();
-		rtk_irq_restore_from_rom();
 	} else {
 		printk("Failed to load Realtek Lowerstack ROM!\n");
 	}
@@ -283,19 +145,11 @@ static int rtk_task_init(void)
 
 static int rtk_platform_init_stage_1(void)
 {
-	DBG_DIRECT("%s...", __func__);
+	restore_isr_registered_before_zephyr();
 
 	/* osif */
 	os_zephyr_patch_init();
 	os_init();
-
-	RamVectorTableUpdate(Peripheral_IRQn + 16, (IRQ_Fun)First_Peripheral_Handler);
-	/**
-	 * SCB->VTOR points to zephyr's vector table which is placed in flash.
-	 * However, vector table place in flash will trigger hardfault when flash erasing.
-	 * So point SCB->VTOR to RAM vector table, and copy zephyr's vector table to RAM.
-	 */
-	rtk_irq_restore_and_relocate();
 
 	if_os_init_done = true;
 
@@ -397,6 +251,8 @@ static int rtk_platform_init_stage_2(void)
 
 	rtk_task_init();
 
+	restore_isr_registered_in_zephyr();
+
 	if (flash_nor_get_exist(FLASH_NOR_IDX_SPIC0) != FLASH_NOR_EXIST_NONE) {
 		if (flash_nor_load_query_info(FLASH_NOR_IDX_SPIC0) == FLASH_NOR_RET_SUCCESS) {
 			/* apply SW Block Protect */
@@ -431,12 +287,6 @@ static int rtk_platform_init_stage_2(void)
 	aon_fast_reg_0x0.pon_boot_done = 1;
 	btaon_fast_write(AON_FAST_REG_REG0X_FW_GENERAL, aon_fast_reg_0x0.d16);
 
-#if MEMORY_WATCH_EN
-	/* dump heap and task stack usage. */
-	extern void memory_watch_enable(void);
-	memory_watch_enable();
-#endif
-
 	return 0;
 }
 
@@ -452,10 +302,11 @@ static int rtk_register_update(void)
 	/* Selects the SysTick timer clock source: external 32768 */
 	SysTick->CTRL &= ~SysTick_CTRL_CLKSOURCE_Msk;
 #else
-#if (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC != 40000)
-#error "CONFIG_SYSTICK_USE_EXTERNAL_CLOCK does not match CONFIG_SYS_CLOCK_TICKS_PER_SEC"
+#if (CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC != 40000000)
+#error "CPU Clock Rate does not match CONFIG_SYS_CLOCK_TICKS_PER_SEC"
 #endif
 #endif /* CONFIG_SYSTICK_USE_EXTERNAL_CLOCK */
+
 	return 0;
 }
 

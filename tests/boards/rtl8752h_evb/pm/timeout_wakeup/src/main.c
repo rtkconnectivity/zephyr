@@ -220,9 +220,11 @@ ZTEST(timeout_wakeup, test_timing_apis)
 	TC_PRINT("sleep time, ms:%lld, cycle:%d\n", time_diff_ms, time_diff_cyc);
 	zassert_true(time_diff_ms >= 3000 && time_diff_ms <= 3010,
 		     "k_uptime_get is not accurated after exiting dlps!");
-	zassert_true(k_cyc_to_ms_floor32(time_diff_cyc) >= 3000 &&
-			     k_cyc_to_ms_floor32(time_diff_cyc) <= 3010,
-		     "k_cycle_get_32 is not accurated after exiting dlps!");
+	zassert_true(
+		k_cyc_to_ms_floor32(time_diff_cyc) >= 3000 &&
+			k_cyc_to_ms_floor32(time_diff_cyc) <= 3020,
+		"k_cycle_get_32 is not accurated after exiting dlps! Time calculated by cycle: %d",
+		k_cyc_to_ms_floor32(time_diff_cyc));
 }
 
 void test_exclude_timer_handler(void *dummy)

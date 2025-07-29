@@ -18,8 +18,7 @@ static sys_dlist_t timeout_list = SYS_DLIST_STATIC_INIT(&timeout_list);
 
 static struct k_spinlock timeout_lock;
 
-#define MAX_WAIT (IS_ENABLED(CONFIG_SYSTEM_CLOCK_SLOPPY_IDLE) \
-		  ? K_TICKS_FOREVER : INT_MAX)
+#define MAX_WAIT (IS_ENABLED(CONFIG_SYSTEM_CLOCK_SLOPPY_IDLE) ? K_TICKS_FOREVER : INT_MAX)
 
 /* Ticks left to process in the currently-executing sys_clock_announce() */
 static int announce_remaining;
@@ -86,8 +85,7 @@ static int32_t next_timeout(void)
 	int32_t ticks_elapsed = elapsed();
 	int32_t ret;
 
-	if ((to == NULL) ||
-		((int64_t)(to->dticks - ticks_elapsed) > (int64_t)INT_MAX)) {
+	if ((to == NULL) || ((int64_t)(to->dticks - ticks_elapsed) > (int64_t)INT_MAX)) {
 		ret = MAX_WAIT;
 	} else {
 		ret = MAX(0, to->dticks - ticks_elapsed);
@@ -96,8 +94,7 @@ static int32_t next_timeout(void)
 	return ret;
 }
 
-void z_add_timeout(struct _timeout *to, _timeout_func_t fn,
-		   k_timeout_t timeout)
+void z_add_timeout(struct _timeout *to, _timeout_func_t fn, k_timeout_t timeout)
 {
 	if (K_TIMEOUT_EQ(timeout, K_FOREVER)) {
 		return;
@@ -113,8 +110,7 @@ void z_add_timeout(struct _timeout *to, _timeout_func_t fn,
 	K_SPINLOCK(&timeout_lock) {
 		struct _timeout *t;
 
-		if (IS_ENABLED(CONFIG_TIMEOUT_64BIT) &&
-			(Z_TICK_ABS(timeout.ticks) >= 0)) {
+		if (IS_ENABLED(CONFIG_TIMEOUT_64BIT) && (Z_TICK_ABS(timeout.ticks) >= 0)) {
 			k_ticks_t ticks = Z_TICK_ABS(timeout.ticks) - curr_tick;
 
 			to->dticks = MAX(1, ticks);
@@ -199,7 +195,7 @@ k_ticks_t z_timeout_expires(const struct _timeout *timeout)
 
 int32_t z_get_next_timeout_expiry(void)
 {
-	int32_t ret = (int32_t) K_TICKS_FOREVER;
+	int32_t ret = (int32_t)K_TICKS_FOREVER;
 
 	K_SPINLOCK(&timeout_lock) {
 		ret = next_timeout();
@@ -227,9 +223,7 @@ void sys_clock_announce(int32_t ticks)
 
 	struct _timeout *t;
 
-	for (t = first();
-		 (t != NULL) && (t->dticks <= announce_remaining);
-		 t = first()) {
+	for (t = first(); (t != NULL) && (t->dticks <= announce_remaining); t = first()) {
 		int dt = t->dticks;
 
 		curr_tick += dt;
@@ -351,7 +345,7 @@ struct _timeout *get_next_timeout(struct _timeout *t)
 {
 	return next(t);
 }
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+
 static int32_t pended_ticks;
 void sys_clock_announce_only_add_ticks(int32_t ticks)
 {
@@ -376,9 +370,7 @@ void sys_clock_announce_process_timeout(void)
 
 	struct _timeout *t;
 
-	for (t = first();
-	     (t != NULL) && (t->dticks <= pended_ticks);
-	     t = first()) {
+	for (t = first(); (t != NULL) && (t->dticks <= pended_ticks); t = first()) {
 		int dt = t->dticks;
 
 		t->dticks = 0;
@@ -398,50 +390,5 @@ void sys_clock_announce_process_timeout(void)
 
 	k_spin_unlock(&timeout_lock, key);
 }
-
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-void sys_clock_announce_only_add_ticks(int32_t ticks)
-{
-	int ticks_remaining = ticks;
-
-	sys_clock_only_add_cycle_count(ticks_remaining);
-
-	struct _timeout *t;
-
-	for (t = first();
-		 (t != NULL) && (t->dticks <= ticks_remaining);
-		 t = next(t)) {
-		int dt = t->dticks;
-
-		curr_tick += dt;
-		t->dticks = 0;
-		ticks_remaining -= dt;
-	}
-
-	if (t != NULL) {
-		t->dticks -= ticks_remaining;
-	}
-	curr_tick += ticks_remaining;
-}
-
-void sys_clock_announce_process_timeout(void)
-{
-	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
-
-	struct _timeout *t;
-
-	for (t = first();
-		 (t != NULL) && (t->dticks == 0);
-		 t = first()) {
-		remove_timeout(t);
-		k_spin_unlock(&timeout_lock, key);
-
-		t->fn(t);
-		key = k_spin_lock(&timeout_lock);
-	}
-
-	k_spin_unlock(&timeout_lock, key);
-}
-#endif
 
 #endif /* CONFIG_SOC_FAMILY_REALTEK_BEE */

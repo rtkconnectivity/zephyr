@@ -113,8 +113,6 @@ void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 	ARG_UNUSED(substate_id);
 }
 
-/* porting device_system_managed.c */
-#ifdef CONFIG_PM_DEVICE
 TYPE_SECTION_START_EXTERN(const struct device *, pm_device_slots);
 void System_Handler(const void *param)
 {
@@ -153,12 +151,13 @@ static void Pinmux_DLPS_Exit(void)
 	}
 }
 
-#if !defined(CONFIG_PM_DEVICE_RUNTIME_EXCLUSIVE)
 /* Number of devices successfully suspended. */
 static size_t num_susp_rtk;
 
 static int pm_suspend_devices_rtk(void)
 {
+	CPU_DLPS_Enter();
+
 	/* Realtek PM Device flow */
 	irq_disable(System_IRQn);
 	Pinmux_DLPS_Enter();
@@ -210,9 +209,9 @@ void pm_resume_devices_rtk(void)
 	}
 
 	num_susp_rtk = 0;
+
+	CPU_DLPS_Exit();
 }
-#endif /* !CONFIG_PM_DEVICE_RUNTIME_EXCLUSIVE */
-#endif /* CONFIG_PM_DEVICE */
 
 #define RTK_PM_WORKQ_STACK_SIZE 512
 #define RTK_PM_WORKQ_PRIORITY   K_HIGHEST_THREAD_PRIO
@@ -221,16 +220,7 @@ K_THREAD_STACK_DEFINE(rtk_pm_workq_stack_area, RTK_PM_WORKQ_STACK_SIZE);
 
 static struct k_work_q rtk_pm_workq;
 static struct k_work work_timeout_process;
-static struct k_work work_pm_information;
-
-void pm_information_handler(struct k_work *item)
-{
-	static uint32_t wakeup_count, last_wakeup_clk, last_sleep_clk;
-
-	platform_pm_get_statistics(&wakeup_count, &last_wakeup_clk, &last_sleep_clk);
-	POWER_LOG("wakeup_count0x%x last_wakeup_clk0x%x last_sleep_clk0x%x wake reason 0x%x",
-		  wakeup_count, last_wakeup_clk, last_sleep_clk, platform_pm_get_wakeup_reason());
-}
+static struct k_work work_device_resume;
 
 void timeout_process_handler(struct k_work *item)
 {
@@ -238,13 +228,20 @@ void timeout_process_handler(struct k_work *item)
 	sys_clock_announce_process_timeout();
 }
 
+void device_resume_handler(struct k_work *item)
+{
+	pm_resume_devices_rtk();
+}
+
 void pm_work_submit(void)
 {
 	/* To minimize irq_lock time, defer time-consuming resuming and compensation
 	 * operations to be executed by the work queue
 	 */
+	extern void sys_clock_restore_tick_and_cycle(void);
+	sys_clock_restore_tick_and_cycle();
+	k_work_submit_to_queue(&rtk_pm_workq, &work_device_resume);
 	k_work_submit_to_queue(&rtk_pm_workq, &work_timeout_process);
-	k_work_submit_to_queue(&rtk_pm_workq, &work_pm_information);
 }
 
 /* Initialize power system */
@@ -261,6 +258,7 @@ static int rtl87x2x_power_init(void)
 
 	LOG_INF("set pm exit_stage_time from %d to %d",
 		platform_pm_system.stage_time[PLATFORM_PM_EXIT], 13);
+
 	platform_pm_system.stage_time[PLATFORM_PM_EXIT] = 13;
 
 	/* do devices & nvic resume in
@@ -271,25 +269,14 @@ static int rtl87x2x_power_init(void)
 			   K_THREAD_STACK_SIZEOF(rtk_pm_workq_stack_area), RTK_PM_WORKQ_PRIORITY,
 			   NULL);
 	k_work_init(&work_timeout_process, timeout_process_handler);
-	k_work_init(&work_pm_information, pm_information_handler);
+	k_work_init(&work_device_resume, device_resume_handler);
 
 	/* register callbacks to PM Store stage */
-#ifdef CONFIG_PM_DEVICE
 	platform_pm_register_callback_func_with_priority((void *)pm_suspend_devices_rtk,
 							 PLATFORM_PM_STORE, 1);
-#endif
-	platform_pm_register_callback_func_with_priority((void *)CPU_DLPS_Enter, PLATFORM_PM_STORE,
-							 1);
-
-	/* register callbacks to PM Restore stage */
-	platform_pm_register_callback_func_with_priority((void *)CPU_DLPS_Exit, PLATFORM_PM_RESTORE,
-							 1);
-#ifdef CONFIG_PM_DEVICE
-	platform_pm_register_callback_func_with_priority((void *)pm_resume_devices_rtk,
-							 PLATFORM_PM_RESTORE, 1);
-#endif
-	platform_pm_register_callback_func_with_priority((void *)pm_work_submit,
-							 PLATFORM_PM_RESTORE, 1);
+	 /* do pm_work_submit after os_pm_restore(tick restore) */
+	platform_pm_register_callback_func_with_priority(
+		(void *)pm_work_submit, PLATFORM_PM_RESTORE, 2);
 
 	return ret;
 }
