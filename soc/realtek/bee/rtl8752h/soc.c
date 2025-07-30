@@ -57,8 +57,6 @@ extern void log_buffer_optimise_enable(void);
 extern bool hw_aes_create_mutex(void);
 extern void (*phy_hw_control_init)(bool dlps_flow);
 extern void (*phy_init)(uint8_t dlps_flow);
-extern uint8_t (*flash_nor_get_default_bp_lv)(void);
-extern void flash_nor_dump_flash_info(void);
 extern void os_zephyr_patch_init(void);
 extern void report_cache_info(void);
 
@@ -252,31 +250,6 @@ static int rtk_platform_init_stage_2(void)
 	rtk_task_init();
 
 	restore_isr_registered_in_zephyr();
-
-	if (flash_nor_get_exist(FLASH_NOR_IDX_SPIC0) != FLASH_NOR_EXIST_NONE) {
-		if (flash_nor_load_query_info(FLASH_NOR_IDX_SPIC0) == FLASH_NOR_RET_SUCCESS) {
-			/* apply SW Block Protect */
-			if (boot_cfg.flash_setting.bp_enable) {
-				/**
-				 * set flash default block protect level depend on
-				 * different flash id and different flash layout
-				 */
-				boot_cfg.flash_setting.bp_lv = flash_nor_get_default_bp_lv();
-			} else {
-				boot_cfg.flash_setting.bp_lv = 0;
-			}
-
-			if (flash_nor_set_tb_bit(FLASH_NOR_IDX_SPIC0, 1) == FLASH_NOR_RET_SUCCESS &&
-			    flash_nor_set_bp_lv(FLASH_NOR_IDX_SPIC0,
-						boot_cfg.flash_setting.bp_lv) ==
-				    FLASH_NOR_RET_SUCCESS) {
-				FLASH_PRINT_INFO1("Flash BP Lv = %d", boot_cfg.flash_setting.bp_lv);
-			} else {
-				FLASH_PRINT_INFO0("Flash BP fail!");
-			}
-		}
-		flash_nor_dump_flash_info();
-	}
 
 	hw_aes_create_mutex();
 
