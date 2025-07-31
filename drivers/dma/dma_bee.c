@@ -662,9 +662,6 @@ static void dma_bee_isr(const struct device *dev)
 		blockflag =
 			((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_BLOCK & BIT(dma_channel_num);
 
-		GDMA_ClearINTPendingBit(dma_channel_num,
-					GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block);
-
 #if DBG_DIRECT_SHOW
 		DBG_DIRECT("[%s] channel %d transferlen%d callback%x ftfflag%d "
 			   "errflag%d blockflag%d complete_callback_en%d",
@@ -674,13 +671,14 @@ static void dma_bee_isr(const struct device *dev)
 #endif
 
 		if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
-			GDMA_ClearINTPendingBit(dma_channel_num,
-						GDMA_INT_Transfer | GDMA_INT_Error);
 			if (errflag == 0 && ftfflag == 0) {
 				continue;
 			}
 
+			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
+
 			if (errflag) {
+				GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
 				err = -EIO;
 			}
 
@@ -691,23 +689,26 @@ static void dma_bee_isr(const struct device *dev)
 							   err);
 			}
 		} else {
-			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer |
-									 GDMA_INT_Error |
-									 GDMA_INT_Block);
 			if (errflag == 0 && ftfflag == 0 && blockflag == 0) {
 				continue;
 			}
 
 			if (errflag) {
+				GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
 				err = -EIO;
 			}
 
 			if (ftfflag) {
+				GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
 				data->channels[i].busy = false;
 			}
 
-			if (blockflag && (!data->channels[i].cyclic)) {
-				data->channels[i].total_size -= GDMA_GetTransferLen(dma_channel);
+			if (blockflag) {
+				GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Block);
+				if (!data->channels[i].cyclic) {
+					data->channels[i].total_size -=
+						GDMA_GetTransferLen(dma_channel);
+				}
 			}
 
 			if (data->channels[i].callback) {
