@@ -503,9 +503,10 @@ static int spi_bee_pm_action(const struct device *dev, enum pm_device_action act
 			return err;
 		}
 
-		data->initialized = false;
-
-		spi_bee_configure(dev, data->ctx.config);
+		if (data->initialized) {
+			data->initialized = false;
+			spi_bee_configure(dev, data->ctx.config);
+		}
 
 		break;
 	default:
