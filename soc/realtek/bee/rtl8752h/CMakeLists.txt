@@ -9,7 +9,5 @@ set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/li
 
 if (CONFIG_PM)
 zephyr_library_sources(power.c)
-zephyr_code_relocate(FILES power.c LOCATION RAM)
 zephyr_code_relocate(FILES ${ZEPHYR_BASE}/arch/arm/core/nmi.c LOCATION RAM) #for z_arm_nmi
-zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/pm/device.c LOCATION RAM)
 endif()
