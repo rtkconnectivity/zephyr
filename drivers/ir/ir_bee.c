@@ -381,7 +381,9 @@ static int ir_bee_rx_enable(const struct device *dev, ir_callback_t callback, vo
 	data->cb = callback;
 	data->cb_usr_data = user_data;
 	data->rx_len = rx_len;
+#if !(IR_HAS_RX_DMA)
 	data->cur_rx_len = 0;
+#endif
 	data->rx_idle_cnt = idle_cnt;
 	data->is_tx_mode = false;
 
