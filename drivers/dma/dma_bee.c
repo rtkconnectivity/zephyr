@@ -68,6 +68,11 @@ struct dma_bee_channel {
 	GDMA_LLIDef *p_dma_lli;
 };
 
+struct dma_bee_isr_param {
+	const struct device *dev;
+	uint8_t channel_id;
+};
+
 struct dma_bee_data {
 	/* this needs to be the first member */
 	struct dma_context ctx;
@@ -645,78 +650,74 @@ static int dma_bee_init(const struct device *dev)
 	return 0;
 }
 
-static void dma_bee_isr(const struct device *dev)
+static void dma_bee_isr(struct dma_bee_isr_param *param)
 {
+	const struct device *dev = param->dev;
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
+	uint8_t i = param->channel_id;
 	int dma_channel_num;
 	uint32_t errflag, ftfflag, blockflag;
 	int err = 0;
 	GDMA_ChannelTypeDef *dma_channel;
 
-	for (uint32_t i = 0; i < cfg->channels; i++) {
-		dma_channel_num = cfg->channel_table[i].channel_num;
-		dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[i].channel_base;
-		errflag = ((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_ERR & BIT(dma_channel_num);
-		ftfflag = ((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_TFR & BIT(dma_channel_num);
-		blockflag =
-			((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_BLOCK & BIT(dma_channel_num);
+	dma_channel_num = cfg->channel_table[i].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[i].channel_base;
+	errflag = ((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_ERR & BIT(dma_channel_num);
+	ftfflag = ((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_TFR & BIT(dma_channel_num);
+	blockflag = ((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_BLOCK & BIT(dma_channel_num);
 
 #if DBG_DIRECT_SHOW
-		DBG_DIRECT("[%s] channel %d transferlen%d callback%x ftfflag%d "
-			   "errflag%d blockflag%d complete_callback_en%d",
-			   __func__, i, GDMA_GetTransferLen(dma_channel),
-			   data->channels[i].callback, ftfflag, errflag, blockflag,
-			   data->channels[i].cfg.complete_callback_en);
+	DBG_DIRECT("[%s] channel %d transferlen%d callback%x ftfflag%d "
+		   "errflag%d blockflag%d complete_callback_en%d",
+		   __func__, i, GDMA_GetTransferLen(dma_channel), data->channels[i].callback,
+		   ftfflag, errflag, blockflag, data->channels[i].cfg.complete_callback_en);
 #endif
 
-		if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
-			if (errflag == 0 && ftfflag == 0) {
-				continue;
-			}
+	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
+		if (errflag == 0 && ftfflag == 0) {
+			return;
+		}
 
+		GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
+
+		if (errflag) {
+			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
+			err = -EIO;
+		}
+
+		data->channels[i].busy = false;
+
+		if (data->channels[i].callback) {
+			data->channels[i].callback(dev, data->channels[i].user_data, i, err);
+		}
+	} else {
+		if (errflag == 0 && ftfflag == 0 && blockflag == 0) {
+			return;
+		}
+
+		if (errflag) {
+			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
+			err = -EIO;
+		}
+
+		if (ftfflag) {
 			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
-
-			if (errflag) {
-				GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
-				err = -EIO;
-			}
-
 			data->channels[i].busy = false;
+		}
 
-			if (data->channels[i].callback) {
+		if (blockflag) {
+			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Block);
+			if (!data->channels[i].cyclic) {
+				data->channels[i].total_size -= GDMA_GetTransferLen(dma_channel);
+			}
+		}
+
+		if (data->channels[i].callback) {
+			if (ftfflag || errflag ||
+			    (blockflag && data->channels[i].cfg.complete_callback_en)) {
 				data->channels[i].callback(dev, data->channels[i].user_data, i,
 							   err);
-			}
-		} else {
-			if (errflag == 0 && ftfflag == 0 && blockflag == 0) {
-				continue;
-			}
-
-			if (errflag) {
-				GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
-				err = -EIO;
-			}
-
-			if (ftfflag) {
-				GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
-				data->channels[i].busy = false;
-			}
-
-			if (blockflag) {
-				GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Block);
-				if (!data->channels[i].cyclic) {
-					data->channels[i].total_size -=
-						GDMA_GetTransferLen(dma_channel);
-				}
-			}
-
-			if (data->channels[i].callback) {
-				if (ftfflag || errflag ||
-				    (blockflag && data->channels[i].cfg.complete_callback_en)) {
-					data->channels[i].callback(dev, data->channels[i].user_data,
-								   i, err);
-				}
 			}
 		}
 	}
@@ -735,8 +736,9 @@ static const struct dma_driver_api dma_bee_driver_api = {
 };
 
 #define IRQ_CONFIGURE(n, index)                                                                    \
-	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(index, n, irq), DT_INST_IRQ_BY_IDX(index, n, priority),     \
-		    dma_bee_isr, DEVICE_DT_INST_GET(index), 0);                                    \
+	irq_connect_dynamic(DT_INST_IRQ_BY_IDX(index, n, irq),                                     \
+			    DT_INST_IRQ_BY_IDX(index, n, priority), (const void *)dma_bee_isr,     \
+			    &dma_bee_##index##_isr_param[n], 0);                                   \
 	irq_enable(DT_INST_IRQ_BY_IDX(index, n, irq));
 
 #define CONFIGURE_ALL_IRQS(index, n) LISTIFY(n, IRQ_CONFIGURE, (), index)
@@ -759,7 +761,17 @@ static const struct dma_driver_api dma_bee_driver_api = {
 	}
 #endif
 
+#define ALL_ISR_PARAM_CONFIGURE(n, index)                                                          \
+	{                                                                                          \
+		.dev = DEVICE_DT_INST_GET(index),                                                  \
+		.channel_id = n,                                                                   \
+	},
+
+#define CONFIGURE_ALL_ISR_PARAMS(index, n) LISTIFY(n, ALL_ISR_PARAM_CONFIGURE, (), index)
+
 #define BEE_DMA_INIT(index)                                                                        \
+	static struct dma_bee_isr_param dma_bee_##index##_isr_param[] = {                          \
+		CONFIGURE_ALL_ISR_PARAMS(index, DT_NUM_IRQS(DT_DRV_INST(index)))};                 \
 	static void dma_bee_##index##_irq_configure(void)                                          \
 	{                                                                                          \
 		CONFIGURE_ALL_IRQS(index, DT_NUM_IRQS(DT_DRV_INST(index)));                        \
@@ -768,7 +780,7 @@ static const struct dma_driver_api dma_bee_driver_api = {
 		.reg = DT_INST_REG_ADDR(index),                                                    \
 		.channels = DT_INST_PROP(index, dma_channels),                                     \
 		.clkid = DT_INST_CLOCKS_CELL(index, id),                                           \
-		.irq_configure = dma_bee_##index##_irq_configure,                                  \
+		.irq_configure = &dma_bee_##index##_irq_configure,                                 \
 		DMA_CHANNER_TABLE,                                                                 \
 	};                                                                                         \
                                                                                                    \
