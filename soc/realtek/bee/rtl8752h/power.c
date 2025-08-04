@@ -213,7 +213,7 @@ void pm_resume_devices_rtk(void)
 	CPU_DLPS_Exit();
 }
 
-#define RTK_PM_WORKQ_STACK_SIZE 512
+#define RTK_PM_WORKQ_STACK_SIZE 768
 #define RTK_PM_WORKQ_PRIORITY   K_HIGHEST_THREAD_PRIO
 
 K_THREAD_STACK_DEFINE(rtk_pm_workq_stack_area, RTK_PM_WORKQ_STACK_SIZE);
