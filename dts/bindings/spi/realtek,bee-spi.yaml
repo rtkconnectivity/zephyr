@@ -22,3 +22,7 @@ properties:
 
   pinctrl-names:
     required: true
+
+  is-slave:
+    type: boolean
+    description: Indicate the spi is spi slave.
