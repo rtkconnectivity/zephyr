@@ -8,8 +8,17 @@
 &pinctrl {
 	uart2_default: uart2_default {
 		group1 {
-			psels = <BEE_PSEL(UART2_TX, P2_3, DIR_OUT, DRV_HIGH, PULL_UP)>,
-			<BEE_PSEL(UART2_RX, P2_4, DIR_IN, DRV_HIGH, PULL_UP)>;
+			psels = <BEE_PSEL(UART2_TX, P3_0, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(UART2_RX, P3_1, DIR_IN, DRV_HIGH, PULL_UP)>;
+		};
+	};
+};
+
+&pinctrl {
+	uart2_sleep: uart2_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P3_0, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SW_MODE, P3_1, DIR_IN, DRV_HIGH, PULL_UP)>;
 		};
 	};
 };

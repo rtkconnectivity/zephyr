@@ -138,6 +138,8 @@ static uint32_t Pinmux_StoreReg[10]; /*  This array should be placed in RAM ON/B
 static void Pinmux_DLPS_Enter(void)
 {
 	POWER_LOG("%s is called", __func__);
+	Pad_ControlSelectValue(P3_0, PAD_SW_MODE);
+	Pad_ControlSelectValue(P3_1, PAD_SW_MODE);
 	for (uint8_t i = 0; i < 10; i++) {
 		Pinmux_StoreReg[i] = PINMUX->CFG[i];
 	}
@@ -274,9 +276,9 @@ static int rtl87x2x_power_init(void)
 	/* register callbacks to PM Store stage */
 	platform_pm_register_callback_func_with_priority((void *)pm_suspend_devices_rtk,
 							 PLATFORM_PM_STORE, 1);
-	 /* do pm_work_submit after os_pm_restore(tick restore) */
-	platform_pm_register_callback_func_with_priority(
-		(void *)pm_work_submit, PLATFORM_PM_RESTORE, 2);
+	/* do pm_work_submit after os_pm_restore(tick restore) */
+	platform_pm_register_callback_func_with_priority((void *)pm_work_submit,
+							 PLATFORM_PM_RESTORE, 2);
 
 	return ret;
 }
