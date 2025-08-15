@@ -20,6 +20,10 @@
 #include <rtl876x_gpio.h>
 #endif
 
+#ifdef CONFIG_PM_DEVICE
+#include <zephyr/sys/slist.h>
+#endif
+
 /* GPIO buses definitions */
 
 struct gpio_bee_irq_info {
@@ -43,14 +47,21 @@ struct gpio_bee_config {
 };
 
 #ifdef CONFIG_PM_DEVICE
+enum pm_pad_mode {
+	PM_PAD_OUTPUT,
+	PM_PAD_INPUT,
+	PM_PAD_WAKEUP,
+};
+
 struct pm_pad_node {
+	sys_snode_t node;
 	uint8_t pad_num;
-	uint8_t next_gpio_num;
+	uint8_t gpio_num;
+	enum pm_pad_mode mode;
 };
 
 struct pm_pad_node_list {
-	struct pm_pad_node *output_head;
-	struct pm_pad_node *wakeup_head;
+	sys_slist_t list;
 	struct pm_pad_node *array;
 };
 
