@@ -20,6 +20,26 @@
 #include <rtl876x_uart.h>
 #endif
 
+#ifdef CONFIG_UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#include <rtl_pinmux.h>
+#include <pm.h>
+#include "power_manager_unit_platform.h"
+#define BEE_PM_CHECK_PASS PM_CHECK_PASS
+#define BEE_PM_CHECK_FAIL PM_CHECK_FAIL
+#define BEE_PM_CHECK_RET  PMCheckResult
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#include <rtl876x_pinmux.h>
+#include <dlps.h>
+#define BEE_PM_CHECK_PASS PM_CHECK_PASS
+#define BEE_PM_CHECK_FAIL PM_CHECK_FAIL
+#define BEE_PM_CHECK_RET  PMCheckResult
+extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
+								PlatformPMStage pf_pm_stage,
+								int8_t priority);
+#endif
+#endif
+
 #ifdef CONFIG_UART_ASYNC_API
 #include <zephyr/drivers/dma.h>
 #endif
@@ -73,6 +93,9 @@ struct uart_bee_data {
 	size_t rx_next_buffer_len;
 #endif
 #ifdef CONFIG_PM_DEVICE
+#ifdef CONFIG_UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
+	BEE_PM_CHECK_RET uart_pm_check_state_idle;
+#endif
 	UARTStoreReg_Typedef store_buf;
 #endif
 };

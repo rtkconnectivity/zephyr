@@ -595,6 +595,9 @@ static int dma_bee_get_status(const struct device *dev, uint32_t ch, struct dma_
 	stat->busy = data->channels[ch].busy;
 	if (data->channels[ch].busy) {
 		GDMA_SuspendCmd(dma_channel, ENABLE);
+		while (!GDMA_GetSuspendChannelStatus(dma_channel))
+			;
+
 		stat->pending_length =
 			data->channels[ch].total_size - GDMA_GetTransferLen(dma_channel);
 
