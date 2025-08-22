@@ -1034,17 +1034,17 @@ static void rtl87x2g_config_mac_keys(struct ieee802154_key *mac_keys)
 	for (i = 0; mac_keys->key_value && i < 3; mac_keys++, i++) {
 		switch (i) {
 		case 0:
-			sPrevKeyId = mac_keys->key_index;
+			sPrevKeyId = mac_keys->key_id;
 			mac_memcpy(sPrevKey, mac_keys->key_value, 16);
 			break;
 
 		case 1:
-			sCurrKeyId = mac_keys->key_index;
+			sCurrKeyId = mac_keys->key_id;
 			mac_memcpy(sCurrKey, mac_keys->key_value, 16);
 			break;
 
 		case 2:
-			sNextKeyId = mac_keys->key_index;
+			sNextKeyId = mac_keys->key_id;
 			mac_memcpy(sNextKey, mac_keys->key_value, 16);
 			break;
 
@@ -1136,43 +1136,7 @@ static int rtl87x2g_configure(const struct device *dev, enum ieee802154_config_t
 		break;
 
 	case IEEE802154_CONFIG_ENH_ACK_HEADER_IE:
-		uint16_t *p_header_ie = (uint16_t *)config->ack_ie.data;
-		uint8_t vendor_ie_content_index;
-
-		if (config->ack_ie.data_len > 0) {
-			if (*p_header_ie == 0x0d04) {
-			} else {
-				enhAckProbingDataLen = config->ack_ie.data_len;
-				vendor_ie_content_index = 6;
-				while (vendor_ie_content_index < enhAckProbingDataLen) {
-					switch (config->ack_ie.data[vendor_ie_content_index]) {
-					case 0x01:
-						enhAckProbingWithLqi = true;
-						break;
-
-					case 0x02:
-						enhAckProbingWithMargin = true;
-						break;
-
-					case 0x03:
-						enhAckProbingWithRssi = true;
-						break;
-
-					default:
-						break;
-					}
-					vendor_ie_content_index++;
-				}
-			}
-		} else {
-			if (*p_header_ie == 0x0d04) {
-			} else {
-				enhAckProbingDataLen = 0;
-				enhAckProbingWithLqi = false;
-				enhAckProbingWithMargin = false;
-				enhAckProbingWithRssi = false;
-			}
-		}
+		/* not support */
 		break;
 
 #if defined(CONFIG_IEEE802154_CSL_ENDPOINT)
