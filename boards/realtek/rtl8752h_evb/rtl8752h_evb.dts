@@ -6,7 +6,7 @@
 
 /dts-v1/;
 #include <realtek/rtl8752h.dtsi>
-#include "rtl8752htv_evb-pinctrl.dtsi"
+#include "rtl8752h_evb-pinctrl.dtsi"
 
 / {
 	model = "RealTek rtl8752h evb ";

@@ -1,4 +1,4 @@
-identifier: rtl8752htv_evb
+identifier: rtl8752h_evb
 name: Realtek rtl8752htv evaluation board
 type: mcu
 arch: arm
