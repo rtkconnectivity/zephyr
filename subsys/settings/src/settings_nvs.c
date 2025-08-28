@@ -211,7 +211,77 @@ static int settings_nvs_load(struct settings_store *cs,
 	}
 	return ret;
 }
+/* RTL_DEBUG[🔌🔧]:subsys:settings_nvs.c增加settings_nvs_read_by_name，通过name读取对应的data */
+int settings_nvs_read_by_name(struct settings_store *cs, const char *name, char *value, size_t val_len) 
+{
+   struct settings_nvs *cf = CONTAINER_OF(cs, struct settings_nvs, cf_store);
+   char rdname[SETTINGS_MAX_NAME_LEN + SETTINGS_EXTRA_LEN + 1];
+   uint16_t name_id = NVS_NAMECNT_ID;
+   uint16_t read_name_id= NVS_NAMECNT_ID;
+   int rc = 0;
 
+   if (!name) {
+      return -EINVAL;
+  }
+
+#if CONFIG_SETTINGS_NVS_NAME_CACHE
+    name_id = settings_nvs_cache_match(cf, name, rdname, sizeof(rdname));
+    if (name_id != NVS_NAMECNT_ID) {
+     read_name_id = name_id;
+     goto found;
+  }
+#endif
+
+   name_id = cf->last_name_id + 1;
+
+#if CONFIG_SETTINGS_NVS_NAME_CACHE
+    /* We can skip reading NVS if we know that the cache wasn't overflowed. */
+   if (cf->loaded && !SETTINGS_NVS_CACHE_OVFL(cf)) {
+      goto found;
+   }
+#endif
+
+    while (1) {
+        name_id--;
+        if (name_id == NVS_NAMECNT_ID) {
+         break;
+        }
+
+        rc = nvs_read(&cf->cf_nvs, name_id, &rdname, sizeof(rdname));
+
+        if (rc < 0) {
+            /* Error or entry not found */
+            if (rc == -ENOENT) {
+                read_name_id = name_id;
+           }
+           continue;
+      }
+
+      rdname[rc] = '\0';
+
+      if (strcmp(name, rdname)) {
+        continue;
+      }
+      read_name_id = name_id;
+      goto found;
+    }
+
+found:
+    if(name_id != NVS_NAMECNT_ID)
+    {
+     /* write the value */
+     rc = nvs_read(&cf->cf_nvs, read_name_id + NVS_NAME_ID_OFFSET,value, val_len);
+     if (rc < 0) {
+       return rc;
+     }
+
+    }
+    else{
+      return -ENOENT;
+    }
+    return rc;
+}
+/* RTL_DEBUG[🔌🔧]:subsys:settings_nvs.c：调试setting_nvs_save */
 static int settings_nvs_save(struct settings_store *cs, const char *name,
 			     const char *value, size_t val_len)
 {

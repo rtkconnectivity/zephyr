@@ -1,0 +1,123 @@
+/ {
+    /*RTL_DEBUG[🔧] rtl8762g mesh gpio button pwm*/
+    aliases {
+        sw0 = &button_0;
+        led0 = &led_0;
+		pwm-led = &pwmleds;
+    };
+
+    gpio_keys {
+		compatible = "gpio-keys";
+		button_0: button_0 {
+			    gpios = <&gpioa 25 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+    gpio-led {
+		compatible = "gpio-leds";
+		led_0: led_0 {
+			gpios = <&gpiob 8 GPIO_ACTIVE_HIGH>;
+		};
+	};
+	// pwmleds {
+	// 	compatible = "pwm-leds";
+
+	// 	/* NOTE: bridge TIMER0_CH0 (PA8) and LED1 (PC0) */
+	// 	pwm_led: pwm_led {
+	// 		pwms = <&pwm8 0 0>;
+
+	// 		};
+	// };
+	
+
+};
+
+&gpioa {
+    status = "okay";
+};
+
+
+&gpiob {
+    status = "okay";
+};
+
+// &timer8 {
+// 	status = "okay";
+// 	prescaler = <1>;
+// 	pwm8: pwm {
+// 			status = "okay";
+// 			pinctrl-0 = <&pwm8_default>;
+// 			pinctrl-names = "default";
+// 	};
+//  };
+
+// &pinctrl {
+// 	pwm8_default: pwm8_default {
+// 			group1 {
+// 					psels = <BEE_PSEL(ENPWM0_P, P4_0,DIR_OUT, DRV_LOW, PULL_DOWN)>;
+// 			};
+//     };
+// };
+
+&timer8 {
+	status = "okay";
+	prescaler = <1>;
+	pwm8: pwm8 {
+		status = "okay";
+		pinctrl-0 = <&pwm8_default>;
+		pinctrl-names = "default";
+	};
+};
+&timer9 {
+	status = "okay";
+	prescaler = <1>;
+	pwm9: pwm9{
+		status = "okay";
+		pinctrl-0 = <&pwm9_default>;
+		pinctrl-names = "default";
+	};
+};
+&timer10 {
+	status = "okay";
+	prescaler = <1>;
+	pwm10: pwm10 {
+		status = "okay";
+		pinctrl-0 = <&pwm10_default>;
+		pinctrl-names = "default";
+	};
+};
+
+&pinctrl {
+	pwm8_default: pwm8_default {
+		group1 {
+			psels = <BEE_PSEL(ENPWM0_P, P4_0,DIR_OUT, DRV_LOW, PULL_DOWN)>;
+		};
+	};
+	pwm9_default: pwm9_default {
+		group1 {
+			psels = <BEE_PSEL(ENPWM1_P, P4_1,DIR_OUT, DRV_LOW, PULL_DOWN)>;
+		};
+	};
+	pwm10_default: pwm10_default {
+		group1 {
+			psels = <BEE_PSEL(ENPWM2_P, P4_2,DIR_OUT, DRV_LOW, PULL_DOWN)>;
+		};
+	};
+};
+ 
+/ {
+    pwmleds: pwmleds {
+        compatible = "pwm-leds";
+	   blue_pwm_led: blue_pwm_led {
+            pwms = <&pwm8 0 PWM_MSEC(5) 0>;
+	    };
+	    red_pwm_led: red_pwm_led {
+		    pwms = <&pwm9 0 PWM_MSEC(5) 0>;
+	    };
+	    green_pwm_led: green_pwm_led {
+		    pwms = <&pwm10 0 PWM_MSEC(5) 0>;
+	    };
+	
+    };
+
+};

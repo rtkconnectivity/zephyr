@@ -19,3 +19,4 @@ if (CONFIG_BUILD_WITH_TFM)
     $<TARGET_PROPERTY:tfm,TFM_BINARY_DIR>/api_ns/interface/include
   )
 endif()
+# zephyr_code_relocate(FILES ${WEST_TOPDIR}/modules/hal/realtek/bee/drivers/pinmux/src/rtl8752h/rtl876x_pinmux.c LOCATION RAM)
