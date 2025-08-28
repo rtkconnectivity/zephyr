@@ -28,6 +28,7 @@ extern void Pinmux_DLPSEnter(void *PeriReg, void *StoreBuf);
 extern void Pinmux_DLPSExit(void *PeriReg, void *StoreBuf);
 extern void NMI_Handler(void);
 extern void sys_clock_announce_process_timeout(void);
+extern void pad_short_pulse_wake_up(int Status);
 
 volatile uint32_t CPU_StoreReg[6];
 volatile uint8_t CPU_StoreReg_IPR[96];
@@ -123,6 +124,9 @@ static size_t num_susp_rtk;
 
 static int pm_suspend_devices_rtk(void)
 {
+	pad_short_pulse_wake_up(1);
+	Pad_ClearAllWakeupINT();
+	System_WakeupDebounceClear(0);
 	CPU_DLPS_Enter();
 
 	Pinmux_DLPSEnter(PINMUX, (void *)&Pinmux_StoreReg);

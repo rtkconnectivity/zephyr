@@ -1,6 +1,6 @@
 # RTL87X2G uart configuration
 
-# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
 config UART_RTL87X2G
@@ -16,4 +16,31 @@ config UART_RTL87X2G
 	select DMA if UART_ASYNC_API
 
 	help
-	  Enable the RTL87X2G uart driver.
+	  Enable the rtl87x2g uart driver.
+
+if UART_RTL87X2G
+config UART_RTL87X2G_KEEP_ACTIVE_AFTER_RX_WAKEUP
+	bool "Keep active after rx wakeup"
+	default y
+	depends on PM_DEVICE
+	help
+	  Keep active and do not allow the system to suspend after rx wakeup.
+
+if UART_RTL87X2G_KEEP_ACTIVE_AFTER_RX_WAKEUP
+config UART_RTL87X2G_KEEP_ACTIVE_MSEC
+	int "Milliseconds to keep active"
+	default 10000
+	help
+	  Time to keep active after rx wakeup in milliseconds.
+	  Note: This does not mean that the system will sleep immediately
+	  after timeout, it depends on other check status.
+
+endif # UART_RTL87X2G_KEEP_ACTIVE_AFTER_RX_WAKEUP
+
+config UART_RTL87X2G_RX_THRESHOLD
+	int "Rx threshold level to trigger interrupt"
+	default 10
+	help
+	  The Rx threshold level to trigger rx interrupt, range from 1 to 29.
+
+endif # UART_RTL87X2G
