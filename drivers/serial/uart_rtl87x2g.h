@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,7 +14,21 @@
 
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/uart.h>
+
 #include <rtl_uart.h>
+
+#ifdef CONFIG_UART_RTL87X2G_KEEP_ACTIVE_AFTER_RX_WAKEUP
+#include <rtl_pinmux.h>
+#include <pm.h>
+#include "power_manager_unit_platform.h"
+#define RTL87X2G_PM_CHECK_PASS PM_CHECK_PASS
+#define RTL87X2G_PM_CHECK_FAIL PM_CHECK_FAIL
+#define RTL87X2G_PM_CHECK_RET  PMCheckResult
+#endif
+
+#ifdef CONFIG_UART_ASYNC_API
+#include <zephyr/drivers/dma.h>
+#endif
 
 struct uart_rtl87x2g_config {
 	UART_TypeDef *uart;
@@ -65,6 +79,9 @@ struct uart_rtl87x2g_data {
 	size_t rx_next_buffer_len;
 #endif
 #ifdef CONFIG_PM_DEVICE
+#ifdef CONFIG_UART_RTL87X2G_KEEP_ACTIVE_AFTER_RX_WAKEUP
+	RTL87X2G_PM_CHECK_RET uart_pm_check_state_idle;
+#endif
 	UARTStoreReg_Typedef store_buf;
 #endif
 };
