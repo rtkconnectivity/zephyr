@@ -1,5 +1,5 @@
-identifier: rtl8762gn_evb
-name: Realtek rtl8762gn evaluation board
+identifier: rtl87x2g_evb
+name: Realtek rtl87x2g evaluation board
 type: mcu
 arch: arm
 ram: 320

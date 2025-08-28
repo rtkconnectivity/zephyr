@@ -58,7 +58,7 @@ tests:
 
   sample.sensor.rtl87x2g:
     filter: dt_alias_exists("qdec0")
-    extra_args: "DTC_OVERLAY_FILE=boards/rtl8762gn_evb.overlay"
+    extra_args: "DTC_OVERLAY_FILE=boards/rtl87x2g_evb.overlay"
     harness_config:
       fixture: rtl87x2g_qdec
       type: multi_line

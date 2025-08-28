@@ -13,8 +13,8 @@ tests:
     platform_exclude:
       - qemu_x86_64
   drivers.rtc.rtc_api.rtl87x2g:
-    platform_allow: rtl8762gn_evb
-    extra_args: "DTC_OVERLAY_FILE=boards/rtl8762gn_evb.overlay"
+    platform_allow: rtl87x2g_evb
+    extra_args: "DTC_OVERLAY_FILE=boards/rtl87x2g_evb.overlay"
     timeout: 90
   drivers.rtc.rtc_api.rtl8752h:
     platform_allow: rtl8752htv_evb

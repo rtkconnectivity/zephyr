@@ -5,7 +5,6 @@ family:
     socs:
     - name: rtl8762gku
     - name: rtl8762gkh
-    - name: rtl8762gn
     - name: rtl8762gtp
     - name: rtl8762gtu
     - name: rtl8762gth
