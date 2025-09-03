@@ -38,11 +38,19 @@ config BEE_KSCAN_AUTOSCAN_MODE
 	  default is autoscan, else is manual scan.
 
 if !BEE_KSCAN_AUTOSCAN_MODE
-config BEE_KSCAN_MANUAL_SCAN_INTERVAL_MSEC
-	int "Scan Interval when using manual mode"
-	default 50
+config BEE_KSCAN_RELEASE_WAKEUP
+	bool "Wakeup system when key release"
+	default n
 	help
-	  Scan Interval when using manual mode.
+	  Wakeup system when key release using manual mode.
+	  If enabled, When entering DLPS during pressing the key, the row pins
+	  will be configured as pull-up. This results in leakage current through
+	  the pull-up resistor during key press, but the system will wake up
+	  immediately after releasing the key.
+	  If disabled, When entering DLPS by pressing the key, the row pins will
+	  be configured as pull-down. This eliminates leakage current during key
+	  press, but the system can only wake up after a timeout period once the
+	  key is released, followed by a scan to detect key status.
 
 endif # BEE_KSCAN_AUTOSCAN_MODE
 

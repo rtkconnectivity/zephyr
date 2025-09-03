@@ -119,18 +119,6 @@ void System_Handler(const void *param)
 	irq_disable(System_IRQn);
 	POWER_LOG("System_Handler");
 
-	if (System_WakeUpInterruptValue(P0_1) == SET) {
-		POWER_LOG("P0_1");
-		Pad_ClearWakeupINTPendingBit(P0_1);
-		System_WakeUpPinDisable(P0_1);
-		/* allowedSystemEnterDlps = false; */
-	}
-	if (System_WakeUpInterruptValue(P2_4) == SET) {
-		POWER_LOG("P2_4");
-		Pad_ClearWakeupINTPendingBit(P2_4);
-		/* avoid retrigger? */
-		System_WakeUpPinDisable(P2_4);
-	}
 	NVIC_ClearPendingIRQ(System_IRQn);
 }
 
@@ -158,11 +146,11 @@ static size_t num_susp_rtk;
 
 static int pm_suspend_devices_rtk(void)
 {
+	Pad_ClearAllWakeupINT();
 	CPU_DLPS_Enter();
 
 	/* Realtek PM Device flow */
 	irq_disable(System_IRQn);
-	Pinmux_DLPS_Enter();
 	/* common flow */
 	const struct device *devs;
 	size_t devc;
@@ -202,7 +190,6 @@ static int pm_suspend_devices_rtk(void)
 void pm_resume_devices_rtk(void)
 {
 	/* Realtek PM Device flow */
-	Pinmux_DLPS_Exit();
 	irq_enable(System_IRQn);
 	/* common flow */
 	for (int i = (num_susp_rtk - 1); i >= 0; i--) {

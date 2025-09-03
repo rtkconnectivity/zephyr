@@ -52,10 +52,12 @@ extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define BEE_Pad_SetControlMode(pad, mode)            Pad_SetControlMode(pad, mode)
+#define BEE_Pad_SetPullMode(pad, pull)               Pad_SetPullMode(pad, pull)
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en)
 #define BEE_KSCAN_REG_CLKDIV                         KEYSCAN_CLK_DIV
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define BEE_Pad_SetControlMode(pad, mode)            Pad_ControlSelectValue(pad, mode)
+#define BEE_Pad_SetPullMode(pad, pull)               Pad_PullUpOrDownValue(pad, pull)
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en, 0)
 #define BEE_KSCAN_REG_CLKDIV                         CLKDIV
 #endif
@@ -98,19 +100,22 @@ struct kscan_bee_data {
 	 * new_key_map[j] setting to 1 means row[i] col[j] is pressed.
 	 */
 	uint32_t key_map[CONFIG_BEE_KSCAN_MAX_ROW_SIZE];
+	/* Total number of pressed pins before software debounce */
+	uint8_t last_scanned_num;
 	/* Total number of pressed pins after software debounce */
-	uint8_t press_num;
+	uint8_t last_pressed_num;
 	/* To count several scan for software debounce */
 	uint8_t sw_deb_press_cnt;
 	/* Row of pins to configure wakeup pins */
 	uint16_t press_rows;
-#ifdef CONFIG_PM_DEVICE
-	KEYSCANStoreReg_Typedef store_buf;
+#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+	/* If timer started, do not configure auto scan during resume */
+	bool timer_started;
 #endif
 };
 
 #ifdef CONFIG_PM_DEVICE
-static PMCheckResult kscan_pm_check_state = PM_CHECK_PASS;
+static volatile PMCheckResult kscan_pm_check_state = PM_CHECK_PASS;
 #endif
 
 static int kscan_bee_init_driver(const struct device *dev, uint32_t scanmode, uint32_t manual_sel)
@@ -261,7 +266,7 @@ static void kscan_bee_all_release_process(const struct device *dev)
 #endif
 	data->sw_deb_press_cnt = 0;
 
-	for (uint8_t i = 0; i < data->press_num; i++) {
+	for (uint8_t i = 0; i < data->last_pressed_num; i++) {
 		uint8_t old_row = data->keys[i].row;
 		uint8_t old_col = data->keys[i].column;
 
@@ -270,7 +275,8 @@ static void kscan_bee_all_release_process(const struct device *dev)
 		}
 	}
 
-	data->press_num = 0;
+	data->last_scanned_num = 0;
+	data->last_pressed_num = 0;
 	data->all_release_flag = true;
 
 	memset(data->keys, 0, sizeof(data->keys));
@@ -329,7 +335,8 @@ static void kscan_bee_process(const struct device *dev, uint8_t new_press_num,
 		data->all_release_flag = false;
 	}
 
-	if (!memcmp(data->last_keys, new_keys, sizeof(data->last_keys))) {
+	if (memcmp(data->last_keys, new_keys, sizeof(data->last_keys)) == 0 &&
+	    new_press_num == data->last_scanned_num) {
 		/* new_keys is same as last_keys */
 		if (data->sw_deb_press_cnt >= scan_debounce_cnt) {
 			/* after sofeware debounce */
@@ -343,12 +350,11 @@ static void kscan_bee_process(const struct device *dev, uint8_t new_press_num,
 		/* new_keys is different from last_keys, start a new software debounce */
 		data->sw_deb_press_cnt = 0;
 		memcpy(data->last_keys, new_keys, sizeof(data->last_keys));
+		data->last_scanned_num = new_press_num;
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 		data->press_rows = 0;
 		for (uint8_t i = 0; i < new_press_num; i++) {
-			if (new_keys[i].row) {
-				data->press_rows |= BIT(new_keys[i].row);
-			}
+			data->press_rows |= BIT(new_keys[i].row);
 		}
 #endif
 		goto start_timer;
@@ -359,7 +365,7 @@ static void kscan_bee_process(const struct device *dev, uint8_t new_press_num,
 		/* all key release */
 
 		/* call all cbs for released keys */
-		for (uint8_t i = 0; i < data->press_num; i++) {
+		for (uint8_t i = 0; i < data->last_pressed_num; i++) {
 			uint8_t old_row = data->keys[i].row;
 			uint8_t old_col = data->keys[i].column;
 
@@ -368,7 +374,7 @@ static void kscan_bee_process(const struct device *dev, uint8_t new_press_num,
 			}
 		}
 
-		data->press_num = 0;
+		data->last_pressed_num = 0;
 		data->press_rows = 0;
 		data->all_release_flag = true;
 
@@ -378,6 +384,7 @@ static void kscan_bee_process(const struct device *dev, uint8_t new_press_num,
 
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 		k_timer_stop(&manual_kscan_timer);
+		data->timer_started = false;
 		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
 					(clock_control_subsys_t)&config->clkid);
 		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
@@ -417,7 +424,7 @@ static void kscan_bee_process(const struct device *dev, uint8_t new_press_num,
 		}
 
 		/* update release keys */
-		for (uint8_t i = 0; i < data->press_num; i++) {
+		for (uint8_t i = 0; i < data->last_pressed_num; i++) {
 			uint8_t old_row = data->keys[i].row;
 			uint8_t old_col = data->keys[i].column;
 
@@ -440,14 +447,14 @@ static void kscan_bee_process(const struct device *dev, uint8_t new_press_num,
 			}
 		}
 
+		data->last_pressed_num = new_press_num;
 		memcpy(data->keys, new_keys, sizeof(data->keys));
-		data->press_num = new_press_num;
 	}
 
 start_timer:
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
-	k_timer_start(&manual_kscan_timer, K_MSEC(CONFIG_BEE_KSCAN_MANUAL_SCAN_INTERVAL_MSEC),
-		      K_FOREVER);
+	data->timer_started = true;
+	k_timer_start(&manual_kscan_timer, K_USEC(config->scan_us), K_FOREVER);
 #endif
 }
 
@@ -526,12 +533,20 @@ static void pm_suspend_process_press(const struct device *dev)
 				/* invert the wakeup level */
 				if (state->pins[i].wakeup_high) {
 					BEE_Pad_SetControlMode(state->pins[i].pin, PAD_SW_MODE);
+#ifdef CONFIG_BEE_KSCAN_RELEASE_WAKEUP
 					BEE_System_WakeUpPinEnable(state->pins[i].pin,
 								   PAD_WAKEUP_POL_LOW, DISABLE);
+#else
+					BEE_Pad_SetPullMode(state->pins[i].pin, PAD_PULL_UP);
+#endif
 				} else if (state->pins[i].wakeup_low) {
 					BEE_Pad_SetControlMode(state->pins[i].pin, PAD_SW_MODE);
+#ifdef CONFIG_BEE_KSCAN_RELEASE_WAKEUP
 					BEE_System_WakeUpPinEnable(state->pins[i].pin,
 								   PAD_WAKEUP_POL_HIGH, DISABLE);
+#else
+					BEE_Pad_SetPullMode(state->pins[i].pin, PAD_PULL_DOWN);
+#endif
 				}
 			} else {
 				if (state->pins[i].wakeup_high) {
@@ -588,14 +603,7 @@ static int kscan_bee_pm_action(const struct device *dev, enum pm_device_action a
 		ret = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
 		if ((ret < 0) && (ret != -ENOENT)) {
 			/* no kscan wakeup pin is configured */
-			kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
-			return ret;
-		}
-
-		/* Set pins to active state */
-		ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
-		if (ret < 0) {
-			return ret;
+			goto exit;
 		}
 
 		/* there are kscan wakeup pins configured, check if they wakeup the system
@@ -606,22 +614,32 @@ static int kscan_bee_pm_action(const struct device *dev, enum pm_device_action a
 				System_WakeUpPinDisable(state->pins[i].pin);
 				if (System_WakeUpInterruptValue(state->pins[i].pin) == SET) {
 					is_pad_wakeup = true;
+					kscan_pm_check_state = PM_CHECK_FAIL;
 					Pad_ClearWakeupINTPendingBit(state->pins[i].pin);
 				}
 			}
 		}
 
-		if (is_pad_wakeup) {
-			kscan_pm_check_state = PM_CHECK_FAIL;
+exit:
+		/* Set pins to active state */
+		ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+		if (ret < 0) {
+			return ret;
+		}
+
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+		if (is_pad_wakeup) {
 			kscan_bee_init_driver(dev, KeyScan_Manual_Scan_Mode,
 					      KeyScan_Manual_Sel_Bit);
-#else
-			kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
-#endif
 		} else {
-			kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
+			if (data->timer_started == false) {
+				kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode,
+						      KeyScan_Manual_Sel_Key);
+			}
 		}
+#else
+		kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
+#endif
 
 		break;
 	default:
