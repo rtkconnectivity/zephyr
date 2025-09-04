@@ -1,0 +1,25 @@
+/*
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&flash {
+	partitions {
+		/*
+		 * Reduce app_partition to make space for
+		 * coredump_partition
+		 */
+
+		app_partition: partition@15000 {
+			label = "app-image";
+			reg = < 0x15000 DT_SIZE_K(396) >;
+		};
+
+		coredump_partition: partition@78000 {
+			label = "coredump-partition";
+			reg = <0x78000 DT_SIZE_K(16)>;
+		};
+
+	};
+};
