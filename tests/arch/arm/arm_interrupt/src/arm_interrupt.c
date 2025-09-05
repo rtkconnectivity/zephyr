@@ -8,6 +8,7 @@
 #include <zephyr/arch/cpu.h>
 #include <cmsis_core.h>
 #include <zephyr/sys/barrier.h>
+#include <zephyr/sw_isr_table.h>
 
 static volatile int test_flag;
 static volatile int expected_reason = -1;
@@ -260,7 +261,18 @@ ZTEST(arm_interrupt, test_arm_interrupt)
 			 * either not implemented or it is not enabled, thus,
 			 * currently not in use by Zephyr.
 			 */
-
+#if defined(CONFIG_SOC_FAMILY_REALTEK_BEE)
+#if defined(CONFIG_GEN_SW_ISR_TABLE)
+			/*
+			 * For interrupts where the IRQ is not enabled but an ISR
+			 * has been installed, such IRQ should not be considered
+			 * as available IRQs for testing purposes.
+			 */
+			if (_sw_isr_table[i].isr != (void *)z_irq_spurious) {
+				continue;
+			}
+#endif
+#endif
 			/* Set the NVIC line to pending. */
 			NVIC_SetPendingIRQ(i);
 
