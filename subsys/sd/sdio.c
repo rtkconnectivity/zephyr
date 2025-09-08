@@ -645,14 +645,31 @@ int sdio_card_init(struct sd_card *card)
 	if (IS_ENABLED(CONFIG_SDHC_SUPPORTS_NATIVE_MODE) &&
 		((card->cccr_flags & SDIO_SUPPORT_HS) ||
 		(card->cccr_flags & SDIO_SUPPORT_4BIT_LS_BUS))) {
+#if defined(CONFIG_SDHC_BEE)
+		if (card->host_props.host_caps.bus_4_bit_support) {
+			/* Raise bus width to 4 bits */
+			ret = sdio_set_bus_width(card, SDHC_BUS_WIDTH4BIT);
+			if (ret) {
+				return ret;
+			}
+			LOG_DBG("Raised card bus width to 4 bits");
+		} else {
+			/* Raise bus width to 1 bits */
+			ret = sdio_set_bus_width(card, SDHC_BUS_WIDTH1BIT);
+			if (ret) {
+				return ret;
+			}
+			LOG_DBG("Raised card bus width to 1 bits");
+		}
+#else
 		/* Raise bus width to 4 bits */
 		ret = sdio_set_bus_width(card, SDHC_BUS_WIDTH4BIT);
 		if (ret) {
 			return ret;
 		}
 		LOG_DBG("Raised card bus width to 4 bits");
+#endif
 	}
-
 	/* Select and set bus speed */
 	sdio_select_bus_speed(card);
 	ret = sdio_set_bus_speed(card);

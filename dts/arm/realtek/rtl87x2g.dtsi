@@ -201,6 +201,30 @@
 			status = "disabled";
 		};
 
+		sdhc0: sdhc0@40150000 {
+			compatible = "realtek,bee-sdhc";
+			reg = <0x40150000 0x200>;
+			interrupts = <61 0>;
+			clocks = <&cctl APB_CLK(SDHC)>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			max-bus-freq = <50000000>;
+			min-bus-freq = <40000>;
+			status = "disabled";
+		};
+
+		sdhc1: sdhc1@40150000 {
+			compatible = "realtek,bee-sdhc";
+			reg = <0x40150000 0x200>;
+			interrupts = <61 0>;
+			clocks = <&cctl APB_CLK(SDHC)>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			max-bus-freq = <50000000>;
+			min-bus-freq = <40000>;
+			status = "disabled";
+		};
+
 		adc: adc@40032000 {
 			compatible = "realtek,bee-adc";
 			reg = <0x40032000 0x60>;

@@ -31,6 +31,7 @@ typedef struct {
 	uint32_t fun: 16;
 	uint32_t wakeup_high: 1;
 	uint32_t wakeup_low: 1;
+	uint32_t current_level: 2;
 } pinctrl_soc_pin;
 
 typedef pinctrl_soc_pin pinctrl_soc_pin_t;
@@ -42,16 +43,17 @@ typedef pinctrl_soc_pin pinctrl_soc_pin_t;
  * @param prop Property name.
  * @param idx Property entry index.
  */
-#define Z_PINCTRL_STATE_PIN_INIT(node_id, prop, idx)                                               \
-	{                                                                                          \
-		.pin = BEE_GET_PIN(DT_PROP_BY_IDX(node_id, prop, idx)),                            \
-		.pull = BEE_GET_PULL(DT_PROP_BY_IDX(node_id, prop, idx)),                          \
-		.drive = BEE_GET_DRIVE(DT_PROP_BY_IDX(node_id, prop, idx)),                        \
-		.dir = BEE_GET_DIR(DT_PROP_BY_IDX(node_id, prop, idx)),                            \
-		.pull_strength = DT_PROP(node_id, bias_pull_strong),                               \
-		.fun = BEE_GET_FUN(DT_PROP_BY_IDX(node_id, prop, idx)),                            \
-		.wakeup_high = DT_PROP(node_id, wakeup_high),                                      \
-		.wakeup_low = DT_PROP(node_id, wakeup_low),                                        \
+#define Z_PINCTRL_STATE_PIN_INIT(node_id, prop, idx)                         \
+	{                                                                    \
+		.pin = BEE_GET_PIN(DT_PROP_BY_IDX(node_id, prop, idx)),      \
+		.pull = BEE_GET_PULL(DT_PROP_BY_IDX(node_id, prop, idx)),    \
+		.drive = BEE_GET_DRIVE(DT_PROP_BY_IDX(node_id, prop, idx)),  \
+		.dir = BEE_GET_DIR(DT_PROP_BY_IDX(node_id, prop, idx)),      \
+		.pull_strength = DT_PROP_OR(node_id, bias_pull_strong, 0),         \
+		.fun = BEE_GET_FUN(DT_PROP_BY_IDX(node_id, prop, idx)),      \
+		.wakeup_high = DT_PROP_OR(node_id, wakeup_high, 0),                \
+		.wakeup_low = DT_PROP_OR(node_id, wakeup_low, 0),                  \
+		.current_level = DT_PROP_OR(node_id, current_level, 0),                  \
 	},
 
 /**

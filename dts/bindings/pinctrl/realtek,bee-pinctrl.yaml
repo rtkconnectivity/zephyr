@@ -87,3 +87,23 @@ child-binding:
       wakeup-low:
         type: boolean
         description: enable wakeup low function
+
+      current-level:
+        type: int
+        description: |
+          current level of pin
+          when VDDIO is set to 1.8V, the pad driving current is as followed:
+              level0: 1.25 mA
+              level1: 2.50 mA
+              level2: 3.75 mA
+              level3: 5.00 mA
+          When VDDIO is set to 3.3V, the pad driving current is as followed:
+              level0: 4 mA
+              level1: 8 mA
+              level2: 12 mA
+              level3: 16 mA
+        enum:
+          - 0
+          - 1
+          - 2
+          - 3

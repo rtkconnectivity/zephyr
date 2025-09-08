@@ -74,6 +74,11 @@ config USE_HAL_REALTEK_SPI
 	help
 	  Enable HAL REALTEK SPI driver
 
+config USE_HAL_REALTEK_SDHC
+	bool
+	help
+	  Enable HAL REALTEK SDHC driver
+
 config USE_HAL_REALTEK_IR
 	bool
 	help

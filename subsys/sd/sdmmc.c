@@ -591,7 +591,11 @@ static int sdmmc_init_hs(struct sd_card *card)
 		LOG_ERR("Failed to switch card to HS mode");
 		return ret;
 	}
-	if (card->flags & SD_4BITS_WIDTH) {
+	if (card->flags & SD_4BITS_WIDTH
+#if defined(CONFIG_SDHC_BEE)
+	 && card->host_props.host_caps.bus_4_bit_support
+#endif
+	) {
 		/* Raise bus width to 4 bits */
 		ret = sdmmc_set_bus_width(card, SDHC_BUS_WIDTH4BIT);
 		if (ret) {

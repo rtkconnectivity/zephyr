@@ -184,9 +184,29 @@
 #define BEE_SWD_CLK            253
 #define BEE_SWD_DIO            254
 #define BEE_dig_debug          255
-
-#define BEE_SW_MODE 257
-#define BEE_PWR_OFF 258
+#define BEE_PINMUX_MAX         (BEE_dig_debug + 1)
+#define BEE_SW_MODE            (BEE_PINMUX_MAX + 1)
+#define BEE_PWR_OFF            (BEE_PINMUX_MAX + 2)
+#define BEE_SDHC0_CLK_P9_4     (BEE_PWR_OFF + 1)
+#define BEE_SDHC0_CMD_P9_3     (BEE_PWR_OFF + 2)
+#define BEE_SDHC0_D0_P10_0     (BEE_PWR_OFF + 3)
+#define BEE_SDHC0_D1_P9_7      (BEE_PWR_OFF + 4)
+#define BEE_SDHC0_D2_P9_6      (BEE_PWR_OFF + 5)
+#define BEE_SDHC0_D3_P9_5      (BEE_PWR_OFF + 6)
+#define BEE_SDHC0_D4_P4_4      (BEE_PWR_OFF + 7)
+#define BEE_SDHC0_D5_P4_5      (BEE_PWR_OFF + 8)
+#define BEE_SDHC0_D6_P4_6      (BEE_PWR_OFF + 9)
+#define BEE_SDHC0_D7_P4_7      (BEE_PWR_OFF + 10)
+#define BEE_SDHC1_CLK_P9_4     (BEE_PWR_OFF + 11)
+#define BEE_SDHC1_CMD_P9_3     (BEE_PWR_OFF + 12)
+#define BEE_SDHC1_D0_P10_0     (BEE_PWR_OFF + 13)
+#define BEE_SDHC1_D1_P9_7      (BEE_PWR_OFF + 14)
+#define BEE_SDHC1_D2_P9_6      (BEE_PWR_OFF + 15)
+#define BEE_SDHC1_D3_P9_5      (BEE_PWR_OFF + 16)
+#define BEE_SDHC1_D4_P4_4      (BEE_PWR_OFF + 17)
+#define BEE_SDHC1_D5_P4_5      (BEE_PWR_OFF + 18)
+#define BEE_SDHC1_D6_P4_6      (BEE_PWR_OFF + 19)
+#define BEE_SDHC1_D7_P4_7      (BEE_PWR_OFF + 20)
 
 #define BEE_QDPH0_IN_NONE      0x0F00
 #define BEE_QDPH0_IN_P1_3_P1_4 0x0F01

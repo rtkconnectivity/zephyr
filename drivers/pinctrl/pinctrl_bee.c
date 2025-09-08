@@ -33,28 +33,58 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 	uint32_t cfg_pull_strength = pin[0].pull_strength;
 	uint32_t cfg_wakeup_high = pin[0].wakeup_high;
 	uint32_t cfg_wakeup_low = pin[0].wakeup_low;
+	uint32_t current_level = pin[0].current_level;
 
 #if DBG_DIRECT_SHOW
 	DBG_DIRECT("[%s] cfg_fun=%d, cfg_pin=%d, cfg_dir=%d,"
 		   " cfg_drv=%d , cfg_pull=%d, cfg_pull_strength=%d, cfg_wakeup_high=%d, "
-		   "cfg_wakeup_low=%d",
+		   "cfg_wakeup_low=%d, current_level=%d",
 		   __func__, cfg_fun, cfg_pin, cfg_dir, cfg_drv, cfg_pull, cfg_pull_strength,
-		   cfg_wakeup_high, cfg_wakeup_low);
+		   cfg_wakeup_high, cfg_wakeup_low, current_level);
 #endif
 
 	bee_pad_set_pull(cfg_pin, cfg_pull_strength);
+	switch (current_level) {
+	case 0:
+		Pad_SetDrivingCurrent(cfg_pin, LEVEL0);
+		break;
+
+	case 1:
+		Pad_SetDrivingCurrent(cfg_pin, LEVEL1);
+		break;
+
+	case 2:
+		Pad_SetDrivingCurrent(cfg_pin, LEVEL2);
+		break;
+
+	case 3:
+		Pad_SetDrivingCurrent(cfg_pin, LEVEL3);
+		break;
+
+	default:
+		break;
+	}
 
 	if (cfg_fun == BEE_PWR_OFF) {
 		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_NOT_PWRON, cfg_pull, cfg_dir, cfg_drv);
 	} else if (cfg_fun == BEE_SW_MODE) {
 		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
-	} else if (cfg_fun < BEE_SW_MODE) {
+	} else if (cfg_fun < BEE_PINMUX_MAX) {
 		Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
 		Pinmux_Config(cfg_pin, cfg_fun);
-	} else {
-		Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
+	} else if (cfg_fun > BEE_PWR_OFF) {
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
-		Pinmux_AON_Config(cfg_fun);
+		if (cfg_fun <= BEE_SDHC1_D7_P4_7) {
+			Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir,
+				   cfg_drv);
+			Pad_Dedicated_Config(cfg_pin, ENABLE);
+			Pad_SetDrivingCurrent(cfg_pin, LEVEL1);
+			Pinmux_HS_Config(SDHC_HS_MUX);
+		} else {
+			Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir,
+				   cfg_drv);
+			Pinmux_AON_Config(cfg_fun);
+		}
 #endif
 	}
 
