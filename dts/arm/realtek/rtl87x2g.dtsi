@@ -509,7 +509,7 @@
 			reg = <0x40038000 0x34c>;
 			interrupts = <72 1>;
 			clocks = <&cctl APB_CLK(A2C)>;
-			bus-speed = <500000>;
+			bitrate = <500000>;
 			sample-point = <875>;
 			status = "disabled";
 		};
