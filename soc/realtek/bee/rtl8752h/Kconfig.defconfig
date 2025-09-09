@@ -33,9 +33,6 @@ config TICKLESS_KERNEL
 config TIMESLICE_SIZE
 	default 10
 
-config NUM_METAIRQ_PRIORITIES
-	default 1
-
 config SYSTICK_USE_EXTERNAL_CLOCK
 	bool
 	default y

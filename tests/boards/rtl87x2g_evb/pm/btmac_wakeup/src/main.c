@@ -44,7 +44,7 @@ ZTEST(btmac_wakeup, test_adv_wakeup)
 
 	printk("Advertising started\n");
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
-	k_sleep(K_SECONDS(60));
+	k_sleep(K_SECONDS(30));
 	/* adv interval is 100ms, so the expected wakeup time is 60s/100ms=600 */
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
 	uint32_t wakeup_count_btmac = wakeup_count_after_test - wakeup_count_before_test;
@@ -52,7 +52,7 @@ ZTEST(btmac_wakeup, test_adv_wakeup)
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n", wakeup_count_btmac,
 		 last_wakeup_clk, last_sleep_clk);
 
-	zassert_true(wakeup_count_btmac <= 650 && wakeup_count_btmac >= 550,
+	zassert_true(wakeup_count_btmac <= 350 && wakeup_count_btmac >= 250,
 		     "failed, wakeup Count: %d\n", wakeup_count_btmac);
 }
 

@@ -6,6 +6,8 @@ config BOARD
 	default "rtl87x2g_evb"
 
 if BT
+config NUM_METAIRQ_PRIORITIES
+	default 1
 
 config MAIN_STACK_SIZE
 	default 2048

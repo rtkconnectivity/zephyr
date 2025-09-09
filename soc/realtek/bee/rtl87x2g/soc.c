@@ -36,10 +36,10 @@ static int rtl87x2g_task_init(void)
 
 	if (memcmp(stack_header->uuid, nonsecure_rom_header.uuid, UUID_SIZE) == 0) {
 		lowerstack_entry = (BOOL_PATCH_FUNC)((uint32_t)stack_header->entry_ptr);
-		printk("Successfully loaded Realtek Lowerstack ROM!\n");
+		DBG_DIRECT("Successfully loaded Realtek Lowerstack ROM!\n");
 		lowerstack_entry();
 	} else {
-		printk("Failed to load Realtek Lowerstack ROM!\n");
+		DBG_DIRECT("Failed to load Realtek Lowerstack ROM!\n");
 	}
 
 	AON_REG_WRITE_BITFIELD(AON_NS_REG0X_FW_GENERAL_NS, km4_pon_boot_done, 1);

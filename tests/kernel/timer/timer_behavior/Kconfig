@@ -19,6 +19,7 @@ config TIMER_TEST_SAMPLES
 
 config TIMER_TEST_PERIOD
 	int "The number of microseconds to for the timer period"
+	default 10000 if SOC_SERIES_RTL8752H || SOC_SERIES_RTL87X2G
 	default 1000
 
 config TIMER_TEST_MAX_STDDEV

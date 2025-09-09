@@ -21,6 +21,7 @@
 		zephyr,shell-uart = &uart2;
 		zephyr,flash-controller = &fmc;
 		zephyr,bt-hci = &bee_bt_hci;
+		zephyr,entropy = &trng;
 	};
 
 	/* These aliases are provided for compatibility with samples */

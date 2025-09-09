@@ -21,9 +21,6 @@ config NUM_IRQS
 config CODE_DATA_RELOCATION
 	default y
 
-config NUM_METAIRQ_PRIORITIES
-	default 1
-
 config USE_DT_CODE_PARTITION
 	default y
 
@@ -62,6 +59,6 @@ config PM_DEVICE
 	depends on PM
 
 config REALTEK_USING_SDK_LIB
-	default y if PM
+	default y if PM || PM_DEVICE
 
 endif # SOC_SERIES_RTL87X2G
