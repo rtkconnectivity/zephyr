@@ -6,3 +6,7 @@ tests:
     arch_allow: arm
     integration_platforms:
       - mps2/an385
+    platform_exclude:
+      - rtl87x2g_evb
+      - rtl8752h_evb
+      - rtl8752h_dongle

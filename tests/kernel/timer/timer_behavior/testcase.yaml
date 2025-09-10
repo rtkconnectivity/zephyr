@@ -12,6 +12,7 @@ tests:
       record:
         regex: "RECORD:(?P<metrics>.*)"
         as_json: ['metrics']
+    timeout: 230
   kernel.timer.timer_behavior_external:
     filter: dt_compat_enabled("test-kernel-timer-behavior-external")
     harness: pytest

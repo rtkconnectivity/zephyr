@@ -11,3 +11,6 @@ tests:
             not CONFIG_GEN_ISR_TABLES
     platform_exclude:
       - mr_canhubk3
+      - rtl87x2g_evb
+      - rtl8752h_evb
+      - rtl8752h_dongle

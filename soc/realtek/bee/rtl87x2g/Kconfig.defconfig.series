@@ -16,7 +16,7 @@ config SOC_PART_NUMBER
 
 config NUM_IRQS
 	int
-	default 109
+	default 96
 
 config CODE_DATA_RELOCATION
 	default y
@@ -54,9 +54,13 @@ config IDLE_STACK_SIZE
 config INIT_STACKS
 	default y
 
+if PM
+config BT
+	default y
+
 config PM_DEVICE
 	default y
-	depends on PM
+endif
 
 config REALTEK_USING_SDK_LIB
 	default y if PM || PM_DEVICE
