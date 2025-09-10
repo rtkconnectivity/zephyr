@@ -125,6 +125,8 @@ static void restore_isr_registered_in_zephyr(void)
 	RamVectorTableUpdate(SVC_VECTORn, (IRQ_Fun)z_arm_svc);
 	RamVectorTableUpdate(NMI_VECTORn, (IRQ_Fun)z_arm_nmi);
 }
+
+#ifdef CONFIG_BT
 static int rtk_task_init(void)
 {
 	char c_rom_uuid[16] = DEFINE_symboltable_uuid;
@@ -140,6 +142,7 @@ static int rtk_task_init(void)
 	}
 	return 0;
 }
+#endif
 
 static int rtk_platform_init_stage_1(void)
 {
@@ -247,7 +250,9 @@ static int rtk_platform_init_stage_2(void)
 	phy_hw_control_init(false);
 	phy_init(false);
 
+#ifdef CONFIG_BT
 	rtk_task_init();
+#endif
 
 	restore_isr_registered_in_zephyr();
 
