@@ -4,3 +4,5 @@ tests:
       - kernel
       - userspace
     ignore_faults: true
+    extra_configs:
+      - CONFIG_TEST_EXTRA_STACK_SIZE=64
