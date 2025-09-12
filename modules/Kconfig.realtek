@@ -39,6 +39,16 @@ config USE_HAL_REALTEK_I2C
 	help
 	  Enable HAL REALTEK I2C driver
 
+config USE_HAL_REALTEK_I2S
+	bool
+	help
+	  Enable HAL REALTEK I2S driver
+
+config USE_HAL_REALTEK_CODEC
+	bool
+	help
+	  Enable HAL REALTEK CODEC driver
+
 config USE_HAL_REALTEK_KEYSCAN
 	bool
 	help
@@ -47,7 +57,12 @@ config USE_HAL_REALTEK_KEYSCAN
 config USE_HAL_REALTEK_AON_QDEC
 	bool
 	help
-	  Enable HAL REALTEK AON QDEC driver
+	  Enable HAL REALTEK AON_QDEC driver
+
+config USE_HAL_REALTEK_QDEC
+	bool
+	help
+	  Enable HAL REALTEK QDEC driver
 
 config USE_HAL_REALTEK_UART
 	bool
@@ -58,6 +73,16 @@ config USE_HAL_REALTEK_SPI
 	bool
 	help
 	  Enable HAL REALTEK SPI driver
+
+config USE_HAL_REALTEK_IR
+	bool
+	help
+	  Enable HAL REALTEK IR driver
+
+config USE_HAL_REALTEK_CAN
+	bool
+	help
+	  Enable HAL REALTEK CAN driver
 
 config USE_HAL_REALTEK_USB
 	bool
