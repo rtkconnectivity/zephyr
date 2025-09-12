@@ -31,8 +31,33 @@ extern FLASH_NOR_RET_TYPE (*flash_nor_erase_locked)(uint32_t addr, FLASH_NOR_ERA
 
 LOG_MODULE_REGISTER(flash_rtl8752h, CONFIG_FLASH_LOG_LEVEL);
 struct flash_rtl8752h_data {
-	struct k_sem mutex;
+#ifdef CONFIG_MULTITHREADING
+	struct k_sem sem;
+#endif
 };
+
+
+#ifdef CONFIG_MULTITHREADING
+#define FLASH_SEM_TIMEOUT (k_is_in_isr() ? K_NO_WAIT : K_FOREVER)
+static inline void flash_rtl8752h_sem_take(const struct device *dev)
+{
+	struct flash_rtl8752h_data *dev_data = dev->data;
+
+	k_sem_take(&dev_data->sem, FLASH_SEM_TIMEOUT);
+}
+
+static inline void flash_rtl8752h_sem_give(const struct device *dev)
+{
+	struct flash_rtl8752h_data *dev_data = dev->data;
+
+	k_sem_give(&dev_data->sem);
+}
+#else
+
+#define flash_rtl8752h_sem_take(dev) do {} while (0)
+#define flash_rtl8752h_sem_give(dev) do {} while (0)
+
+#endif
 
 #ifdef CONFIG_FLASH_PAGE_LAYOUT
 static const struct flash_pages_layout flash_pages_layout_rtl8752h[] = {
@@ -75,8 +100,9 @@ static int flash_rtl8752h_read(const struct device *dev, off_t offset,
 	if (len == 0U) {
 		return 0;
 	}
-
+	flash_rtl8752h_sem_take(dev);
 	flash_nor_read_locked(FLASH_ADDR + offset, (uint8_t *)data, len);
+	flash_rtl8752h_sem_give(dev);
 
 	return 0;
 }
@@ -100,9 +126,11 @@ static int flash_rtl8752h_write(const struct device *dev, off_t offset,
 		uint8_t *tmp = k_malloc(len);
 
 		if (tmp != NULL) {
+			flash_rtl8752h_sem_take(dev);
 			flash_nor_read_locked((uint32_t)data, (uint8_t *)tmp, len);
 			flash_nor_write_locked(FLASH_ADDR + offset, (uint8_t *)tmp, len);
 			k_free(tmp);
+			flash_rtl8752h_sem_give(dev);
 		} else {
 			LOG_ERR("k_malloc %x0x for flash data transfer station failed", len);
 		}
@@ -110,11 +138,12 @@ static int flash_rtl8752h_write(const struct device *dev, off_t offset,
 	}
 #else
 	__ASSERT((uint32_t)data < FLASH_ADDR,
-		"not supported: Data in flash (0x%x) cannot be used as source",
+		"not supported: data in flash (0x%x) cannot be used as source",
 		(uint32_t)data);
 #endif
-
+	flash_rtl8752h_sem_take(dev);
 	flash_nor_write_locked(FLASH_ADDR + offset, (uint8_t *)data, len);
+	flash_rtl8752h_sem_give(dev);
 	return 0;
 }
 
@@ -144,10 +173,9 @@ static int flash_rtl8752h_erase(const struct device *dev, off_t offset, size_t s
 	uint32_t start_addr = FLASH_ADDR + offset;
 
 	for (int i = 0; i < size / FLASH_ERASE_BLK_SZ; i++) {
-		uint32_t key = arch_irq_lock();
-
+		flash_rtl8752h_sem_take(dev);
 		flash_nor_erase_locked(start_addr + i * FLASH_ERASE_BLK_SZ, FLASH_NOR_ERASE_SECTOR);
-		arch_irq_unlock(key);
+		flash_rtl8752h_sem_give(dev);
 	}
 
 	return 0;
@@ -177,6 +205,12 @@ static const struct flash_driver_api flash_rtl8752h_driver_api = {
 	(mode) == FLASH_NOR_4_BIT_MODE ? "FLASH_NOR_4_BIT_MODE" : "Invalid mode")
 static int flash_rtl8752h_init(const struct device *dev)
 {
+#ifdef CONFIG_MULTITHREADING
+	struct flash_rtl8752h_data *dev_data = dev->data;
+
+	k_sem_init(&dev_data->sem, 1, 1);
+#endif
+
 	if (flash_nor_get_exist(FLASH_NOR_IDX_SPIC0) != FLASH_NOR_EXIST_NONE) {
 		if (flash_nor_load_query_info(FLASH_NOR_IDX_SPIC0) == FLASH_NOR_RET_SUCCESS) {
 			/* apply SW Block Protect */
