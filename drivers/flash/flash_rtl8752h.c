@@ -16,7 +16,6 @@ extern void flash_nor_dump_flash_info(void);
 extern FLASH_NOR_RET_TYPE (*flash_nor_read_locked)(uint32_t addr, uint8_t *data, uint32_t byte_len);
 extern FLASH_NOR_RET_TYPE (*flash_nor_write_locked)(uint32_t addr, uint8_t *data, uint32_t byte_len);
 extern FLASH_NOR_RET_TYPE (*flash_nor_erase_locked)(uint32_t addr, FLASH_NOR_ERASE_MODE mode);
-extern void flash_sem_init(void);
 
 #define DT_DRV_COMPAT realtek_rtl8752h_flash_controller
 #define SOC_NV_FLASH_NODE DT_INST(0, soc_nv_flash)
@@ -167,7 +166,6 @@ static const struct flash_driver_api flash_rtl8752h_driver_api = {
 	(mode) == FLASH_NOR_4_BIT_MODE ? "FLASH_NOR_4_BIT_MODE" : "Invalid mode")
 static int flash_rtl8752h_init(const struct device *dev)
 {
-	flash_sem_init();
 	if (flash_nor_get_exist(FLASH_NOR_IDX_SPIC0) != FLASH_NOR_EXIST_NONE) {
 		if (flash_nor_load_query_info(FLASH_NOR_IDX_SPIC0) == FLASH_NOR_RET_SUCCESS) {
 			/* apply SW Block Protect */
