@@ -101,3 +101,8 @@ tests:
       - gd32vf103v_eval
       - gd32a503v_eval
       - gd32f470i_eval
+  drivers.flash.common.rtl:
+    platform_allow:
+      - rtl8752h_evb
+    extra_args:
+      - OVERLAY_CONFIG=boards/rtl8752h_evb.conf
