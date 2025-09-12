@@ -93,13 +93,23 @@ static int flash_rtl87x2g_write(const struct device *dev, off_t offset,
         return 0;
     }
 
-    if (data >= (const void *)FLASH_ADDR)
-    {
-        char tmp[len];
-        flash_nor_read_locked((uint32_t)data, (uint8_t *)tmp, len);
-        flash_nor_write_locked(FLASH_ADDR + offset, (uint8_t *)tmp, len);
-        return 0;
-    }
+#if CONFIG_KERNEL_MEM_POOL && CONFIG_HEAP_MEM_POOL_SIZE
+	if ((uint32_t)data >= FLASH_ADDR) {
+		uint8_t *tmp = k_malloc(len);
+
+		if (tmp != NULL) {
+			flash_nor_read_locked((uint32_t)data, (uint8_t *)tmp, len);
+			flash_nor_write_locked(FLASH_ADDR + offset, (uint8_t *)tmp, len);
+			k_free(tmp);
+		} else {
+			LOG_ERR("k_malloc %x0x for flash data transfer station failed", len);
+		}
+	}
+#else
+	__ASSERT((uint32_t)data < FLASH_ADDR,
+		"not supported: Data in flash (0x%x) cannot be used as source",
+		(uint32_t)data);
+#endif
 
     flash_nor_write_locked(FLASH_ADDR + offset, (uint8_t *)data, len);
     return 0;
@@ -165,13 +175,11 @@ static const struct flash_driver_api flash_rtl87x2g_driver_api =
 
 static int flash_rtl87x2g_init(const struct device *dev)
 {
-//
-
     return 0;
 }
 
 static struct flash_rtl87x2g_data flash_data;
 
 DEVICE_DT_INST_DEFINE(0, flash_rtl87x2g_init, NULL,
-                      &flash_data, NULL, POST_KERNEL,
-                      CONFIG_FLASH_INIT_PRIORITY, &flash_rtl87x2g_driver_api);
+			&flash_data, NULL, POST_KERNEL,
+			CONFIG_FLASH_INIT_PRIORITY, &flash_rtl87x2g_driver_api);
