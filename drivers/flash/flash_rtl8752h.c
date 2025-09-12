@@ -106,6 +106,7 @@ static int flash_rtl8752h_write(const struct device *dev, off_t offset,
 		} else {
 			LOG_ERR("k_malloc %x0x for flash data transfer station failed", len);
 		}
+		return 0;
 	}
 #else
 	__ASSERT((uint32_t)data < FLASH_ADDR,
@@ -203,10 +204,10 @@ static int flash_rtl8752h_init(const struct device *dev)
 
 	/* Switch flash to 4-bit mode before kernel starts to avoid xip isr affecting the calibration flow. */
     if (flash_nor_try_high_speed_mode(FLASH_NOR_IDX_SPIC0,
-        CONFIG_SOC_FLASH_RTL8752H_BIT_MODE) == FLASH_NOR_RET_SUCCESS) {
-        DBG_DIRECT("Flash change to %s",
-            GET_FLASH_BIT_MODE_STR(CONFIG_SOC_FLASH_RTL8752H_BIT_MODE)
-        );
+	CONFIG_SOC_FLASH_RTL8752H_BIT_MODE) == FLASH_NOR_RET_SUCCESS) {
+	DBG_DIRECT("Flash change to %s",
+	    GET_FLASH_BIT_MODE_STR(CONFIG_SOC_FLASH_RTL8752H_BIT_MODE)
+	);
     }
 
 	return 0;

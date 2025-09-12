@@ -31,13 +31,13 @@ struct flash_rtl87x2g_data
 static const struct flash_pages_layout flash_pages_layout_rtl87x2g[] =
 {
     {
-        .pages_size = FLASH_ERASE_BLK_SZ,
-        .pages_count = FLASH_SIZE / FLASH_ERASE_BLK_SZ
+	.pages_size = FLASH_ERASE_BLK_SZ,
+	.pages_count = FLASH_SIZE / FLASH_ERASE_BLK_SZ
     }
 };
 static void flash_rtl87x2g_page_layout(const struct device *dev,
-                                       const struct flash_pages_layout **layout,
-                                       size_t *layout_size)
+				       const struct flash_pages_layout **layout,
+				       size_t *layout_size)
 {
     *layout = flash_pages_layout_rtl87x2g;
 
@@ -57,19 +57,19 @@ static const struct flash_parameters flash_rtl87x2g_parameters =
 };
 
 static int flash_rtl87x2g_read(const struct device *dev, off_t offset,
-                               void *data, size_t len)
+			       void *data, size_t len)
 {
     if ((offset > FLASH_SIZE) ||
-        ((offset + len) > FLASH_SIZE))
+	((offset + len) > FLASH_SIZE))
     {
-        LOG_ERR("offset(:0x%lx) or offset+len(:0x%lx) is out of flash boundary", (long)offset,
-                (long)(offset + len));
-        return -EINVAL;
+	LOG_ERR("offset(:0x%lx) or offset+len(:0x%lx) is out of flash boundary", (long)offset,
+		(long)(offset + len));
+	return -EINVAL;
     }
 
     if (len == 0U)
     {
-        return 0;
+	return 0;
     }
 
     flash_nor_read_locked(FLASH_ADDR + offset, (uint8_t *)data, len);
@@ -78,19 +78,19 @@ static int flash_rtl87x2g_read(const struct device *dev, off_t offset,
 }
 
 static int flash_rtl87x2g_write(const struct device *dev, off_t offset,
-                                const void *data, size_t len)
+				const void *data, size_t len)
 {
     if ((offset > FLASH_SIZE) ||
-        ((offset + len) > FLASH_SIZE))
+	((offset + len) > FLASH_SIZE))
     {
-        LOG_ERR("offset(:0x%lx) or offset+len(:0x%lx) is out of flash boundary", (long)offset,
-                (long)(offset + len));
-        return -EINVAL;
+	LOG_ERR("offset(:0x%lx) or offset+len(:0x%lx) is out of flash boundary", (long)offset,
+		(long)(offset + len));
+	return -EINVAL;
     }
 
     if (len == 0U)
     {
-        return 0;
+	return 0;
     }
 
 #if CONFIG_KERNEL_MEM_POOL && CONFIG_HEAP_MEM_POOL_SIZE
@@ -104,6 +104,7 @@ static int flash_rtl87x2g_write(const struct device *dev, off_t offset,
 		} else {
 			LOG_ERR("k_malloc %x0x for flash data transfer station failed", len);
 		}
+		return 0;
 	}
 #else
 	__ASSERT((uint32_t)data < FLASH_ADDR,
@@ -118,37 +119,38 @@ static int flash_rtl87x2g_write(const struct device *dev, off_t offset,
 static int flash_rtl87x2g_erase(const struct device *dev, off_t offset, size_t size)
 {
     if ((offset > FLASH_SIZE) ||
-        ((offset + size) > FLASH_SIZE))
+	((offset + size) > FLASH_SIZE))
     {
-        LOG_ERR("offset(:0x%lx) or offset+size(:0x%lx) is out of flash boundary", (long)offset,
-                (long)(offset + size));
-        return -EINVAL;
+	LOG_ERR("offset(:0x%lx) or offset+size(:0x%lx) is out of flash boundary", (long)offset,
+		(long)(offset + size));
+	return -EINVAL;
     }
 
     if ((offset % FLASH_ERASE_BLK_SZ) != 0)
     {
-        LOG_ERR("offset 0x%lx: not on a page boundary", (long)offset);
-        return -EINVAL;
+	LOG_ERR("offset 0x%lx: not on a page boundary", (long)offset);
+	return -EINVAL;
     }
 
     if ((size % FLASH_ERASE_BLK_SZ) != 0)
     {
-        LOG_ERR("size %zu: not multiple of a page size", size);
-        return -EINVAL;
+	LOG_ERR("size %zu: not multiple of a page size", size);
+	return -EINVAL;
     }
 
     if (!size)
     {
-        return 0;
+	return 0;
     }
 
     uint32_t start_addr = FLASH_ADDR + offset;
 
     for (int i = 0; i < size / FLASH_ERASE_BLK_SZ; i++)
     {
-        uint32_t key = arch_irq_lock();
-        flash_nor_erase_locked(start_addr + i * FLASH_ERASE_BLK_SZ, FLASH_NOR_ERASE_SECTOR);
-        arch_irq_unlock(key);
+	uint32_t key = arch_irq_lock();
+
+	flash_nor_erase_locked(start_addr + i * FLASH_ERASE_BLK_SZ, FLASH_NOR_ERASE_SECTOR);
+	arch_irq_unlock(key);
     }
 
     return 0;
