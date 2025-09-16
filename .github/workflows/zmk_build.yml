@@ -40,7 +40,7 @@ jobs:
         with:
           repository: "rtkconnectivity/zmk.git"
           path: "zmk"
-          ref: "zmk_rtk"
+          ref: "zmk_rtk_3.5.0"
           fetch-depth: 0
           persist-credentials: false
 
