@@ -85,6 +85,10 @@ static int dma_rtl87x2g_configure(const struct device *dev, uint32_t channel,
 #endif
 
 	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
+	if (dma_channel_num < 0) {
+		return -EINVAL;
+	}
+
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
 
 	GDMA_InitTypeDef dma_init_struct;
@@ -342,6 +346,10 @@ static int dma_rtl87x2g_reload(const struct device *dev, uint32_t channel, uint3
 	GDMA_ChannelTypeDef *dma_channel;
 
 	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
+	if (dma_channel_num < 0) {
+		return -EINVAL;
+	}
+
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
 
 	if (channel >= cfg->channels) {
@@ -388,6 +396,10 @@ static int dma_rtl87x2g_start(const struct device *dev, uint32_t channel)
 	GDMA_ChannelTypeDef *dma_channel;
 
 	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
+	if (dma_channel_num < 0) {
+		return -EINVAL;
+	}
+
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
 
 	if (channel >= cfg->channels) {
@@ -436,6 +448,10 @@ static int dma_rtl87x2g_stop(const struct device *dev, uint32_t channel)
 	GDMA_ChannelTypeDef *dma_channel;
 
 	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
+	if (dma_channel_num < 0) {
+		return -EINVAL;
+	}
+
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
 
 	if (channel >= cfg->channels) {
@@ -460,6 +476,10 @@ static int dma_rtl87x2g_suspend(const struct device *dev, uint32_t channel)
 	GDMA_ChannelTypeDef *dma_channel;
 
 	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
+	if (dma_channel_num < 0) {
+		return -EINVAL;
+	}
+
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
 
 	if (channel >= cfg->channels) {
@@ -486,6 +506,10 @@ static int dma_rtl87x2g_resume(const struct device *dev, uint32_t channel)
 	GDMA_ChannelTypeDef *dma_channel;
 
 	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
+	if (dma_channel_num < 0) {
+		return -EINVAL;
+	}
+
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
 
 	if (channel >= cfg->channels) {
@@ -513,10 +537,17 @@ static int dma_rtl87x2g_get_status(const struct device *dev, uint32_t ch, struct
 {
 	const struct dma_rtl87x2g_config *cfg = dev->config;
 	struct dma_rtl87x2g_data *data = dev->data;
-	int dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, ch);
-	GDMA_ChannelTypeDef *dma_channel =
-		(GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
-	bool suspending = GDMA_GetSuspendChannelStatus(dma_channel);
+	int dma_channel_num;
+	GDMA_ChannelTypeDef *dma_channel;
+	bool suspending;
+
+	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, ch);
+	if (dma_channel_num < 0) {
+		return -EINVAL;
+	}
+
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
+	suspending = GDMA_GetSuspendChannelStatus(dma_channel);
 
 	if (ch >= cfg->channels) {
 		LOG_ERR("channel must be < %" PRIu32 " (%" PRIu32 ")", cfg->channels, ch);
@@ -565,6 +596,10 @@ static int dma_rtl87x2g_init(const struct device *dev)
 
 	for (uint32_t i = 0; i < cfg->channels; i++) {
 		dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, i);
+		if (dma_channel_num < 0) {
+			return -EINVAL;
+		}
+
 		if (dma_channel_num >= 0) {
 			GDMA_INTConfig(dma_channel_num,
 				       GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block,
@@ -589,6 +624,10 @@ static void dma_rtl87x2g_isr(const struct device *dev)
 
 	for (uint32_t i = 0; i < cfg->channels; i++) {
 		dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, i);
+		if (dma_channel_num < 0) {
+			return -EINVAL;
+		}
+
 		dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
 		errflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_STATUSERR_L & BIT(dma_channel_num);
 		ftfflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_STATUSTFR_L & BIT(dma_channel_num);
