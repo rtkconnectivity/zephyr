@@ -24,6 +24,7 @@
 };
 
 &flash {
+	reg = <0x4000000 DT_SIZE_K(1024)>;
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
@@ -58,7 +59,11 @@
 		};
 		app_partition: partition@2d000 {
 			label = "app-image";
-			reg = <0x2D000 DT_SIZE_K(828)>;
+			reg = <0x2D000 DT_SIZE_K(412)>;
+		};
+		ota_tmp_partition: partition@94000 {
+			label = "ota-tmp-image";
+			reg = <0x94000 DT_SIZE_K(416)>;
 		};
 		storage_partition: partition@fc000 {
 			label = "storage";
@@ -79,4 +84,8 @@
 	parity = "none";
 	stop-bits = "1";
 	data-bits = <8>;
+};
+
+&corewdt {
+	status = "okay";
 };

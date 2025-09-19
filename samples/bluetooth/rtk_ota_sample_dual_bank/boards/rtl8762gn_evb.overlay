@@ -1,0 +1,69 @@
+/ {
+	chosen {
+		zephyr,code-partition = &app_partition_0;
+	};
+};
+
+
+&flash {
+	reg = <0x4000000 DT_SIZE_K(1024)>;
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		reserved: partition@0 {
+			label = "reserved-image";
+			reg = <0x0 DT_SIZE_K(4)>;
+		};
+		config_file: partition@1000 {
+			label = "config-file-image";
+			reg = <0x1000 DT_SIZE_K(4)>;
+		};
+		boot_patch_0: partition@2000 {
+			label = "boot-patch-0-image";
+			reg = <0x2000 DT_SIZE_K(32)>;
+		};
+		boot_patch_1: partition@a000 {
+			label = "boot-patch-1-image";
+			reg = <0xA000 DT_SIZE_K(32)>;
+		};
+         /* Bank 0 */
+		ota_header_0: partition@12000 {
+			label = "ota-header-0-image";
+			reg = <0x12000 DT_SIZE_K(4)>;
+		};
+		system_patch_0: partition@13000 {
+			label = "system-patch-0-image";
+			reg = <0x13000 DT_SIZE_K(32)>;
+		};
+		stack_patch_0: partition@1b000 {
+			label = "stack-patch-0-image";
+			reg = <0x1B000 DT_SIZE_K(72)>;
+		};
+		app_partition_0: partition@2d000 {
+			label = "app-image-0";
+			reg = <0x2D000 DT_SIZE_K(360)>;
+		};
+        /* Bank 1 */
+        ota_header_1: partition@87000 {
+			label = "ota-header-1-image";
+			reg = <0x87000 DT_SIZE_K(4)>;
+		};
+		system_patch_1: partition@88000 {
+			label = "system-patch-1-image";
+			reg = <0x88000 DT_SIZE_K(32)>;
+		};
+		stack_patch_1: partition@90000 {
+			label = "stack-patch-1-image";
+			reg = <0x90000 DT_SIZE_K(72)>;
+		};
+		app_partition_1: partition@a2000 {
+			label = "app-image-1";
+			reg = <0xA2000 DT_SIZE_K(360)>;
+		};
+		storage_partition: partition@fc000 {
+			label = "storage";
+			reg = <0xFC000 DT_SIZE_K(16)>;
+		};
+	};
+};

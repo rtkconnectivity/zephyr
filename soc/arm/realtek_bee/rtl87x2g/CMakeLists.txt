@@ -1,3 +1,5 @@
+add_subdirectory_ifdef(CONFIG_REALTEK_OTA ota_src)
+
 zephyr_compile_definitions(STACK_ROM_ADDRESS=0x36000)
 
 zephyr_library_sources(soc.c)
