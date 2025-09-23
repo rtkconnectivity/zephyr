@@ -4,6 +4,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/linker/linker-defs.h>
 #include <zephyr/sys/barrier.h>
+#include <kernel_internal.h>
 #include <soc.h>
 
 #include "rom_api_for_zephyr.h"
@@ -21,6 +22,12 @@
 
 #define LOG_LEVEL CONFIG_SOC_LOG_LEVEL
 LOG_MODULE_REGISTER(soc);
+
+extern char __extram_data_start[];
+extern char __extram_data_end[];
+extern char __extram_data_load_start[];
+extern char __extram_bss_start[];
+extern char __extram_bss_end[];
 
 extern void os_zephyr_patch_init(void);
 extern void BTMAC_Handler(void);
@@ -53,8 +60,16 @@ void rtk_rom_irq_connect(void)
 	/* IRQ_CONNECT(Flash_SEC_IRQn, 5, Flash_SEC_Handler, NULL, 0); */
 }
 
+static void rtl87x2g_extra_ram_init(void)
+{
+	z_early_memcpy(&__extram_data_start, &__extram_data_load_start,
+			__extram_data_end - __extram_data_start);
+	z_early_memset(__extram_bss_start, 0, __extram_bss_end - __extram_bss_start);
+}
+
 static int rtk_platform_init(void)
 {
+	rtl87x2g_extra_ram_init();
 /*
  * SCB->VTOR points to zephyr's vector table which is placed in flash.
  * However, vector table place in flash will trigger hardfault when flash erasing.
