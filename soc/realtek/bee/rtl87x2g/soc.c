@@ -9,6 +9,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/linker/linker-defs.h>
 #include <zephyr/sys/barrier.h>
+#include <kernel_internal.h>
 #include <soc.h>
 
 #include "rom_api_for_zephyr.h"
@@ -21,6 +22,12 @@
 #include "aon_reg.h"
 #include "os_pm.h"
 #include "trace.h"
+
+extern char __extram_data_start[];
+extern char __extram_data_end[];
+extern char __extram_data_load_start[];
+extern char __extram_bss_start[];
+extern char __extram_bss_end[];
 
 extern void os_zephyr_patch_init(void);
 extern void WDG_SystemReset(int wdt_mode, int reset_reason);
@@ -110,8 +117,16 @@ static void rtl87x2g_isr_register(void)
 	RamVectorTableUpdate(NMI_VECTORn, (IRQ_Fun)z_arm_nmi);
 }
 
+static void rtl87x2g_extra_ram_init(void)
+{
+	z_early_memcpy(&__extram_data_start, &__extram_data_load_start,
+			__extram_data_end - __extram_data_start);
+	z_early_memset(__extram_bss_start, 0, __extram_bss_end - __extram_bss_start);
+}
+
 static int rtl87x2g_platform_init(void)
 {
+	rtl87x2g_extra_ram_init();
 	/*
 	 * RTL87X2G reserves a RAM region for the vector table, referred to as the RamVectorTable.
 	 * Steps to initialize the vector table in RAM:

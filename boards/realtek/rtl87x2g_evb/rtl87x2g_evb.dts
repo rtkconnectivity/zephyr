@@ -13,10 +13,10 @@
 	compatible = "realtek,rtl87x2g_evb";
 
 	chosen {
-		zephyr,sram = &ram_data;
+		zephyr,sram = &tcm0;
 		zephyr,flash = &flash;
 		zephyr,code-partition = &app_partition;
-		zephyr,itcm = &ram_code;
+		zephyr,itcm = &tcm1;
 		zephyr,console = &uart2;
 		zephyr,shell-uart = &uart2;
 		zephyr,flash-controller = &fmc;

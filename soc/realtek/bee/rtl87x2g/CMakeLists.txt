@@ -8,8 +8,12 @@ zephyr_library_sources(soc.c)
 zephyr_library_sources_ifdef(CONFIG_REALTEK_IMAGE_HEADER image_header.c)
 
 zephyr_linker_sources(ROM_START SORT_KEY 0x0header realtek_image_header.ld)
+zephyr_linker_sources(SECTIONS rtk_ext_ram.ld)
 zephyr_linker_sources(SECTIONS trace_section.ld)
-zephyr_linker_sources(RAMFUNC_SECTION app_ram_text.ld)
+zephyr_linker_sources(ROM_SECTIONS rtk_xip.ld)
+zephyr_linker_sources(RAMFUNC_SECTION rtk_ramfunc.ld)
+zephyr_linker_sources(RODATA rtk_rodata.ld)
+zephyr_linker_sources(RWDATA rtk_rwdata.ld)
 # zephyr_linker_sources(SECTIONS boot_section.ld)
 
 set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/linker.ld CACHE INTERNAL "")

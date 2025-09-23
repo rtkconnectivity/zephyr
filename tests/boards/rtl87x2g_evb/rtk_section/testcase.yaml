@@ -1,0 +1,4 @@
+tests:
+  boards.rtl87x2g.rtk_section:
+    platform_allow:
+      - rtl87x2g_evb
