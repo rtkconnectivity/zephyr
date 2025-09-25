@@ -1,0 +1,23 @@
+/*
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/delete-node/ &tcm1;
+/delete-node/ &tcm_heap;
+/ {
+	tcm {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		tcm1: memory@119c00 {
+			reg  = <0x00119c00 DT_SIZE_K(40)>;
+			compatible = "zephyr,memory-region", "arm,itcm";
+			zephyr,memory-region = "ITCM";
+		};
+		tcm_heap: memory@123c00 {
+			compatible = "mmio-sram";
+			reg  = <0x123c00 DT_SIZE_K(100)>;
+		};
+	};
+};
