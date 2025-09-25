@@ -30,6 +30,3 @@ properties:
     type: boolean
     description: Specify trigger mode in IR RX mode.
       RX will be triggered by rising edge by default.
-
-  dma-names:
-    required: true

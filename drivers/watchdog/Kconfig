@@ -132,4 +132,6 @@ source "drivers/watchdog/Kconfig.ene"
 
 source "drivers/watchdog/Kconfig.rtl87x2g"
 
+source "drivers/watchdog/Kconfig.rtl8752h"
+
 endif # WATCHDOG

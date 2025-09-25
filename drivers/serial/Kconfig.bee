@@ -17,3 +17,30 @@ config UART_BEE
 
 	help
 	  Enable the bee uart driver.
+
+if UART_BEE
+config UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
+	bool "Keep active after rx wakeup"
+	default y
+	depends on PM_DEVICE
+	help
+	  Keep active and do not allow the system to suspend after rx wakeup.
+
+if UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
+config UART_BEE_KEEP_ACTIVE_TIMEOUT_MSEC
+	int "Milliseconds to keep active"
+	default 10000
+	help
+	  Time to keep active after rx wakeup in milliseconds.
+	  Note: This does not mean that the system will sleep immediately
+	  after timeout, it depends on other check status.
+
+endif # UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
+
+config UART_BEE_RX_THRESHOLD
+	int "Rx threshold level to trigger interrupt"
+	default 10
+	help
+	  The Rx threshold level to trigger rx interrupt, range from 1 to 29.
+
+endif # UART_BEE

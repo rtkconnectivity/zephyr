@@ -30,7 +30,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(rtl87x2g_pm, LOG_LEVEL_INF);
 
-#define RTK_PM_WORKQ_STACK_SIZE 512
+#define RTK_PM_WORKQ_STACK_SIZE 768
 #define RTK_PM_WORKQ_PRIORITY   K_HIGHEST_THREAD_PRIO
 
 K_THREAD_STACK_DEFINE(rtk_pm_workq_stack_area, RTK_PM_WORKQ_STACK_SIZE);

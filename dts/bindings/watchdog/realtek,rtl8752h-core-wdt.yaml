@@ -1,0 +1,21 @@
+description: RealTek core watchdog timer
+
+compatible: "realtek,rtl8752h-core-wdt"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  # 16Bit: 32.768k/(1+divfactor).
+  div-factor:
+    type: int
+    description: Watchdog clock divider
+    required: true
+
+  initial-timeout-ms:
+    type: int
+    default: 4000
+    description: |
+      Set timeout value in milliseconds.

@@ -32,6 +32,7 @@
 #include "gpio_bee.h"
 #include <zephyr/drivers/gpio/gpio_utils.h>
 #include <zephyr/logging/log.h>
+#include "trace.h"
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define BEE_GPIO_WriteBit(port, bit, val)            GPIO_WriteBit(port, bit, val)
@@ -171,13 +172,6 @@ static int gpio_bee_gpio2pad(uint8_t port_num, uint32_t pin)
 	return -EIO;
 }
 
-#ifdef CONFIG_PM_DEVICE
-static int gpio_bee_pm_pad_list_insert(struct pm_pad_node *head, struct pm_pad_node *array,
-				       uint8_t pad_num, uint8_t gpio_num);
-static void gpio_bee_pm_pad_list_remove(struct pm_pad_node *head, struct pm_pad_node *array,
-					uint8_t pad_num, uint8_t gpio_num);
-#endif
-
 static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpio_flags_t flags)
 {
 	LOG_DBG("port=%s, pin=%d, flags=0x%x, line%d\n", port->name, pin, flags, __LINE__);
@@ -281,22 +275,28 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 	}
 
 #ifdef CONFIG_PM_DEVICE
+	sys_snode_t *prev;
+
 	if (flags & GPIO_OUTPUT) {
-		gpio_bee_pm_pad_list_remove(data->list.wakeup_head, data->list.array, pad_pin, pin);
-		ret = gpio_bee_pm_pad_list_insert(data->list.output_head, data->list.array, pad_pin,
-						  pin);
-		if (ret) {
-			LOG_ERR("Failed to insert gpio pm pad list");
-			return ret;
+		data->list.array[pin].mode = PM_PAD_OUTPUT;
+	} else if (flags & GPIO_INPUT) {
+		if (flags & BEE_GPIO_INPUT_PM_WAKEUP) {
+			data->list.array[pin].mode = PM_PAD_WAKEUP;
+		} else {
+			data->list.array[pin].mode = PM_PAD_INPUT;
 		}
-	} else if ((flags & GPIO_INPUT) && (flags & BEE_GPIO_INPUT_PM_WAKEUP)) {
-		gpio_bee_pm_pad_list_remove(data->list.output_head, data->list.array, pad_pin, pin);
-		ret = gpio_bee_pm_pad_list_insert(data->list.wakeup_head, data->list.array, pad_pin,
-						  pin);
-		if (ret) {
-			LOG_ERR("Failed to insert gpio pm pad list");
-			return ret;
+	} else {
+		if (sys_slist_find(&data->list.list, (sys_snode_t *)&data->list.array[pin],
+				   &prev)) {
+			sys_slist_remove(&data->list.list, prev,
+					 (sys_snode_t *)&data->list.array[pin]);
 		}
+
+		return 0;
+	}
+
+	if (!sys_slist_find(&data->list.list, (sys_snode_t *)&data->list.array[pin], NULL)) {
+		sys_slist_append(&data->list.list, (sys_snode_t *)&data->list.array[pin]);
 	}
 
 #endif
@@ -494,200 +494,165 @@ int gpio_bee_port_get_direction(const struct device *port, gpio_port_pins_t map,
 #endif
 
 #ifdef CONFIG_PM_DEVICE
-static int gpio_bee_pm_pad_list_init(struct pm_pad_node_list *list)
+static void output_pad_pm_suspend(const struct device *port, struct pm_pad_node *pad_node)
 {
-	list->output_head = &(list->array[32]);
-	list->output_head->pad_num = 0xff;
-	list->output_head->next_gpio_num = 0xff;
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+	const struct gpio_bee_config *config = port->config;
+	GPIO_TypeDef *port_base = config->port_base;
+#endif
+	uint8_t pad_num, gpio_num;
+    //uint8_t pad_num, gpio_num,val;
 
-	list->wakeup_head = &(list->array[33]);
-	list->wakeup_head->pad_num = 0xff;
-	list->wakeup_head->next_gpio_num = 0xff;
-
-	return 0;
+	pad_num = pad_node->pad_num;
+	gpio_num = pad_node->gpio_num;
+    //val= BEE_GPIO_ReadOutputDataBit(port_base, BIT(gpio_num));
+    //DBG_DIRECT("output suspend pad num=%d,gpio num= %d,val=%d",pad_num,gpio_num,val);
+	//BEE_Pad_SetOutputLevel(pad_num, val);
+	//Pad_Config(pad_num, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_UP, PAD_OUT_ENABLE,PAD_OUT_HIGH);
+			  
+	BEE_Pad_SetOutputLevel(pad_num, BEE_GPIO_ReadOutputDataBit(port_base, BIT(gpio_num)));
+	BEE_Pad_SetControlMode(pad_num, PAD_SW_MODE);
 }
 
-static int gpio_bee_pm_pad_list_insert(struct pm_pad_node *head, struct pm_pad_node *array,
-				       uint8_t pad_num, uint8_t gpio_num)
+static void input_pad_pm_suspend(const struct device *port, struct pm_pad_node *pad_node)
 {
-	struct pm_pad_node *new_node;
-	struct pm_pad_node *cur_node = head;
+	uint8_t pad_num;
 
-	/* Search from head to tail */
-	while (cur_node->next_gpio_num != 0xff) {
-		if (cur_node->pad_num > pad_num &&
-		    array[cur_node->next_gpio_num].pad_num < pad_num) {
-			/* Insert the node */
-			new_node = &(array[gpio_num]);
-			new_node->pad_num = pad_num;
-			new_node->next_gpio_num = cur_node->next_gpio_num;
-			cur_node->next_gpio_num = gpio_num;
-			return 0;
-		} else if (cur_node->pad_num == pad_num) {
-			return 0;
-		}
-
-		cur_node = &(array[cur_node->next_gpio_num]);
-		continue;
-	}
-
-	if (cur_node->pad_num == pad_num) {
-		return 0;
-	}
-
-	/* Insert the first node */
-	new_node = &(array[gpio_num]);
-	new_node->pad_num = pad_num;
-	new_node->next_gpio_num = cur_node->next_gpio_num;
-	cur_node->next_gpio_num = gpio_num;
-
-	return 0;
+	pad_num = pad_node->pad_num;
+	//DBG_DIRECT("input suspend pad num=%d",pad_num);
+	BEE_Pad_SetControlMode(pad_num, PAD_SW_MODE);
 }
 
-static void gpio_bee_pm_pad_list_remove(struct pm_pad_node *head, struct pm_pad_node *array,
-					uint8_t pad_num, uint8_t gpio_num)
+static void wakeup_pad_pm_suspend(const struct device *port, struct pm_pad_node *pad_node)
 {
-	struct pm_pad_node *cur_node = head;
+	const struct gpio_bee_config *config = port->config;
+	GPIO_TypeDef *port_base = config->port_base;
+	uint8_t pad_num, gpio_num;
 
-	while (cur_node->next_gpio_num != 0xff) {
-		if (array[cur_node->next_gpio_num].pad_num == pad_num) {
-			if (array[cur_node->next_gpio_num].next_gpio_num != 0xff) {
-				cur_node->next_gpio_num =
-					array[cur_node->next_gpio_num].next_gpio_num;
+	pad_num = pad_node->pad_num;
+	gpio_num = pad_node->gpio_num;
+	if (port_base->BEE_GPIO_REG_INT_EN & BIT(gpio_num)) {
+#if CONFIG_BEE_GPIO_SUPPORT_BOTH_EDGE
+		if (port_base->INTBOTHEDGE & BIT(gpio_num)) {
+			port_base->DATAIN;
+			bool high_trigger = !(port_base->DATAIN & BIT(gpio_num));
+
+			Pad_ControlSelectValue(pad_num, PAD_SW_MODE);
+			BEE_System_WakeUpPinEnable(
+				pad_num, high_trigger ? PAD_WAKEUP_POL_HIGH : PAD_WAKEUP_POL_LOW,
+				DISABLE);
+			if (high_trigger) {
+				port_base->INTPOLARITY |= BIT(gpio_num);
+
 			} else {
-				cur_node->next_gpio_num = 0xff;
+				port_base->INTPOLARITY &= (~BIT(gpio_num));
 			}
-			return;
-		} else if (array[cur_node->next_gpio_num].pad_num < pad_num) {
-			return;
-		}
+		} else {
+#endif
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+			extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
+			uint32_t GPIO_Pin_Swap = GPIO_SwapDebPinBit(port_base, BIT(gpio_num));
+			bool high_trigger = port_base->GPIO_EXT_DEB_POL_CTL & GPIO_Pin_Swap;
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+		bool high_trigger = port_base->INTPOLARITY & BIT(gpio_num);
+#endif
 
-		cur_node = &(array[cur_node->next_gpio_num]);
-		continue;
+			BEE_Pad_SetControlMode(pad_num, PAD_SW_MODE);
+			BEE_System_WakeUpPinEnable(
+				pad_num, high_trigger ? PAD_WAKEUP_POL_HIGH : PAD_WAKEUP_POL_LOW,
+				DISABLE);
+#if CONFIG_BEE_GPIO_SUPPORT_BOTH_EDGE
+		}
+#endif
 	}
 }
 
+static void output_pad_pm_resume(const struct device *port, struct pm_pad_node *pad_node)
+{
+	uint8_t pad_num;
+
+	pad_num = pad_node->pad_num;
+
+	Pinmux_Config(pad_num, DWGPIO);
+	BEE_Pad_SetControlMode(pad_num, PAD_PINMUX_MODE);
+}
+
+static void input_pad_pm_resume(const struct device *port, struct pm_pad_node *pad_node)
+{
+	uint8_t pad_num;
+
+	pad_num = pad_node->pad_num;
+
+	Pinmux_Config(pad_num, DWGPIO);
+	BEE_Pad_SetControlMode(pad_num, PAD_PINMUX_MODE);
+}
+
+static void wakeup_pad_pm_resume(const struct device *port, struct pm_pad_node *pad_node)
+{
+	uint8_t pad_num;
+
+	pad_num = pad_node->pad_num;
+
+	System_WakeUpPinDisable(pad_num);
+	Pinmux_Config(pad_num, DWGPIO);
+	BEE_Pad_SetControlMode(pad_num, PAD_PINMUX_MODE);
+}
+#include <trace.h>
 static int gpio_bee_pm_action(const struct device *port, enum pm_device_action action)
 {
 	const struct gpio_bee_config *config = port->config;
 	struct gpio_bee_data *data = port->data;
 	GPIO_TypeDef *port_base = config->port_base;
-	struct pm_pad_node *pm_pad_node_array = data->list.array;
-	struct pm_pad_node *cur_output_pad_node = data->list.output_head;
-	struct pm_pad_node *cur_wakeup_pad_node = data->list.wakeup_head;
+	struct pm_pad_node *pad_node;
+	uint8_t pad_num, gpio_num;
 
 	extern void GPIO_DLPSEnter(void *PeriReg, void *StoreBuf);
 	extern void GPIO_DLPSExit(void *PeriReg, void *StoreBuf);
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-		while (cur_output_pad_node->next_gpio_num != 0xff) {
-			BEE_Pad_SetOutputLevel(
-				pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
-				BEE_GPIO_ReadOutputDataBit(
-					port_base, BIT(cur_output_pad_node->next_gpio_num)));
-			BEE_Pad_SetControlMode(
-				pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
-				PAD_SW_MODE);
-			cur_output_pad_node =
-				&(pm_pad_node_array[cur_output_pad_node->next_gpio_num]);
-		}
-
-		while (cur_wakeup_pad_node->next_gpio_num != 0xff) {
-			/* Enable pm wakeup function for gpios which ：
-			 * 1. Configured BEE_GPIO_INPUT_PM_WAKEUP flag;
-			 * 2. Enabled interrupt;
-			 */
-			if (port_base->BEE_GPIO_REG_INT_EN &
-			    BIT(cur_wakeup_pad_node->next_gpio_num)) {
-#if CONFIG_BEE_GPIO_SUPPORT_BOTH_EDGE
-				if (port_base->INTBOTHEDGE &
-				    BIT(cur_wakeup_pad_node->next_gpio_num)) {
-					port_base->DATAIN;
-					bool high_trigger =
-						!(port_base->DATAIN &
-						  BIT(cur_wakeup_pad_node->next_gpio_num));
-
-					Pad_ControlSelectValue(
-						pm_pad_node_array[cur_wakeup_pad_node
-									  ->next_gpio_num]
-							.pad_num,
-						PAD_SW_MODE);
-					BEE_System_WakeUpPinEnable(
-						pm_pad_node_array[cur_wakeup_pad_node
-									  ->next_gpio_num]
-							.pad_num,
-						high_trigger ? PAD_WAKEUP_POL_HIGH
-							     : PAD_WAKEUP_POL_LOW,
-						DISABLE);
-					if (high_trigger) {
-						port_base->INTPOLARITY |=
-							BIT(cur_wakeup_pad_node->next_gpio_num);
-
-					} else {
-						port_base->INTPOLARITY &=
-							(~BIT(cur_wakeup_pad_node->next_gpio_num));
-					}
-				} else {
-#endif
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-					extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx,
-									   uint32_t GPIO_Pin);
-					uint32_t GPIO_Pin_Swap = GPIO_SwapDebPinBit(
-						port_base, BIT(cur_wakeup_pad_node->next_gpio_num));
-					bool high_trigger =
-						port_base->GPIO_EXT_DEB_POL_CTL & GPIO_Pin_Swap;
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-				bool high_trigger = port_base->INTPOLARITY &
-						    BIT(cur_wakeup_pad_node->next_gpio_num);
-#endif
-
-					BEE_Pad_SetControlMode(
-						pm_pad_node_array[cur_wakeup_pad_node
-									  ->next_gpio_num]
-							.pad_num,
-						PAD_SW_MODE);
-					BEE_System_WakeUpPinEnable(
-						pm_pad_node_array[cur_wakeup_pad_node
-									  ->next_gpio_num]
-							.pad_num,
-						high_trigger ? PAD_WAKEUP_POL_HIGH
-							     : PAD_WAKEUP_POL_LOW,
-						DISABLE);
-#if CONFIG_BEE_GPIO_SUPPORT_BOTH_EDGE
-				}
-#endif
+		SYS_SLIST_FOR_EACH_CONTAINER(&data->list.list, pad_node, node) {
+			pad_num = pad_node->pad_num;
+			gpio_num = pad_node->gpio_num;
+			switch (pad_node->mode) {
+			case PM_PAD_OUTPUT:
+				output_pad_pm_suspend(port, pad_node);
+				break;
+			case PM_PAD_INPUT:
+				input_pad_pm_suspend(port, pad_node);
+				break;
+			case PM_PAD_WAKEUP:
+				/* Enable pm wakeup function for gpios which ：
+				 * 1. Configured BEE_GPIO_INPUT_PM_WAKEUP flag;
+				 * 2. Enabled interrupt;
+				 */
+				wakeup_pad_pm_suspend(port, pad_node);
+				break;
+			default:
+				break;
 			}
-			cur_wakeup_pad_node =
-				&(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]);
 		}
 
 		GPIO_DLPSEnter(port_base, &data->store_buf);
 
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-
-		while (cur_output_pad_node->next_gpio_num != 0xff) {
-			Pinmux_Config(pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
-				      DWGPIO);
-
-			BEE_Pad_SetControlMode(
-				pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
-				PAD_PINMUX_MODE);
-			cur_output_pad_node =
-				&(pm_pad_node_array[cur_output_pad_node->next_gpio_num]);
-		}
-
-		while (cur_wakeup_pad_node->next_gpio_num != 0xff) {
-			System_WakeUpPinDisable(
-				pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num);
-			Pinmux_Config(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num,
-				      DWGPIO);
-			BEE_Pad_SetControlMode(
-				pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num,
-				PAD_PINMUX_MODE);
-			cur_wakeup_pad_node =
-				&(pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num]);
+		SYS_SLIST_FOR_EACH_CONTAINER(&data->list.list, pad_node, node) {
+			pad_num = pad_node->pad_num;
+			gpio_num = pad_node->gpio_num;
+			switch (pad_node->mode) {
+			case PM_PAD_OUTPUT:
+				output_pad_pm_resume(port, pad_node);
+				break;
+			case PM_PAD_INPUT:
+				input_pad_pm_resume(port, pad_node);
+				break;
+			case PM_PAD_WAKEUP:
+				wakeup_pad_pm_resume(port, pad_node);
+				break;
+			default:
+				break;
+			}
 		}
 
 		GPIO_DLPSExit(port_base, &data->store_buf);
@@ -764,12 +729,11 @@ static int gpio_bee_init(const struct device *dev)
 	memset(data->pin_debounce_ms, 0, sizeof(data->pin_debounce_ms));
 
 #ifdef CONFIG_PM_DEVICE
-	ret = gpio_bee_pm_pad_list_init(&(data->list));
-	if (ret) {
-		LOG_ERR("Failed to init gpio pm pad list");
-		return ret;
+	sys_slist_init(&(data->list.list));
+	for (uint8_t i = 0; i < 32; i++) {
+		data->list.array[i].gpio_num = i;
+		data->list.array[i].pad_num = gpio_bee_gpio2pad(config->port_num, i);
 	}
-
 #endif
 	return ret;
 }
@@ -789,10 +753,9 @@ static int gpio_bee_init(const struct device *dev)
 #define GPIO_BEE_GET_IRQ_INFO(index) .irq_info = &gpio_bee_irq_info##index,
 
 #ifdef CONFIG_PM_DEVICE
-#define GPIO_BEE_ARRAY_DEFINE(index) struct pm_pad_node pm_pad_node_array##index[32 + 1 + 1];
+#define GPIO_BEE_ARRAY_DEFINE(index) struct pm_pad_node pm_pad_node_array##index[32];
 
-#define GPIO_BEE_DATA_INIT(index)                                                                  \
-	.list.array = pm_pad_node_array##index, .list.output_head = NULL, .list.wakeup_head = NULL,
+#define GPIO_BEE_DATA_INIT(index) .list.array = pm_pad_node_array##index,
 
 #else
 #define GPIO_BEE_ARRAY_DEFINE(index)

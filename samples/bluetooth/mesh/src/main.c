@@ -32,6 +32,106 @@
 #define OP_ONOFF_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x03)
 #define OP_ONOFF_STATUS    BT_MESH_MODEL_OP_2(0x82, 0x04)
 
+#if CONFIG_PM
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+#include "rtl876x_pinmux.h"
+#elif  defined(CONFIG_SOC_SERIES_RTL87X2G)
+#include "rtl_pinmux.h"
+#endif
+#include "mesh/adv.h"
+#include "trace.h"
+#include "dlps.h"
+#if defined(CONFIG_BT_MESH_SHELL)
+#include <zephyr/shell/shell.h>
+#endif
+
+void pm_test_timer_expired_handler(struct k_timer *timer);
+K_TIMER_DEFINE(pm_test_timer, pm_test_timer_expired_handler, NULL);
+void pm_test_timer_expired_handler(struct k_timer *timer)
+{
+
+}
+bool is_app_enabled_dlps = true;
+int pm_user_ctl(const struct shell *sh, size_t argc, char **argv)
+{
+   int err = 0;
+   uint16_t pm_ctl =0;
+   #if defined(CONFIG_BT_MESH_SHELL)
+   pm_ctl = shell_strtoul(argv[1], 0, &err);
+   #endif
+   if(pm_ctl ==0) is_app_enabled_dlps =false;
+   else is_app_enabled_dlps =true;
+
+   return 0;
+}
+
+extern void (*platform_pm_register_callback_func_with_priority)(void *, PlatformPMStage, int8_t);
+
+enum PMCheckResult app_enter_dlps_check(void) {
+    //DBG_DIRECT("app check dlps flag %d", app_global_data.is_app_enabled_dlps);
+    //return app_global_data.is_app_enabled_dlps ? PM_CHECK_PASS : PM_CHECK_FAIL;
+	//printk("dlps_check\n");
+	//DBG_DIRECT("dlps_check\n");
+	//return is_app_enabled_dlps ? PM_CHECK_PASS : PM_CHECK_FAIL;
+	return PM_CHECK_PASS ;
+	//return is_app_enabled_dlps;
+}
+
+void sync_entim_exit_dlps_cb(void)
+{
+	 //printk("exit_dlps_cb\n");
+	 //uint32_t reason= power_get_wakeup_reason();
+	 //Pad_Config(P4_0, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_DOWN, PAD_OUT_ENABLE, PAD_OUT_LOW);
+	 uint32_t reason = platform_pm_get_wakeup_reason();
+	 //DBG_DIRECT("exit_dlps_cb reason=0x%x",reason);
+	  printk("ext=0x%08x\n",reason);
+	//  #if defined(CONFIG_SHELL)
+	//   if (System_WakeUpInterruptValue(P3_1) == SET)
+    //   {
+	// 	//DBG_DIRECT("wakeup by P31");
+	// 	Pad_ClearWakeupINTPendingBit(P3_1);
+	// 	System_WakeUpPinDisable(P3_1);
+	// 	printk("p31 wake up\n");
+	// 	is_app_enabled_dlps=false;
+	//   }
+	//   Pad_ControlSelectValue(P3_0, PAD_PINMUX_MODE);
+    //   Pad_ControlSelectValue(P3_1, PAD_PINMUX_MODE);
+	//   //Pad_ControlSelectValue(P2_4, PAD_PINMUX_MODE);//button pin
+    //   //Pad_ControlSelectValue(P4_0, PAD_PINMUX_MODE);//gpio led pin
+	//  #endif
+      
+}
+void sync_entim_enter_dlps_cb(void)
+{
+    printk("en_cb\n");
+	//DBG_DIRECT("enter_dlps_cb");
+	// #if defined(CONFIG_SHELL)
+	//  //Pad_Config(P4_0, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_DOWN, PAD_OUT_ENABLE, PAD_OUT_HIGH);
+	//  Pad_ControlSelectValue(P3_0, PAD_SW_MODE);//tx pin
+    //  Pad_ControlSelectValue(P3_1, PAD_SW_MODE);//rx pin
+	//  //Pad_ControlSelectValue(P2_4, PAD_SW_MODE);//button pin
+    //  //Pad_ControlSelectValue(P4_0, PAD_SW_MODE);//gpio led pin
+	//  #if defined(CONFIG_SOC_SERIES_RTL8752H)
+	//  System_WakeUpPinEnable(P3_1, PAD_WAKEUP_POL_LOW, 0,20);
+	//  #elif  defined(CONFIG_SOC_SERIES_RTL87X2G)
+    //  System_WakeUpPinEnable(P3_1, PAD_WAKEUP_POL_LOW, 0);
+	//  #endif
+	// #endif
+     
+}
+
+
+static void app_dlps_check_cb_register(void) {
+    platform_pm_register_callback_func_with_priority((void *)app_enter_dlps_check, PLATFORM_PM_CHECK,1);
+}
+static void app_dlps_enter_cb_register(void) {
+    platform_pm_register_callback_func_with_priority((void *)sync_entim_enter_dlps_cb, PLATFORM_PM_ENTER,1);
+}
+static void app_dlps_exit_cb_register(void) {
+    platform_pm_register_callback_func_with_priority((void *)sync_entim_exit_dlps_cb, PLATFORM_PM_EXIT,1);
+}
+#endif
+
 static void attention_on(const struct bt_mesh_model *mod)
 {
 	board_led_set(true);
@@ -216,9 +316,14 @@ static int gen_onoff_set(const struct bt_mesh_model *model,
 			 struct bt_mesh_msg_ctx *ctx,
 			 struct net_buf_simple *buf)
 {
+	#if CONFIG_PM
+	is_app_enabled_dlps=false;
+	#endif
 	(void)gen_onoff_set_unack(model, ctx, buf);
 	//onoff_status_send(model, ctx); //2025-07-30
-
+    #if CONFIG_PM
+	is_app_enabled_dlps=true;
+	#endif
 	return 0;
 }
 
@@ -388,6 +493,7 @@ static void button_pressed(struct k_work *work)
 }
 
 char addr_s[BT_ADDR_LE_STR_LEN];//2025-07-30
+int bt_mesh_scan_disable(void);
 static void bt_ready(int err)
 {
 	if (err) {
@@ -417,9 +523,10 @@ static void bt_ready(int err)
 
 	/* This will be a no-op if settings_load() loaded provisioning info */
 	bt_mesh_prov_enable(BT_MESH_PROV_ADV | BT_MESH_PROV_GATT);
-
+   // bt_mesh_scan_disable();
 	printk("Mesh initialized\n");
 }
+
 
 /*RTL_DEBUG[🔧]：使用shell指令，增加mesh device的调试code*/
 /*
@@ -630,16 +737,18 @@ int mesh_key_info(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
+
+
 SHELL_STATIC_SUBCMD_SET_CREATE(mesh_user_cmds,     
        SHELL_CMD_ARG(heap-test, NULL, "[<period:ms> count:(0=>unlimited)>]", cmd_heap_test_start_demo, 1,2), 
        SHELL_CMD_ARG(key-show, NULL, "netkey index", mesh_key_info, 1, 1),
        SHELL_CMD_ARG(mesh-send, NULL, "[<Dst:(0=>0xffff)> <period:ms> <count:(0=>unlimited)>]", cmd_mesh_test_start_demo, 1, 3),
        #if CONFIG_PM
+	   SHELL_CMD_ARG(pm-ctl, NULL, "[<ctl:(0=>exit 1=>enter)>]", pm_user_ctl, 1, 1),
        #endif
      SHELL_SUBCMD_SET_END
     );
  SHELL_CMD_ARG_REGISTER(mesh_user, &mesh_user_cmds, "mesh user define commands", NULL, 1, 1);
-
 
 #endif
 
@@ -675,13 +784,18 @@ int main(void)
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 	}
-    
+	#if CONFIG_PM
+    app_dlps_check_cb_register();
+    app_dlps_enter_cb_register();
+    app_dlps_exit_cb_register();
+	//k_timer_start(&pm_test_timer, K_MSEC(300), K_MSEC(300));//K_NO_WAIT);
+	#endif
 	#if defined(CONFIG_BT_MESH_SHELL)
     /*
      2025-7-30 lq_liu
      get info from my_fifo to send mesh message by gen_onoff_send 
      */
-     //T_RTL_MESH_SEND_BUF *rx_data;
+     //T_RTL_MESH_SEND_BUF *rx_data; 
      while (1) {
     
         k_msgq_get(&swtimer_msgq, &mesh_send_buf, K_FOREVER);

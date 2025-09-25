@@ -462,7 +462,7 @@ void net_buf_unref(struct net_buf *buf)
 #endif
 {
 	__ASSERT_NO_MSG(buf);
-
+   // k_spinlock_key_t key = k_spin_lock(&buf_unref_lock);
 	while (buf) {
 		
 		struct net_buf_pool *pool;
@@ -494,24 +494,27 @@ void net_buf_unref(struct net_buf *buf)
 		atomic_inc(&pool->avail_count);
 		__ASSERT_NO_MSG(atomic_get(&pool->avail_count) <= pool->buf_count);
 #endif
-
+        //k_spin_unlock(&buf_unref_lock, key);//解锁
 		if (pool->destroy) {
 			pool->destroy(buf);
+			//key = k_spin_lock(&buf_unref_lock);//上锁
 			 /* 在调用 pool->destroy 前解锁*/
-			//k_spin_unlock(&buf_unref_lock, key);
-			//pool->destroy(buf);
-			//key = k_spin_lock(&buf_unref_lock);
-            //buf = frags;
-			//k_spin_unlock(&buf_unref_lock, key);
+			// k_spin_unlock(&buf_unref_lock, key);
+			// pool->destroy(buf);
+			// key = k_spin_lock(&buf_unref_lock);
+            // buf = frags;
+			// k_spin_unlock(&buf_unref_lock, key);
 		} else {
+			//key = k_spin_lock(&buf_unref_lock);//上锁
 			net_buf_destroy(buf);
 			/*默认 destroy 完成后解锁*/
 			//buf = frags;
-           // k_spin_unlock(&buf_unref_lock, key);
+            //k_spin_unlock(&buf_unref_lock, key);
 		}
 
 		buf = frags;
 	}
+	//k_spin_unlock(&buf_unref_lock, key);//解锁
 }
 
 struct net_buf *net_buf_ref(struct net_buf *buf)

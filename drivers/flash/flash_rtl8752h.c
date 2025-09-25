@@ -8,7 +8,14 @@
 #include <zephyr/drivers/flash.h>
 #include <zephyr/logging/log.h>
 
-#include <flash_nor_device.h>
+#include <platform_cfg.h>
+#include <trace.h>
+
+extern uint8_t (*flash_nor_get_default_bp_lv)(void);
+extern void flash_nor_dump_flash_info(void);
+extern FLASH_NOR_RET_TYPE (*flash_nor_read_locked)(uint32_t addr, uint8_t *data, uint32_t byte_len);
+extern FLASH_NOR_RET_TYPE (*flash_nor_write_locked)(uint32_t addr, uint8_t *data, uint32_t byte_len);
+extern FLASH_NOR_RET_TYPE (*flash_nor_erase_locked)(uint32_t addr, FLASH_NOR_ERASE_MODE mode);
 
 #define DT_DRV_COMPAT realtek_rtl8752h_flash_controller
 #define SOC_NV_FLASH_NODE DT_INST(0, soc_nv_flash)
@@ -159,18 +166,44 @@ static const struct flash_driver_api flash_rtl8752h_driver_api = {
 	(mode) == FLASH_NOR_4_BIT_MODE ? "FLASH_NOR_4_BIT_MODE" : "Invalid mode")
 static int flash_rtl8752h_init(const struct device *dev)
 {
-	/* ToDo */
-	if (flash_nor_try_high_speed_mode(FLASH_NOR_IDX_SPIC0,
-		CONFIG_SOC_FLASH_RTL8752H_BIT_MODE) == FLASH_NOR_RET_SUCCESS) {
-		LOG_INF("Flash change to %s",
-			GET_FLASH_BIT_MODE_STR(CONFIG_SOC_FLASH_RTL8752H_BIT_MODE)
-		);
+	if (flash_nor_get_exist(FLASH_NOR_IDX_SPIC0) != FLASH_NOR_EXIST_NONE) {
+		if (flash_nor_load_query_info(FLASH_NOR_IDX_SPIC0) == FLASH_NOR_RET_SUCCESS) {
+			/* apply SW Block Protect */
+			if (boot_cfg.flash_setting.bp_enable) {
+				/**
+				 * set flash default block protect level depend on
+				 * different flash id and different flash layout
+				 */
+				boot_cfg.flash_setting.bp_lv = flash_nor_get_default_bp_lv();
+			} else {
+				boot_cfg.flash_setting.bp_lv = 0;
+			}
+
+			if (flash_nor_set_tb_bit(FLASH_NOR_IDX_SPIC0, 1) == FLASH_NOR_RET_SUCCESS &&
+			    flash_nor_set_bp_lv(FLASH_NOR_IDX_SPIC0,
+						boot_cfg.flash_setting.bp_lv) ==
+				    FLASH_NOR_RET_SUCCESS) {
+				FLASH_PRINT_INFO1("Flash BP Lv = %d", boot_cfg.flash_setting.bp_lv);
+			} else {
+				FLASH_PRINT_INFO0("Flash BP fail!");
+			}
+		}
+		flash_nor_dump_flash_info();
 	}
+
+	/* Switch flash to 4-bit mode before kernel starts to avoid xip isr affecting the calibration flow. */
+    if (flash_nor_try_high_speed_mode(FLASH_NOR_IDX_SPIC0,
+        CONFIG_SOC_FLASH_RTL8752H_BIT_MODE) == FLASH_NOR_RET_SUCCESS) {
+        DBG_DIRECT("Flash change to %s",
+            GET_FLASH_BIT_MODE_STR(CONFIG_SOC_FLASH_RTL8752H_BIT_MODE)
+        );
+    }
+
 	return 0;
 }
 
 static struct flash_rtl8752h_data flash_data;
 
 DEVICE_DT_INST_DEFINE(0, flash_rtl8752h_init, NULL,
-					  &flash_data, NULL, POST_KERNEL,
+					  &flash_data, NULL, PRE_KERNEL_1,
 					  CONFIG_FLASH_INIT_PRIORITY, &flash_rtl8752h_driver_api);

@@ -632,7 +632,7 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 	I2S_InitStruct.I2S_RxChSequence = I2S_RX_CH_L_R;
 	I2S_InitStruct.I2S_MCLKOutput = I2S_MCLK_128fs;
 	I2S_InitStruct.I2S_DMACmd = I2S_DMA_ENABLE;
-#if defined(CONFIG_I2S_BEE_RX)
+#if defined(CONFIG_I2S_BEE_TX)
 	I2S_InitStruct.I2S_TxWaterlevel = 64 - dev_data->dma_tx.dma_cfg.dest_burst_length;
 #endif
 #if defined(CONFIG_I2S_BEE_RX)

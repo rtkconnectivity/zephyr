@@ -289,6 +289,19 @@
 			status = "disabled";
 		};
 
+		aonwdt: watchdog@40000190 {
+			compatible = "realtek,rtl8752h-aon-wdt";
+			reg = <0x40000190 0x10>;
+			status = "disabled";
+		};
+
+		corewdt: watchdog@40006000 {
+			compatible = "realtek,rtl8752h-core-wdt";
+			reg = <0x40006000 0x10>;
+			div-factor = <31>;
+			status = "disabled";
+		};
+
 		ir: ir@40015800 {
 			compatible = "realtek,bee-ir";
 			reg = <0x40015800 0x54>;
@@ -333,6 +346,17 @@
 			status = "disabled";
 			#address-cells = <1>;
 			#size-cells = <0>;
+		};
+
+		spi0_slave: spi_slave@40013000 {
+			compatible = "realtek,bee-spi";
+			reg = <0x40013000 0xf0>;
+			interrupts = <14 0>;
+			clocks = <&cctl APB_CLK(SPI0)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			is-slave;
 		};
 
 		spi1: spi@40013400 {

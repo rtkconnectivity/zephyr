@@ -350,6 +350,110 @@ static void hrs_notify(void)
 	bt_hrs_notify(heartrate);
 }
 
+#if CONFIG_PM
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+#include "rtl876x_pinmux.h"
+#elif  defined(CONFIG_SOC_SERIES_RTL87X2G)
+#include "rtl_pinmux.h"
+#endif
+#include "mesh/adv.h"
+#include "trace.h"
+#include "dlps.h"
+
+bool is_app_enabled_dlps = true;
+//extern PowerModeWakeupReason power_get_wakeup_reason();
+#if defined(CONFIG_SHELL)
+#include <zephyr/shell/shell.h>
+#endif
+
+#if defined(CONFIG_SHELL)
+
+int pm_user_ctl(const struct shell *sh, size_t argc, char **argv)
+{
+   int err = 0;
+
+   uint16_t pm_ctl = shell_strtoul(argv[1], 0, &err);
+   if(pm_ctl ==0) is_app_enabled_dlps =false;
+   else is_app_enabled_dlps =true;
+
+   return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(user_cmds,          	
+	SHELL_CMD_ARG(pm-ctl, NULL, "[<ctl:(0=>exit 1=>enter)>]", pm_user_ctl, 1, 1),
+    SHELL_SUBCMD_SET_END
+ );
+SHELL_CMD_ARG_REGISTER(user_test, &user_cmds, "user define commands",
+		 NULL, 1, 1);
+
+#endif
+
+
+ 
+extern void (*platform_pm_register_callback_func_with_priority)(void *, PlatformPMStage, int8_t);
+
+enum PMCheckResult app_enter_dlps_check(void) {
+    //DBG_DIRECT("app check dlps flag %d", app_global_data.is_app_enabled_dlps);
+    //return app_global_data.is_app_enabled_dlps ? PM_CHECK_PASS : PM_CHECK_FAIL;
+	//printk("dlps_check\n");
+	//DBG_DIRECT("dlps_check\n");
+	return is_app_enabled_dlps ? PM_CHECK_PASS : PM_CHECK_FAIL;
+	//return is_app_enabled_dlps;
+}
+
+void sync_entim_exit_dlps_cb(void)
+{
+	 //printk("exit_dlps_cb\n");
+	 //uint32_t reason= power_get_wakeup_reason();
+	 //Pad_Config(P4_0, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_DOWN, PAD_OUT_ENABLE, PAD_OUT_LOW);
+	 uint32_t reason = platform_pm_get_wakeup_reason();
+	 //DBG_DIRECT("exit_dlps_cb reason=0x%x",reason);
+	 printk("exit_dlps_cb reason=0x%08x\n",reason);
+	 #if defined(CONFIG_SHELL)
+	  if (System_WakeUpInterruptValue(P3_1) == SET)
+      {
+		//DBG_DIRECT("wakeup by P31");
+		Pad_ClearWakeupINTPendingBit(P3_1);
+		System_WakeUpPinDisable(P3_1);
+		printk("p31 wake up\n");
+		is_app_enabled_dlps=false;
+	  }
+	  Pad_ControlSelectValue(P3_0, PAD_PINMUX_MODE);
+      Pad_ControlSelectValue(P3_1, PAD_PINMUX_MODE);
+	 #endif
+      
+}
+void sync_entim_enter_dlps_cb(void)
+{
+    printk("enter_dlps_cb\n");
+	//DBG_DIRECT("enter_dlps_cb");
+	#if defined(CONFIG_SHELL)
+	 //Pad_Config(P4_0, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_DOWN, PAD_OUT_ENABLE, PAD_OUT_HIGH);
+	 Pad_ControlSelectValue(P3_0, PAD_SW_MODE);//tx pin
+     Pad_ControlSelectValue(P3_1, PAD_SW_MODE);//rx pin
+	 #if defined(CONFIG_SOC_SERIES_RTL8752H)
+	 System_WakeUpPinEnable(P3_1, PAD_WAKEUP_POL_LOW, 0,20);
+	 #elif  defined(CONFIG_SOC_SERIES_RTL87X2G)
+     System_WakeUpPinEnable(P3_1, PAD_WAKEUP_POL_LOW, 0);
+	 #endif
+	#endif
+     
+}
+
+
+static void app_dlps_check_cb_register(void) {
+    platform_pm_register_callback_func_with_priority((void *)app_enter_dlps_check, PLATFORM_PM_CHECK,1);
+}
+static void app_dlps_enter_cb_register(void) {
+    platform_pm_register_callback_func_with_priority((void *)sync_entim_enter_dlps_cb, PLATFORM_PM_ENTER,1);
+}
+static void app_dlps_exit_cb_register(void) {
+    platform_pm_register_callback_func_with_priority((void *)sync_entim_exit_dlps_cb, PLATFORM_PM_EXIT,1);
+}
+
+#endif
+
+
 int main(void)
 {
 	struct bt_gatt_attr *vnd_ind_attr;
@@ -363,7 +467,11 @@ int main(void)
 	}
 
 	bt_ready();
-
+    #if CONFIG_PM
+    app_dlps_check_cb_register();
+    app_dlps_enter_cb_register();
+    app_dlps_exit_cb_register();
+	#endif
 	bt_gatt_cb_register(&gatt_callbacks);
 	bt_conn_auth_cb_register(&auth_cb_display);
 
@@ -371,7 +479,7 @@ int main(void)
 					    &vnd_enc_uuid.uuid);
 	bt_uuid_to_str(&vnd_enc_uuid.uuid, str, sizeof(str));
 	printk("Indicate VND attr %p (UUID %s)\n", vnd_ind_attr, str);
-
+    
 	/* Implement notification. At the moment there is no suitable way
 	 * of starting delayed work so we do it here
 	 */

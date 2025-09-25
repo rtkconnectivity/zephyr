@@ -26,9 +26,15 @@
 #include <zephyr/pm/policy.h>
 
 #ifdef CONFIG_PM_DEVICE
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #include "power_manager_unit_platform.h"
-#if defined(CONFIG_SOC_SERIES_RTL8752H)
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include "dlps.h"
+
+extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
+								PlatformPMStage pf_pm_stage,
+								int8_t priority);
+
 #endif
 #endif
 

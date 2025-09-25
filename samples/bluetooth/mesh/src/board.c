@@ -66,8 +66,10 @@ static int led_init(void)
     //2025-07-30
 	// err = gpio_pin_configure(led_dev, LED0_PIN,
 	// 			 LED0_FLAGS | GPIO_OUTPUT_INACTIVE);
+	// err = gpio_pin_configure(led_dev, LED0_PIN, 
+	// 	  LED0_FLAGS | GPIO_OUTPUT_ACTIVE | GPIO_PULL_UP);
 	err = gpio_pin_configure(led_dev, LED0_PIN, 
-		  LED0_FLAGS | GPIO_OUTPUT_ACTIVE | GPIO_PULL_UP);
+		  LED0_FLAGS | GPIO_OUTPUT_INACTIVE | GPIO_PULL_DOWN);
 	if (err) {
 		return err;
 	}

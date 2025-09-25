@@ -11,7 +11,7 @@ zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/shell/backends/shell_uart.c LOC
 endif()
 if (CONFIG_PM)
 zephyr_library_sources(power.c)
-zephyr_code_relocate(FILES power.c LOCATION RAM)
 zephyr_code_relocate(FILES ${ZEPHYR_BASE}/arch/arm/core/nmi.c LOCATION RAM) #for z_arm_nmi
-zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/pm/device.c LOCATION RAM)
+# zephyr_code_relocate(FILES power.c LOCATION RAM)
+# zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/pm/device.c LOCATION RAM)
 endif()

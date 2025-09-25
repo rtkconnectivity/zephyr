@@ -52,5 +52,7 @@ zephyr_library_sources_ifdef(CONFIG_WDT_SHELL wdt_shell.c)
 
 zephyr_library_sources_ifdef(CONFIG_AON_WDT_RTL87X2G	wdt_aon_rtl87x2g.c)
 zephyr_library_sources_ifdef(CONFIG_CORE_WDT_RTL87X2G	wdt_core_rtl87x2g.c)
+zephyr_library_sources_ifdef(CONFIG_AON_WDT_RTL8752H	wdt_aon_rtl8752h.c)
+zephyr_library_sources_ifdef(CONFIG_CORE_WDT_RTL8752H	wdt_core_rtl8752h.c)
 
 zephyr_library_sources_ifdef(CONFIG_USERSPACE wdt_handlers.c)

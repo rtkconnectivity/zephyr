@@ -1,0 +1,20 @@
+# Copyright (c) 2025 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
+
+config AON_WDT_RTL8752H
+	bool "RTL8752H AON Watchdog Timer driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_AON_WDT_ENABLED
+	select USE_HAL_REALTEK_AON_WDT
+	help
+	  Enable the RTL8752H aon wdg timer driver.
+
+config CORE_WDT_RTL8752H
+	bool "RTL8752H Core Watchdog Timer driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL8752H_CORE_WDT_ENABLED
+	depends on !PM
+	select USE_HAL_REALTEK_CORE_WDT
+	help
+	  Enable the RTL8752H core wdg timer driver. It's not
+	  supported with (CONFIG_PM=y)
