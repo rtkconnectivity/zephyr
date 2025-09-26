@@ -126,9 +126,9 @@
 #define BEE_ADCDAT_SPORT0      125
 #define BEE_DACDAT_SPORT0      126
 #define BEE_MCLK               127
-
-#define BEE_SW_MODE 257
-#define BEE_PWR_OFF 258
+#define BEE_PINMUX_MAX         (BEE_MCLK + 1)
+#define BEE_SW_MODE            (BEE_PINMUX_MAX + 1)
+#define BEE_PWR_OFF            (BEE_PINMUX_MAX + 2)
 
 #define BEE_PIN_DISCONNECTED BEE_PIN_MSK
 
