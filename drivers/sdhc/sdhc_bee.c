@@ -549,7 +549,6 @@ static int sdhc_bee_set_io(const struct device *dev, struct sdhc_io *ios)
 	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
 	struct sdhc_bee_data *data = dev->data;
 	uint8_t bus_width;
-	uint16_t clk_div;
 
 	LOG_INF("SDHC I/O: dev: %s, bus width %d, clock %dHz, card power %s, voltage %s", dev->name,
 		ios->bus_width, ios->clock, ios->power_mode == SDHC_POWER_ON ? "ON" : "OFF",
@@ -713,7 +712,6 @@ static void sdio_bee_isr(void *arg)
 {
 	const struct device *dev = (const struct device *)arg;
 	const struct sdhc_bee_config *cfg = dev->config;
-	struct sdhc_bee_data *data = dev->data;
 	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
 
 	DisableIntrByNvic(sdhc_base);
@@ -804,6 +802,30 @@ static int sdhc_bee_init(const struct device *dev)
 }
 
 #ifdef CONFIG_PM_DEVICE
+static void SDIO_DLPSEnter(void *PeriReg, void *StoreBuf)
+{
+	SDHC_TypeDef *SDHCx = (SDHC_TypeDef *)PeriReg;
+	SDHCStoreReg_Typedef *store_buf = (SDHCStoreReg_Typedef *)StoreBuf;
+
+	store_buf->sdhc_reg[0] = (*(volatile uint32_t *)0x40002378);
+	store_buf->sdhc_reg[1] = (*(volatile uint32_t *)0x40002374);
+	store_buf->sdhc_reg[2] = SDHCx->CTRL;
+	store_buf->sdhc_reg[3] = SDHCx->RINTSTS;
+	store_buf->sdhc_reg[4] = SDHCx->INTMASK;
+}
+
+static void SDIO_DLPSExit(void *PeriReg, void *StoreBuf)
+{
+	SDHC_TypeDef *SDHCx = (SDHC_TypeDef *)PeriReg;
+	SDHCStoreReg_Typedef *store_buf = (SDHCStoreReg_Typedef *)StoreBuf;
+
+	(*(volatile uint32_t *)0x40002378) = store_buf->sdhc_reg[0];
+	(*(volatile uint32_t *)0x40002374) = store_buf->sdhc_reg[1];
+	SDHCx->CTRL = store_buf->sdhc_reg[2];
+	SDHCx->RINTSTS = store_buf->sdhc_reg[3];
+	SDHCx->INTMASK = store_buf->sdhc_reg[4];
+}
+
 static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action action)
 {
 	const struct sdhc_bee_config *config = dev->config;
@@ -829,8 +851,6 @@ static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
 				       (clock_control_subsys_t)&config->clkid);
 
-		sdhc_bee_set_clk_src(dev, data->bus_clock);
-
 		/* Set pins to active state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 		if (err < 0) {
@@ -842,6 +862,9 @@ static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		}
 
 		SDIO_DLPSExit(sdhc_base, &data->store_buf);
+		SDHC_SetClkOutFreq(sdhc_base, data->bus_clock / 1000);
+		SDHC_SetHostDataWidth(sdhc_base,
+				      data->bus_width == 1 ? DATAWIDTH_1BIT : DATAWIDTH_4BIT);
 
 		break;
 	default:
