@@ -86,7 +86,6 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 			Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir,
 				   cfg_drv);
 			Pad_Dedicated_Config(cfg_pin, ENABLE);
-			Pad_SetDrivingCurrent(cfg_pin, LEVEL1);
 			Pinmux_HS_Config(SDHC_HS_MUX);
 		} else {
 			Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir,
