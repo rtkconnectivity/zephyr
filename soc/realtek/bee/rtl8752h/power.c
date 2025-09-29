@@ -19,7 +19,7 @@
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(soc, CONFIG_SOC_LOG_LEVEL);
-#define REALTEK_POWER_LOG 0
+#define REALTEK_POWER_LOG 1
 
 /* ROM Extern Variables and Functions */
 /* #include <power_manager_unit_platform.h> */
@@ -183,7 +183,7 @@ static int pm_suspend_devices_rtk(void)
 		TYPE_SECTION_START(pm_device_slots)[num_susp_rtk] = dev;
 		num_susp_rtk++;
 	}
-
+    POWER_LOG("enter is called");
 	return 0;
 }
 

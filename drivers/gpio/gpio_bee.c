@@ -504,10 +504,15 @@ static void output_pad_pm_suspend(const struct device *port, struct pm_pad_node 
 	GPIO_TypeDef *port_base = config->port_base;
 #endif
 	uint8_t pad_num, gpio_num;
+    //uint8_t pad_num, gpio_num,val;
 
 	pad_num = pad_node->pad_num;
 	gpio_num = pad_node->gpio_num;
-
+    //val= BEE_GPIO_ReadOutputDataBit(port_base, BIT(gpio_num));
+    //DBG_DIRECT("output suspend pad num=%d,gpio num= %d,val=%d",pad_num,gpio_num,val);
+	//BEE_Pad_SetOutputLevel(pad_num, val);
+	//Pad_Config(pad_num, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_UP, PAD_OUT_ENABLE,PAD_OUT_HIGH);
+			  
 	BEE_Pad_SetOutputLevel(pad_num, BEE_GPIO_ReadOutputDataBit(port_base, BIT(gpio_num)));
 	BEE_Pad_SetControlMode(pad_num, PAD_SW_MODE);
 }
@@ -517,6 +522,7 @@ static void input_pad_pm_suspend(const struct device *port, struct pm_pad_node *
 	uint8_t pad_num;
 
 	pad_num = pad_node->pad_num;
+	//DBG_DIRECT("input suspend pad num=%d",pad_num);
 	BEE_Pad_SetControlMode(pad_num, PAD_SW_MODE);
 }
 
@@ -594,7 +600,7 @@ static void wakeup_pad_pm_resume(const struct device *port, struct pm_pad_node *
 	Pinmux_Config(pad_num, DWGPIO);
 	BEE_Pad_SetControlMode(pad_num, PAD_PINMUX_MODE);
 }
-
+#include <trace.h>
 static int gpio_bee_pm_action(const struct device *port, enum pm_device_action action)
 {
 	const struct gpio_bee_config *config = port->config;

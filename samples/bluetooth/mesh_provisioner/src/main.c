@@ -304,15 +304,35 @@ static int bt_ready(void)
 
 static uint8_t check_unconfigured(struct bt_mesh_cdb_node *node, void *data)
 {
-	if (!atomic_test_bit(node->flags, BT_MESH_CDB_NODE_CONFIGURED)) {
+	// if (!atomic_test_bit(node->flags, BT_MESH_CDB_NODE_CONFIGURED)) {
+	// 	if (node->addr == self_addr) {
+	// 		configure_self(node);
+	// 	} else {
+	// 		configure_node(node);
+	// 	}
+	// }
+	/* 优化configuration过程 2025-07-30*/
+    if (!atomic_test_bit(node->flags, BT_MESH_CDB_NODE_CONFIGURED)) {
 		if (node->addr == self_addr) {
 			configure_self(node);
 		} else {
+		   printk("Waiting for node to be added...\n");
+		   int err = k_sem_take(&sem_node_added, K_SECONDS(5));
+		    if (err == -EAGAIN) {
+			 printk("Timeout waitingfor node to be added\n");
+		    }
+		    else if(err==0){
+		     //configure_node(node);
+			 printk("node has been  added\n");
+		    }
 			configure_node(node);
+            k_sem_reset(&sem_node_added);
+		  //configure_node(node);
 		}
 	}
-
+    printk("CDB_ITER_CONTINUE\n");
 	return BT_MESH_CDB_ITER_CONTINUE;
+
 }
 
 #if DT_NODE_HAS_STATUS(SW0_NODE, okay)
@@ -332,7 +352,8 @@ static void button_init(void)
 		printk("Error: button device %s is not ready\n", button.port->name);
 		return;
 	}
-	ret = gpio_pin_configure_dt(&button, GPIO_INPUT);
+	//ret = gpio_pin_configure_dt(&button, GPIO_INPUT); //按照bee3plus mesh dongle的配置设置 2025-07-30
+	ret = gpio_pin_configure_dt(&button, GPIO_INPUT| GPIO_PULL_DOWN);
 	if (ret != 0) {
 		printk("Error %d: failed to configure %s pin %d\n", ret, button.port->name,
 		       button.pin);
@@ -382,32 +403,36 @@ int main(void)
 		}
 
 		bin2hex(node_uuid, 16, uuid_hex_str, sizeof(uuid_hex_str));
+       
+		//RTL_DEBUG[🔧]开启配网，显示uprov beacon，去掉button激活配网  2025-07-30
+		bin2hex(node_uuid, 16, uuid_hex_str, sizeof(uuid_hex_str));
+        printk("unprov beacon %s\n", uuid_hex_str);
 
-#if DT_NODE_HAS_STATUS(SW0_NODE, okay)
-		k_sem_reset(&sem_button_pressed);
-		printk("Device %s detected, press button 1 to provision.\n", uuid_hex_str);
-		err = k_sem_take(&sem_button_pressed, K_SECONDS(30));
-		if (err == -EAGAIN) {
-			printk("Timed out, button 1 wasn't pressed in time.\n");
-			continue;
-		}
-#endif
+// #if DT_NODE_HAS_STATUS(SW0_NODE, okay)
+// 		k_sem_reset(&sem_button_pressed);
+// 		printk("Device %s detected, press button 1 to provision.\n", uuid_hex_str);
+// 		err = k_sem_take(&sem_button_pressed, K_SECONDS(30));
+// 		if (err == -EAGAIN) {
+// 			printk("Timed out, button 1 wasn't pressed in time.\n");
+// 			continue;
+// 		}
+// #endif
 
-		printk("Provisioning %s\n", uuid_hex_str);
-		err = bt_mesh_provision_adv(node_uuid, net_idx, 0, 0);
-		if (err < 0) {
-			printk("Provisioning failed (err %d)\n", err);
-			continue;
-		}
+// 		printk("Provisioning %s\n", uuid_hex_str);
+// 		err = bt_mesh_provision_adv(node_uuid, net_idx, 0, 0);
+// 		if (err < 0) {
+// 			printk("Provisioning failed (err %d)\n", err);
+// 			continue;
+// 		}
 
-		printk("Waiting for node to be added...\n");
-		err = k_sem_take(&sem_node_added, K_SECONDS(10));
-		if (err == -EAGAIN) {
-			printk("Timeout waiting for node to be added\n");
-			continue;
-		}
+// 		printk("Waiting for node to be added...\n");
+// 		err = k_sem_take(&sem_node_added, K_SECONDS(10));
+// 		if (err == -EAGAIN) {
+// 			printk("Timeout waiting for node to be added\n");
+// 			continue;
+// 		}
 
-		printk("Added node 0x%04x\n", node_addr);
+// 		printk("Added node 0x%04x\n", node_addr);
 	}
 	return 0;
 }

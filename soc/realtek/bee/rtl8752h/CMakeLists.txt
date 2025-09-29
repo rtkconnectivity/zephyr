@@ -6,8 +6,12 @@ zephyr_linker_sources(SECTIONS trace_section.ld)
 zephyr_library_sources(soc.c)
 zephyr_include_directories(.)
 set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/linker.ld CACHE INTERNAL "")
-
+if (CONFIG_CODE_DATA_RELOCATION)
+zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/shell/backends/shell_uart.c LOCATION RAM2_BSS)
+endif()
 if (CONFIG_PM)
 zephyr_library_sources(power.c)
 zephyr_code_relocate(FILES ${ZEPHYR_BASE}/arch/arm/core/nmi.c LOCATION RAM) #for z_arm_nmi
+# zephyr_code_relocate(FILES power.c LOCATION RAM)
+# zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/pm/device.c LOCATION RAM)
 endif()

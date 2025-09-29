@@ -88,6 +88,32 @@ int settings_load_subtree_direct(
 	return 0;
 }
 
+int settings_nvs_read_by_name(struct settings_store *cs, const char *name,char *value, size_t val_len);
+/*
+ * read a single value to buffer. 
+ RTL_DEBUG[🔌🔧]:subsys:settings-store:增加settings_read_one,使用name读取对应的一笔数据
+ 调用settings_nvs_read_by_name
+ */
+int settings_read_one(const char *name, void *value, size_t read_len)
+{
+    int rc;
+    struct settings_store *cs;
+
+    cs = settings_save_dst;
+    if (!cs) {
+       return -ENOENT;
+    }
+
+    k_mutex_lock(&settings_lock, K_FOREVER);
+
+    rc = settings_nvs_read_by_name(cs, name, (char *)value, read_len);
+
+    k_mutex_unlock(&settings_lock);
+
+    return rc;
+}
+
+/* RTL_DEBUG[🔌🔧]:subsys:settings-store:调试setting_save_one */
 /*
  * Append a single value to persisted config. Don't store duplicate value.
  */

@@ -450,6 +450,11 @@ void net_buf_put(struct k_fifo *fifo, struct net_buf *buf)
 	k_fifo_put(fifo, buf);
 }
 
+// 定义全局自旋锁
+/*
+RTL_FIXME[🛠️] 优化net buf释放:加lock保护  2025-07-30
+*/
+struct k_spinlock buf_unref_lock;// add 
 #if defined(CONFIG_NET_BUF_LOG)
 void net_buf_unref_debug(struct net_buf *buf, const char *func, int line)
 #else
@@ -457,11 +462,13 @@ void net_buf_unref(struct net_buf *buf)
 #endif
 {
 	__ASSERT_NO_MSG(buf);
-
+   // k_spinlock_key_t key = k_spin_lock(&buf_unref_lock);
 	while (buf) {
-		struct net_buf *frags = buf->frags;
+		
 		struct net_buf_pool *pool;
-
+        /*加锁保护整个操作，包括 frags 的定义*/
+		//k_spinlock_key_t key = k_spin_lock(&buf_unref_lock);
+		struct net_buf *frags = buf->frags;
 #if defined(CONFIG_NET_BUF_LOG)
 		if (!buf->ref) {
 			NET_BUF_ERR("%s():%d: buf %p double free", func, line,
@@ -473,6 +480,8 @@ void net_buf_unref(struct net_buf *buf)
 			    buf->pool_id, buf->frags);
 
 		if (--buf->ref > 0) {
+			/*引用计数仍大于 0，解锁并返回*/
+			//k_spin_unlock(&buf_unref_lock, key);
 			return;
 		}
 
@@ -485,15 +494,27 @@ void net_buf_unref(struct net_buf *buf)
 		atomic_inc(&pool->avail_count);
 		__ASSERT_NO_MSG(atomic_get(&pool->avail_count) <= pool->buf_count);
 #endif
-
+        //k_spin_unlock(&buf_unref_lock, key);//解锁
 		if (pool->destroy) {
 			pool->destroy(buf);
+			//key = k_spin_lock(&buf_unref_lock);//上锁
+			 /* 在调用 pool->destroy 前解锁*/
+			// k_spin_unlock(&buf_unref_lock, key);
+			// pool->destroy(buf);
+			// key = k_spin_lock(&buf_unref_lock);
+            // buf = frags;
+			// k_spin_unlock(&buf_unref_lock, key);
 		} else {
+			//key = k_spin_lock(&buf_unref_lock);//上锁
 			net_buf_destroy(buf);
+			/*默认 destroy 完成后解锁*/
+			//buf = frags;
+            //k_spin_unlock(&buf_unref_lock, key);
 		}
 
 		buf = frags;
 	}
+	//k_spin_unlock(&buf_unref_lock, key);//解锁
 }
 
 struct net_buf *net_buf_ref(struct net_buf *buf)

@@ -1,0 +1,30 @@
+/ {
+
+    aliases {
+        sw0 = &button_0;
+        led0 = &led_0;
+    };
+
+    gpio_keys {
+		compatible = "gpio-keys";
+		button_0: button_0 {
+			    gpios = <&gpioa 25 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+    gpio-led {
+		compatible = "gpio-leds";
+		led_0: led_0 {
+			gpios = <&gpiob 8 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&gpioa {
+    status = "okay";
+};
+
+
+&gpiob {
+    status = "okay";
+};

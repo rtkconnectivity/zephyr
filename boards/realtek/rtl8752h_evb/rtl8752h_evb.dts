@@ -50,6 +50,7 @@
 	pinctrl-1 = <&uart2_sleep>;
 	pinctrl-names = "default", "sleep";
 	status = "okay";
+	//status = "disabled";
 	current-speed = <2000000>;
 	parity = "none";
 	stop-bits = "1";
