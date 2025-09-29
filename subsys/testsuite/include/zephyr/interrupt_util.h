@@ -39,6 +39,18 @@ static inline uint32_t get_available_nvic_line(uint32_t initial_offset)
 				NVIC_ClearPendingIRQ(i);
 
 				if (!NVIC_GetPendingIRQ(i)) {
+#if defined(CONFIG_SOC_FAMILY_REALTEK_BEE)
+#if defined(CONFIG_GEN_SW_ISR_TABLE)
+					/*
+					 * For interrupts where the IRQ is not enabled but an ISR
+					 * has been installed, such IRQ should not be considered
+					 * as available IRQs for testing purposes.
+					 */
+					if (_sw_isr_table[i].isr != (void *)z_irq_spurious) {
+						continue;
+					}
+#endif
+#endif
 					/*
 					 * If the NVIC line can be successfully
 					 * un-pended, it is guaranteed that it

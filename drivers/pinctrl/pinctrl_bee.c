@@ -18,9 +18,17 @@
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define bee_pad_set_pull(pin, stre)       Pad_SetPullStrength(pin, stre)
 #define bee_pad_wakeup(pin, pol, en, deb) System_WakeUpPinEnable(pin, pol, en)
+#define BEE_DRIVING_LEVEL0 LEVEL0
+#define BEE_DRIVING_LEVEL1 LEVEL1
+#define BEE_DRIVING_LEVEL2 LEVEL2
+#define BEE_DRIVING_LEVEL3 LEVEL3
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define bee_pad_set_pull(pin, stre)       Pad_PullConfigValue(pin, stre)
 #define bee_pad_wakeup(pin, pol, en, deb) System_WakeUpPinEnable(pin, pol, en, deb)
+#define BEE_DRIVING_LEVEL0 PAD_DRIVING_CURRENT_8_8mA
+#define BEE_DRIVING_LEVEL1 PAD_DRIVING_CURRENT_12_18mA
+#define BEE_DRIVING_LEVEL2 PAD_DRIVING_CURRENT_16_28mA
+#define BEE_DRIVING_LEVEL3 PAD_DRIVING_CURRENT_16_28mA
 #endif
 
 static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
@@ -46,19 +54,19 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 	bee_pad_set_pull(cfg_pin, cfg_pull_strength);
 	switch (current_level) {
 	case 0:
-		Pad_SetDrivingCurrent(cfg_pin, LEVEL0);
+		Pad_SetDrivingCurrent(cfg_pin, BEE_DRIVING_LEVEL0);
 		break;
 
 	case 1:
-		Pad_SetDrivingCurrent(cfg_pin, LEVEL1);
+		Pad_SetDrivingCurrent(cfg_pin, BEE_DRIVING_LEVEL1);
 		break;
 
 	case 2:
-		Pad_SetDrivingCurrent(cfg_pin, LEVEL2);
+		Pad_SetDrivingCurrent(cfg_pin, BEE_DRIVING_LEVEL2);
 		break;
 
 	case 3:
-		Pad_SetDrivingCurrent(cfg_pin, LEVEL3);
+		Pad_SetDrivingCurrent(cfg_pin, BEE_DRIVING_LEVEL3);
 		break;
 
 	default:
@@ -78,7 +86,6 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 			Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir,
 				   cfg_drv);
 			Pad_Dedicated_Config(cfg_pin, ENABLE);
-			Pad_SetDrivingCurrent(cfg_pin, LEVEL1);
 			Pinmux_HS_Config(SDHC_HS_MUX);
 		} else {
 			Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir,

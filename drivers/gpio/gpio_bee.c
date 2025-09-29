@@ -244,6 +244,9 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 		gpio_init_struct.GPIO_ITPolarity = flags & GPIO_INT_LOW_0
 							   ? GPIO_INT_POLARITY_ACTIVE_LOW
 							   : GPIO_INT_POLARITY_ACTIVE_HIGH;
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+		Pad_Dedicated_Config(pad_pin, DISABLE);
+#endif
 		Pad_Config(pad_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, pull_config,
 			   flags & GPIO_OUTPUT ? PAD_OUT_ENABLE : PAD_OUT_DISABLE,
 			   flags & GPIO_OUTPUT_INIT_HIGH ? PAD_OUT_HIGH : PAD_OUT_LOW);

@@ -1,7 +1,7 @@
 tests:
-  boards.rtl87x2g.pm.btmac_wakeup:
+  boards.rtl8752h.pm.btmac_wakeup:
     platform_allow:
-      - rtl87x2g_evb
+      - rtl8752h_evb
     tags:
       - pm
       - bluetooth

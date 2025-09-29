@@ -15,7 +15,7 @@
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #include <rtl_rcc.h>
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#include <rtl876X_rcc.h>
+#include <rtl876x_rcc.h>
 #endif
 
 #include <trace.h>

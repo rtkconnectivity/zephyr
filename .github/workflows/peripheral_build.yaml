@@ -108,7 +108,6 @@ jobs:
         shell: bash
         run: |
           cd realtek-zephyr-project/zephyr
-          git log --reverse -1
           echo "============= build rtl87x2g_evb ============="
           west build -b rtl87x2g_evb samples/bluetooth/peripheral -p
           echo "============= build rtl8752h_evb ============="

@@ -136,7 +136,7 @@ static int sdhc_bee_do_transaction(const struct device *dev, struct sdhc_command
 	uint32_t blockaddr;
 	uint32_t remainblock;
 
-	if (dev_data->sdio_int_en && dev_data->bus_width == 4) {
+	if (dev_data->sdio_int_en) {
 		sdhc_bee_disable_interrupt_pin(dev);
 	}
 
@@ -533,7 +533,7 @@ static int sdhc_bee_do_transaction(const struct device *dev, struct sdhc_command
 		ret = -ENOTSUP;
 	}
 
-	if (dev_data->sdio_int_en && dev_data->bus_width == 4) {
+	if (dev_data->sdio_int_en) {
 		sdhc_bee_enable_interrupt_pin(dev);
 	}
 
@@ -549,7 +549,6 @@ static int sdhc_bee_set_io(const struct device *dev, struct sdhc_io *ios)
 	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
 	struct sdhc_bee_data *data = dev->data;
 	uint8_t bus_width;
-	uint16_t clk_div;
 
 	LOG_INF("SDHC I/O: dev: %s, bus width %d, clock %dHz, card power %s, voltage %s", dev->name,
 		ios->bus_width, ios->clock, ios->power_mode == SDHC_POWER_ON ? "ON" : "OFF",
@@ -703,6 +702,60 @@ static int sdhc_bee_get_host_props(const struct device *dev, struct sdhc_host_pr
 	return 0;
 }
 
+static int sdhc_bee_enable_interrupt(const struct device *dev, sdhc_interrupt_cb_t callback,
+				     int sources, void *user_data)
+{
+	LOG_INF("[%s] line%d", __func__, __LINE__);
+	struct sdhc_bee_data *data = dev->data;
+	const struct sdhc_bee_config *cfg = dev->config;
+	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
+	int ret;
+
+	data->cb = callback;
+	data->user_data = user_data;
+
+	if (data->sdio_int_en) {
+		return 0;
+	}
+
+	if (sources & SDHC_INT_SDIO) {
+		ret = sdhc_bee_enable_interrupt_pin(dev);
+		if (ret) {
+			LOG_ERR("Enable interrupt fail. int-gpio should be configured in 4 "
+				"bit mode");
+			return -EIO;
+		}
+		data->sdio_int_en = true;
+	} else {
+		LOG_ERR("Enable interrupt fail. Only support SDHC_INT_SDIO");
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+
+static int sdhc_bee_disable_interrupt(const struct device *dev, int sources)
+{
+	LOG_INF("[%s] line%d", __func__, __LINE__);
+	struct sdhc_bee_data *data = dev->data;
+	const struct sdhc_bee_config *cfg = dev->config;
+	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
+	int ret;
+
+	if (sources & SDHC_INT_SDIO) {
+		ret = sdhc_bee_disable_interrupt_pin(dev);
+		data->sdio_int_en = false;
+	} else {
+		LOG_ERR("Disable interrupt fail. Only support SDHC_INT_SDIO");
+		return -ENOTSUP;
+	}
+
+	data->cb = NULL;
+	data->user_data = NULL;
+
+	return 0;
+}
+
 /**
  * @brief SDHC interrupt handler
  *
@@ -713,7 +766,6 @@ static void sdio_bee_isr(void *arg)
 {
 	const struct device *dev = (const struct device *)arg;
 	const struct sdhc_bee_config *cfg = dev->config;
-	struct sdhc_bee_data *data = dev->data;
 	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
 
 	DisableIntrByNvic(sdhc_base);
@@ -804,6 +856,30 @@ static int sdhc_bee_init(const struct device *dev)
 }
 
 #ifdef CONFIG_PM_DEVICE
+static void SDIO_DLPSEnter(void *PeriReg, void *StoreBuf)
+{
+	SDHC_TypeDef *SDHCx = (SDHC_TypeDef *)PeriReg;
+	SDHCStoreReg_Typedef *store_buf = (SDHCStoreReg_Typedef *)StoreBuf;
+
+	store_buf->sdhc_reg[0] = (*(volatile uint32_t *)0x40002378);
+	store_buf->sdhc_reg[1] = (*(volatile uint32_t *)0x40002374);
+	store_buf->sdhc_reg[2] = SDHCx->CTRL;
+	store_buf->sdhc_reg[3] = SDHCx->RINTSTS;
+	store_buf->sdhc_reg[4] = SDHCx->INTMASK;
+}
+
+static void SDIO_DLPSExit(void *PeriReg, void *StoreBuf)
+{
+	SDHC_TypeDef *SDHCx = (SDHC_TypeDef *)PeriReg;
+	SDHCStoreReg_Typedef *store_buf = (SDHCStoreReg_Typedef *)StoreBuf;
+
+	(*(volatile uint32_t *)0x40002378) = store_buf->sdhc_reg[0];
+	(*(volatile uint32_t *)0x40002374) = store_buf->sdhc_reg[1];
+	SDHCx->CTRL = store_buf->sdhc_reg[2];
+	SDHCx->RINTSTS = store_buf->sdhc_reg[3];
+	SDHCx->INTMASK = store_buf->sdhc_reg[4];
+}
+
 static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action action)
 {
 	const struct sdhc_bee_config *config = dev->config;
@@ -829,8 +905,6 @@ static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
 				       (clock_control_subsys_t)&config->clkid);
 
-		sdhc_bee_set_clk_src(dev, data->bus_clock);
-
 		/* Set pins to active state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 		if (err < 0) {
@@ -842,6 +916,9 @@ static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		}
 
 		SDIO_DLPSExit(sdhc_base, &data->store_buf);
+		SDHC_SetClkOutFreq(sdhc_base, data->bus_clock / 1000);
+		SDHC_SetHostDataWidth(sdhc_base,
+				      data->bus_width == 1 ? DATAWIDTH_1BIT : DATAWIDTH_4BIT);
 
 		break;
 	default:
@@ -859,6 +936,8 @@ static const struct sdhc_driver_api sdhc_api = {
 	.get_card_present = sdhc_bee_get_card_present,
 	.card_busy = sdhc_bee_card_busy,
 	.get_host_props = sdhc_bee_get_host_props,
+	.enable_interrupt = sdhc_bee_enable_interrupt,
+	.disable_interrupt = sdhc_bee_disable_interrupt,
 };
 
 #define SDHC_BEE_INIT(n)                                                                           \

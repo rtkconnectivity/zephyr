@@ -76,6 +76,10 @@ const struct sys_multi_heap_rec *sys_multi_heap_get_heap(const struct sys_multi_
 	 * if it's invalid and our target is the last!)
 	 * FIXME: return -ENOENT when a proper heap is not found
 	 */
+	if (i == 0) {
+		return NULL;
+	}
+
 	return &mheap->heaps[i-1];
 }
 

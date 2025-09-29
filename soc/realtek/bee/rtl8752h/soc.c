@@ -109,11 +109,15 @@ static void restore_isr_registered_in_zephyr(void)
 			irqn = vector_n - 16;
 			if (irq_is_enabled(irqn)) {
 				irq_disable(irqn);
-				z_isr_install(irqn, isr_handler, NULL);
+				if (_sw_isr_table[irqn].isr != isr_handler) {
+					z_isr_install(irqn, isr_handler, NULL);
+				}
 				RamVectorTableUpdate(vector_n, (IRQ_Fun)_isr_wrapper);
 				irq_enable(irqn);
 			} else {
-				z_isr_install(irqn, isr_handler, NULL);
+				if (_sw_isr_table[irqn].isr != isr_handler) {
+					z_isr_install(irqn, isr_handler, NULL);
+				}
 				RamVectorTableUpdate(vector_n, (IRQ_Fun)_isr_wrapper);
 			}
 			DBG_DIRECT("Restore ISR registered in SYS_INIT: vector_n:%d irqn:%d "
@@ -235,7 +239,7 @@ static int rtk_platform_init_stage_1(void)
 	return 0;
 }
 
-static int rtk_platform_init_stage_2(void)
+int rtk_platform_init_stage_2(void)
 {
 	platform_rtc_aon_init();
 
@@ -290,4 +294,4 @@ static int rtk_register_update(void)
 
 SYS_INIT(rtk_platform_init_stage_1, EARLY, 0);
 SYS_INIT(rtk_register_update, PRE_KERNEL_2, 1);
-SYS_INIT(rtk_platform_init_stage_2, APPLICATION, 0);
+SYS_INIT(rtk_platform_init_stage_2, PRE_KERNEL_2, 2);
