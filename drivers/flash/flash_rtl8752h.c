@@ -9,18 +9,8 @@
 #include <zephyr/logging/log.h>
 
 #include <platform_cfg.h>
+#include <flash_nor_device.h>
 #include <trace.h>
-
-extern uint8_t (*flash_nor_get_default_bp_lv)(void);
-extern void flash_nor_dump_flash_info(void);
-extern FLASH_NOR_RET_TYPE (*flash_nor_read_locked)(uint32_t addr, uint8_t *data, uint32_t byte_len);
-extern FLASH_NOR_RET_TYPE (*flash_nor_write_locked)(uint32_t addr, uint8_t *data, uint32_t byte_len);
-extern FLASH_NOR_RET_TYPE (*flash_nor_erase_locked)
-						(uint32_t addr, FLASH_NOR_ERASE_MODE mode);
-extern FLASH_NOR_RET_TYPE(*flash_nor_set_bp_lv_locked)
-						(FLASH_NOR_IDX_TYPE idx, uint8_t bp_lv);
-extern FLASH_NOR_RET_TYPE(*flash_nor_unlock_bp_by_addr_locked)
-						(uint32_t unlock_addr, uint8_t *old_bp_lv);
 
 #define DT_DRV_COMPAT realtek_rtl8752h_flash_controller
 #define SOC_NV_FLASH_NODE DT_INST(0, soc_nv_flash)
@@ -31,9 +21,6 @@ extern FLASH_NOR_RET_TYPE(*flash_nor_unlock_bp_by_addr_locked)
 #define FLASH_SIZE DT_REG_SIZE(SOC_NV_FLASH_NODE)
 #define FLASH_ADDR DT_REG_ADDR(SOC_NV_FLASH_NODE)
 
-
-#include <trace.h>
-
 LOG_MODULE_REGISTER(flash_rtl8752h, CONFIG_FLASH_LOG_LEVEL);
 struct flash_rtl8752h_data {
 #ifdef CONFIG_MULTITHREADING
@@ -41,7 +28,6 @@ struct flash_rtl8752h_data {
 #endif
 	uint8_t g_flash_old_bp_lv;
 };
-
 
 #ifdef CONFIG_MULTITHREADING
 #define FLASH_SEM_TIMEOUT (k_is_in_isr() ? K_NO_WAIT : K_FOREVER)
