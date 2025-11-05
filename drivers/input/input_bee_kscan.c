@@ -598,7 +598,7 @@ exit:
 			return ret;
 		}
 
-#if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
+#if !CONFIG_BEE_INPUT_KSCAN_AUTOSCAN_MODE
 		if (is_pad_wakeup) {
 			kscan_bee_init_driver(dev, KeyScan_Manual_Scan_Mode,
 					      KeyScan_Manual_Sel_Bit);
