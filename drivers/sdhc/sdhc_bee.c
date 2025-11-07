@@ -789,18 +789,18 @@ static int sdhc_bee_init(const struct device *dev)
 
 	LOG_INF("[%s] %s initializing line%d", __func__, dev->name, __LINE__);
 
-	ret = clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
-
-	if (ret != 0) {
-		LOG_ERR("Error enabling SDHC clock");
-		return ret;
-	}
-
 	/* Pin configuration */
 	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 
 	if (ret < 0) {
 		LOG_ERR("Failed to configure SDHC pins");
+		return ret;
+	}
+
+	ret = clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+	if (ret != 0) {
+		LOG_ERR("Error enabling SDHC clock");
 		return ret;
 	}
 
@@ -902,9 +902,6 @@ static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action ac
 
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
-				       (clock_control_subsys_t)&config->clkid);
-
 		/* Set pins to active state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 		if (err < 0) {
@@ -914,6 +911,9 @@ static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		if (!data->sdio_int_en) {
 			pinctrl_apply_state(config->pcfg, PINCTRL_STATE_INTERRUPT);
 		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
 
 		SDIO_DLPSExit(sdhc_base, &data->store_buf);
 		SDHC_SetClkOutFreq(sdhc_base, data->bus_clock / 1000);

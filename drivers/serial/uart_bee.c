@@ -1240,9 +1240,6 @@ static int uart_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		}
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
-				       (clock_control_subsys_t)&config->clkid);
-
 #if CONFIG_UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
 		const struct pinctrl_state *state;
 
@@ -1265,6 +1262,9 @@ static int uart_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		if (err < 0) {
 			return err;
 		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
 
 		UART_DLPSExit(uart, &data->store_buf);
 
@@ -1343,14 +1343,14 @@ static int uart_bee_init(const struct device *dev)
 #endif
 	data->dev = dev;
 
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
-
 	/* Configure pinmux  */
 
 	err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 	if (err < 0) {
 		return err;
 	}
+
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 	/* Configure peripheral  */
 

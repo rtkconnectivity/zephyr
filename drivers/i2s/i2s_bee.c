@@ -639,11 +639,11 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 	I2S_InitStruct.I2S_RxWaterlevel = dev_data->dma_rx.dma_cfg.source_burst_length;
 #endif
 
-	/* clock */
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&dev_cfg->clkid);
-
 	/* pinctrl */
 	pinctrl_apply_state(dev_cfg->pinctrl, PINCTRL_STATE_DEFAULT);
+
+	/* clock */
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&dev_cfg->clkid);
 
 	I2S_Init(base, &I2S_InitStruct);
 

@@ -408,14 +408,13 @@ static int i2c_bee_pm_action(const struct device *dev, enum pm_device_action act
 
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-
-		(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
-
 		/* Set pins to active state */
 		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 		if (err < 0) {
 			return err;
 		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 		I2C_DLPSExit(i2c, &data->store_buf);
 
@@ -440,13 +439,13 @@ static int i2c_bee_init(const struct device *dev)
 	uint32_t bitrate_cfg;
 	int err = 0;
 
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
-
 	/* Configure pinmux  */
 	err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 	if (err < 0) {
 		return err;
 	}
+
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 	/* Mutex semaphore to protect the i2c api in multi-thread env. */
 	k_sem_init(&data->bus_mutex, 1, 1);

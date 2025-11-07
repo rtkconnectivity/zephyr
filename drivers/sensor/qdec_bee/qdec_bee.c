@@ -373,14 +373,14 @@ static int qdec_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		}
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
-				       (clock_control_subsys_t)&config->clkid);
-
 		/* Set pins to active state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 		if (err < 0) {
 			return err;
 		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
 
 		QDEC_DLPSExit(qdec, &data->store_buf);
 
@@ -406,9 +406,9 @@ static int qdec_bee_init(const struct device *dev)
 	QDEC_TypeDef *qdec = (QDEC_TypeDef *)config->reg;
 	int ret = 0;
 
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
-
 	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 	if (ret < 0) {
 		return ret;

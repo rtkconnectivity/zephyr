@@ -596,15 +596,15 @@ static int kscan_bee_pm_action(const struct device *dev, enum pm_device_action a
 #endif
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
-				       (clock_control_subsys_t)&config->clkid);
-
 		/* check wakeup pin status */
 		ret = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
 		if ((ret < 0) && (ret != -ENOENT)) {
 			/* no kscan wakeup pin is configured */
 			goto exit;
 		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
 
 		/* there are kscan wakeup pins configured, check if they wakeup the system
 		 */
@@ -660,9 +660,9 @@ static int kscan_bee_init(const struct device *dev)
 	memset(data->key_map, 0, sizeof(data->key_map));
 	memset(data->keys, 0, sizeof(data->keys));
 
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
-
 	pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 	kscan_bee_init_driver(dev, KeyScan_Manual_Scan_Mode, KeyScan_Manual_Sel_Key);

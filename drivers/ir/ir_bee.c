@@ -193,11 +193,12 @@ static int ir_bee_tx_init(const struct device *dev)
 	struct ir_bee_data *data = dev->data;
 	int err;
 
-	ir_bee_reset(dev);
 	err = ir_bee_config_tx_pin(dev);
 	if (err < 0) {
 		return err;
 	}
+
+	ir_bee_reset(dev);
 
 	IR_InitTypeDef IR_InitStruct;
 
@@ -301,11 +302,12 @@ static int ir_bee_rx_init(const struct device *dev)
 	struct ir_bee_data *data = dev->data;
 	int err;
 
-	ir_bee_reset(dev);
 	err = ir_bee_config_rx_pin(dev);
 	if (err < 0) {
 		return err;
 	}
+
+	ir_bee_reset(dev);
 
 	IR_InitTypeDef IR_InitStruct;
 

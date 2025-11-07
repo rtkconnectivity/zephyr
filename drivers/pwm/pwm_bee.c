@@ -235,8 +235,6 @@ static int pwm_bee_init(const struct device *dev)
 	uint8_t clock_div;
 	int ret;
 
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
-
 	data->tim_clk = 40000000;
 
 #ifdef CONFIG_PM_DEVICE
@@ -248,6 +246,8 @@ static int pwm_bee_init(const struct device *dev)
 	if (ret < 0) {
 		return ret;
 	}
+
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 	switch (config->prescaler) {
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)

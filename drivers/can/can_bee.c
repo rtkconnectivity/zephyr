@@ -829,9 +829,10 @@ static int can_bee_pm_action(const struct device *dev, enum pm_device_action act
 		if (err < 0) {
 			return err;
 		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
 		if (data->common.started) {
-			(void)clock_control_on(BEE_CLOCK_CONTROLLER,
-					       (clock_control_subsys_t)&cfg->clkid);
 			CAN_Init(init_struct);
 			CAN_Cmd(ENABLE);
 			CAN_INTConfig((CAN_BUS_OFF_INT | CAN_ERROR_INT | CAN_RX_INT | CAN_TX_INT),
@@ -925,13 +926,13 @@ static int can_bee_init(const struct device *dev)
 		}
 	}
 
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 	/* Configure pinmux  */
-
 	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 	if (ret < 0) {
 		return ret;
 	}
+
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 	/* Configure peripheral  */
 	ret = can_calc_timing(dev, &timing, cfg->common.bitrate, cfg->common.sample_point);

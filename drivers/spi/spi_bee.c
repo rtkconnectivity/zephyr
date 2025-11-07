@@ -644,15 +644,14 @@ static int spi_bee_pm_action(const struct device *dev, enum pm_device_action act
 		}
 		break;
 	case PM_DEVICE_ACTION_RESUME:
-
-		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
-				       (clock_control_subsys_t)&config->clkid);
-
 		/* Set pins to active state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 		if (err < 0) {
 			return err;
 		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
 
 		if (data->initialized) {
 			data->initialized = false;
@@ -754,13 +753,13 @@ static int spi_bee_init(const struct device *dev)
 	const struct spi_bee_config *cfg = dev->config;
 	int ret;
 
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
-
 	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 	if (ret) {
 		LOG_ERR("Failed to apply pinctrl state");
 		return ret;
 	}
+
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 #ifdef CONFIG_SPI_BEE_DMA
 	if ((data->dma_rx.dma_dev && !data->dma_tx.dma_dev) ||
