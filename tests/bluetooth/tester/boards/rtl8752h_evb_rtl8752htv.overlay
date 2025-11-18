@@ -1,0 +1,25 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/ {
+	chosen {
+		zephyr,uart-pipe = &uart0;
+	};
+};
+
+&pinctrl {
+	uart0_default: uart0_default {
+		group1 {
+			psels = <BEE_PSEL(UART0_TX, P4_0, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(UART0_RX, P4_1, DIR_IN, DRV_HIGH, PULL_UP)>;
+		};
+	};
+};
+
+&uart0 {
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-names = "default";
+	status = "okay";
+	current-speed = <115200>;
+	parity = "none";
+	stop-bits = "1";
+	data-bits = <8>;
+};
