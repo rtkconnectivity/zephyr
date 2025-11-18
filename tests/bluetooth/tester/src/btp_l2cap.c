@@ -393,6 +393,7 @@ static uint8_t send_data(const void *cmd, uint16_t cmd_len,
 
 	buf = net_buf_alloc(&data_pool, K_FOREVER);
 	net_buf_reserve(buf, BT_L2CAP_SDU_CHAN_SEND_RESERVE);
+	memset(net_buf_user_data(buf), 0, buf->user_data_size);
 
 	net_buf_add_mem(buf, cp->data, data_len);
 	ret = bt_l2cap_chan_send(&chan->le.chan, buf);
