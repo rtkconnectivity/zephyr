@@ -120,12 +120,14 @@ static void rtl87x2g_isr_register(void)
 static void rtl87x2g_extra_ram_init(void)
 {
 	z_early_memcpy(&__extram_data_start, &__extram_data_load_start,
-			__extram_data_end - __extram_data_start);
+		       __extram_data_end - __extram_data_start);
 	z_early_memset(__extram_bss_start, 0, __extram_bss_end - __extram_bss_start);
 }
 
 static int rtl87x2g_platform_init(void)
 {
+
+	DBG_DIRECT("in here!");
 	rtl87x2g_extra_ram_init();
 	/*
 	 * RTL87X2G reserves a RAM region for the vector table, referred to as the RamVectorTable.
@@ -149,9 +151,6 @@ static int rtl87x2g_platform_init(void)
 
 	/* Init heap using Zephyr heap APIs. */
 	os_init();
-
-	/* Init essential APIs related to OS for RTK PM. */
-	os_pm_init();
 
 	/* TZ enabled: for “Non-secure function call”.
 	 * Init non-secure function pointer that will be called by secure side using
@@ -266,12 +265,12 @@ static int rtl87x2g_update_systick_config(void)
 	NVIC_SetPriority(SysTick_IRQn, 0xff);
 	SysTick->CTRL &= ~SysTick_CTRL_CLKSOURCE_Msk;
 
-/*
- * Unset SCB_CCR_DIV_0_TRP bit to avoid usagefault when dividing by zero.
- * If this bit is set, ll_iso_generate_cis_unframed_parameters_from_host_info()
- * in rom will trigger usage fault.
- * WARNING: In Freertos, this bit will not be set.
- */
+	/*
+	 * Unset SCB_CCR_DIV_0_TRP bit to avoid usagefault when dividing by zero.
+	 * If this bit is set, ll_iso_generate_cis_unframed_parameters_from_host_info()
+	 * in rom will trigger usage fault.
+	 * WARNING: In Freertos, this bit will not be set.
+	 */
 	SCB->CCR &= ~SCB_CCR_DIV_0_TRP_Msk;
 
 	return 0;

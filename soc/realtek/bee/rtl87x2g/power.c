@@ -11,6 +11,7 @@
 #include <zephyr/kernel_structs.h>
 #include <zephyr/init.h>
 #include <string.h>
+#include <stdint.h>
 #include <zephyr/drivers/timer/system_timer.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/device_runtime.h>
@@ -25,17 +26,12 @@
 #include <power_manager_unit_platform.h>
 #include <pm.h>
 #include <rtl_pinmux.h>
+#include "os_pm.h"
 #include <trace.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(rtl87x2g_pm, LOG_LEVEL_INF);
 
-#define RTK_PM_WORKQ_STACK_SIZE 768
-#define RTK_PM_WORKQ_PRIORITY   K_HIGHEST_THREAD_PRIO
-
-K_THREAD_STACK_DEFINE(rtk_pm_workq_stack_area, RTK_PM_WORKQ_STACK_SIZE);
-
-struct k_work_q rtk_pm_workq;
 struct k_work work_timeout_process;
 struct k_work work_device_resume;
 
@@ -48,6 +44,7 @@ extern void NMI_Handler(void);
 extern void sys_clock_announce_process_timeout(void);
 extern void pad_short_pulse_wake_up(int Status);
 extern void sys_clock_restore_tick_and_cycle(void);
+extern void os_pm_restore_tickcount(void);
 
 volatile uint32_t CPU_StoreReg[6];
 volatile uint8_t CPU_StoreReg_IPR[96];
@@ -175,28 +172,19 @@ void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 	ARG_UNUSED(substate_id);
 }
 
-void timeout_process_handler(struct k_work *item)
+void pm_reusme_systick_and_process_timeout(void)
 {
-	sys_clock_announce_process_timeout();
-}
-
-void device_resume_handler(struct k_work *item)
-{
-	pm_resume_devices_rtk();
-}
-
-void submit_items_to_rtk_pm_workq(void)
-{
-/* Restore cur_ticks and cycle_count at this point rather than waiting until
- * work_timeout_process. This is because if you wait until work_timeout_process to
- * restore them, there might be a situation where after restoring nvic in
- * work_device_resume, an interrupt is triggered that enters the isr. At this point, ticks
- * and cycle have not been restored, and if the timing API is called, it will return the
- * values from when entering DLPS.
- */
+	/* Restore systick after driver resume to ensure no systick isr is triggered and exclude
+	 * timer is timeout out and executed. Restore the sys clock of Zephyr. Note: exclude timer
+	 * cb may rely on the driver resume.
+	 */
+	__disable_irq();
+	os_pm_restore_tickcount();
 	sys_clock_restore_tick_and_cycle();
-	k_work_submit_to_queue(&rtk_pm_workq, &work_device_resume);
-	k_work_submit_to_queue(&rtk_pm_workq, &work_timeout_process);
+	__enable_irq();
+
+	/* Subtract the pended tick from the timeout list and manually trigger a timeout process. */
+	sys_clock_announce_process_timeout();
 }
 
 /* Initialize power system */
@@ -204,33 +192,20 @@ static int rtl87x2g_power_init(void)
 {
 	int ret = 0;
 
+	/* Init essential APIs related to OS for RTK PM. */
+	os_pm_init();
+
 	bt_power_mode_set(BTPOWER_DEEP_SLEEP);
 	power_mode_set(POWER_DLPS_MODE);
+
 	z_arm_nmi_set_handler(NMI_Handler);
-	k_work_queue_init(&rtk_pm_workq);
-	k_work_queue_start(&rtk_pm_workq, rtk_pm_workq_stack_area,
-			   K_THREAD_STACK_SIZEOF(rtk_pm_workq_stack_area), RTK_PM_WORKQ_PRIORITY,
-			   NULL);
-	k_work_init(&work_timeout_process, timeout_process_handler);
-	k_work_init(&work_device_resume, device_resume_handler);
+
 	platform_pm_register_callback_func_with_priority((void *)pm_suspend_devices_rtk,
 							 PLATFORM_PM_STORE, 1);
-	/* do timeout function process and devices & nvic resume in
-	 * rtk_pm_workq thread via zephyr's workq mechanism.
-	 */
-	platform_pm_register_callback_func_with_priority((void *)submit_items_to_rtk_pm_workq,
-							 PLATFORM_PM_PEND, 1);
-
-	/* The rtl87x2g Zephyr has not registered platform_pm_system.schedule_bottom_half_callback
-	 * in rtk power manager. Therefore,
-	 * we need to fine-tune platform_pm_system.stage_time[PLATFORM_PM_PEND]. The default value
-	 * is 100 (equivalent to 3.125ms), which is too large,
-	 * causing the system to wake up too early and thereby increasing power consumption.
-	 * In the Zephyr environment, change this default value to 20.
-	 * If the app has additional registered pend functions, consider increasing this value
-	 * accordingly to ensure the system does not oversleep.
-	 */
-	platform_pm_system.stage_time[PLATFORM_PM_PEND] = 20;
+	platform_pm_register_callback_func_with_priority((void *)pm_resume_devices_rtk,
+							 PLATFORM_PM_PEND, -1);
+	platform_pm_register_callback_func_with_priority(
+		(void *)pm_reusme_systick_and_process_timeout, PLATFORM_PM_PEND, INT8_MAX);
 
 	return ret;
 }

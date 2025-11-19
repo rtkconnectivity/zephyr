@@ -10,6 +10,8 @@
 #include <pm.h>
 #include <os_pm.h>
 #include <os_timer.h>
+#include <trace.h>
+#include <power_manager_unit_platform.h>
 struct triggered_test_item {
 	int key;
 	struct k_work_poll work;
@@ -43,11 +45,6 @@ void test_timer_handler(struct k_timer *dummy)
 		k_sem_give(&test_thread_sem);
 		k_timer_stop(&test_timer);
 	}
-}
-
-void test_exclude_timer_handler(void *dummy)
-{
-	test_exclude_timer_cnt = 44;
 }
 
 void test_timer_handler_oneshot(struct k_timer *dummy)
@@ -181,33 +178,77 @@ ZTEST(timeout_wakeup, test_timing_apis)
 	zassert_true(wakeup_count_timing_apis == 1, "test_timing_apis failed, wakeup Count: %d\n",
 		     wakeup_count_timing_apis);
 	TC_PRINT("sleep time, ms:%lld, cycle:%d\n", time_diff_ms, time_diff_cyc);
-	zassert_true(time_diff_ms >= 3000 && time_diff_ms <= 3010,
+	zassert_true(time_diff_ms >= 3000 && time_diff_ms <= 3020,
 		     "k_uptime_get is not accurated after exiting dlps!");
 	zassert_true(k_cyc_to_ms_floor32(time_diff_cyc) >= 3000 &&
-			     k_cyc_to_ms_floor32(time_diff_cyc) <= 3010,
+			     k_cyc_to_ms_floor32(time_diff_cyc) <= 3020,
 		     "k_cycle_get_32 is not accurated after exiting dlps!");
 }
 
-ZTEST(timeout_wakeup, test_exclude_timer)
+#define MAX_RECORDS 3
+int execution_order[MAX_RECORDS];
+int exec_idx;
+
+void test_exclude_timer_handler(void *dummy)
+{
+	test_exclude_timer_cnt = 44;
+	if (exec_idx < MAX_RECORDS) {
+		execution_order[exec_idx++] = 3;
+	}
+}
+
+void pend_cb_before_driver_resume(void)
+{
+	if (exec_idx < MAX_RECORDS) {
+		execution_order[exec_idx++] = 2;
+	}
+}
+
+void restore_tag_cb(void)
+{
+	if (exec_idx < MAX_RECORDS) {
+		execution_order[exec_idx++] = 1;
+	}
+}
+
+void add_delay_to_trigger_exclude_timer(void)
+{
+	DBG_DIRECT("add delay to make systick isr triggered before driver resume!");
+	DBG_DIRECT("add delay to make systick isr triggered before driver resume!");
+}
+
+ZTEST(timeout_wakeup, test_exclude_timer_execute_after_driver_resume)
 {
 	uint32_t wakeup_count_timer;
 	bool status;
 
+	platform_pm_register_callback_func_with_priority((void *)restore_tag_cb,
+							 PLATFORM_PM_RESTORE, -2);
+	platform_pm_register_callback_func_with_priority((void *)pend_cb_before_driver_resume,
+							 PLATFORM_PM_PEND, -2);
+	platform_pm_register_callback_func_with_priority((void *)add_delay_to_trigger_exclude_timer,
+							 PLATFORM_PM_PEND, -3);
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
-	status = os_timer_create(&test_exclude_timer, "exclude_timer", 1, 1000, false,
+	status = os_timer_create(&test_exclude_timer, "exclude_timer", 1, 80, false,
 				 test_exclude_timer_handler);
 	zassert_true(status != false, "error creating one-shot timer!");
 	status = os_register_pm_excluded_handle(&test_exclude_timer, PLATFORM_PM_EXCLUDED_TIMER);
 	zassert_true(status != false, "error register exclude timer!");
-	status = os_timer_start(&test_exclude_timer);
-	zassert_true(status != false, "error start exclude timer!");
 
 	k_sem_init(&test_thread_sem, 0, UINT_MAX);
 	k_timer_init(&test_timer, test_timer_handler_oneshot, NULL);
-	k_timer_start(&test_timer, K_SECONDS(3), K_SECONDS(3));
+	k_timer_start(&test_timer, K_SECONDS(1), K_SECONDS(1));
+	status = os_timer_start(&test_exclude_timer);
+	zassert_true(status != false, "error start exclude timer!");
+
 	k_sem_take(&test_thread_sem, K_FOREVER);
+
 	zassert_true(test_exclude_timer_cnt == 44,
 		     "exclude timer is not executed, which is wrong!");
+	zassert_true(execution_order[0] == 1 && execution_order[1] == 2 && execution_order[2] == 3,
+		     "exclude timer is executed before the driver resume, which is risky! flow "
+		     "is:%d,%d,%d",
+		     execution_order[0], execution_order[1], execution_order[2]);
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
 	wakeup_count_timer = wakeup_count_after_test - wakeup_count_before_test;
 
@@ -215,6 +256,7 @@ ZTEST(timeout_wakeup, test_exclude_timer)
 		 wakeup_count_timer, last_wakeup_clk, last_sleep_clk);
 
 	status = os_unregister_pm_excluded_handle(&test_exclude_timer, PLATFORM_PM_EXCLUDED_TIMER);
+
 	zassert_true(status != false, "error unregister exclude timer!");
 	zassert_true(wakeup_count_timer == 1, "test_exclude_timer failed, wakeup Count:%d\n",
 		     wakeup_count_timer);

@@ -247,7 +247,6 @@ int rtk_platform_init_stage_2(void)
 	power_manager_master_init();
 	power_manager_slave_init();
 	platform_pm_init();
-	os_pm_init();
 
 	init_osc_sdm_timer();
 

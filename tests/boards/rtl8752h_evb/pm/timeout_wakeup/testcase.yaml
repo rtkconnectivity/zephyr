@@ -1,6 +1,7 @@
 tests:
   boards.rtl8752h.pm.timeout_wakeup:
     platform_allow:
-      - rtl8752h_evb
+      - rtl8752h_evb/rtl8752htv
+      - rtl8752h_evb/rtl8752hkf
     tags:
       - pm

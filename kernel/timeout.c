@@ -362,12 +362,15 @@ void sys_clock_restore_tick_and_cycle(void)
 	sys_clock_only_add_cycle_count(pended_ticks);
 	/* restore cur_ticks. */
 	curr_tick += pended_ticks;
+}
+
+void sys_clock_announce_process_timeout(void)
+{
+	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
 
 	struct _timeout *t;
 
-	for (t = first();
-	     (t != NULL) && (t->dticks <= pended_ticks);
-	     t = next(t)) {
+	for (t = first(); (t != NULL) && (t->dticks <= pended_ticks); t = next(t)) {
 		int dt = t->dticks;
 
 		t->dticks = 0;
@@ -380,17 +383,12 @@ void sys_clock_restore_tick_and_cycle(void)
 
 	pended_ticks = 0;
 
-}
+	/* Separate the handling of pending tick counts and timeout
+	 * callback functions to avoid errors when a timer is started
+	 * during the timer callback.
+	 */
 
-void sys_clock_announce_process_timeout(void)
-{
-	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
-
-	struct _timeout *t;
-
-	for (t = first();
-	     (t != NULL) && (t->dticks == 0);
-	     t = first()) {
+	for (t = first(); (t != NULL) && (t->dticks == 0); t = first()) {
 		remove_timeout(t);
 
 		k_spin_unlock(&timeout_lock, key);

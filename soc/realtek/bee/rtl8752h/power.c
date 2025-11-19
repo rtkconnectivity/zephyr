@@ -15,6 +15,7 @@
 #include <cmsis_core.h>
 #include <dlps.h>
 #include <trace.h>
+#include <os_pm.h>
 #include <rtl876x_pinmux.h>
 #include <zephyr/logging/log.h>
 
@@ -29,6 +30,7 @@ extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
 
 extern void NMI_Handler(void);
 extern void sys_clock_announce_process_timeout(void);
+extern void sys_clock_restore_tick_and_cycle(void);
 
 #if REALTEK_POWER_LOG
 #define POWER_LOG(...) DBG_DIRECT(__VA_ARGS__)
@@ -122,25 +124,6 @@ void System_Handler(const void *param)
 	NVIC_ClearPendingIRQ(System_IRQn);
 }
 
-static uint32_t Pinmux_StoreReg[10]; /*  This array should be placed in RAM ON/Buffer ON.    */
-static void Pinmux_DLPS_Enter(void)
-{
-	POWER_LOG("%s is called", __func__);
-	Pad_ControlSelectValue(P3_0, PAD_SW_MODE);
-	Pad_ControlSelectValue(P3_1, PAD_SW_MODE);
-	for (uint8_t i = 0; i < 10; i++) {
-		Pinmux_StoreReg[i] = PINMUX->CFG[i];
-	}
-}
-
-static void Pinmux_DLPS_Exit(void)
-{
-	POWER_LOG("%s is called", __func__);
-	for (uint8_t i = 0; i < 10; i++) {
-		PINMUX->CFG[i] = Pinmux_StoreReg[i];
-	}
-}
-
 /* Number of devices successfully suspended. */
 static size_t num_susp_rtk;
 
@@ -202,41 +185,28 @@ void pm_resume_devices_rtk(void)
 	CPU_DLPS_Exit();
 }
 
-#define RTK_PM_WORKQ_STACK_SIZE 768
-#define RTK_PM_WORKQ_PRIORITY   K_HIGHEST_THREAD_PRIO
-
-K_THREAD_STACK_DEFINE(rtk_pm_workq_stack_area, RTK_PM_WORKQ_STACK_SIZE);
-
-static struct k_work_q rtk_pm_workq;
-static struct k_work work_timeout_process;
-static struct k_work work_device_resume;
-
-void timeout_process_handler(struct k_work *item)
+void pm_reusme_systick_and_process_timeout(void)
 {
-	/* Handle the timeouts that expired during lowpower */
+	/* Restore systick after driver resume to ensure no systick isr is triggered and exclude
+	 * timer is timeout out and executed. Restore the sys clock of Zephyr. Note: exclude timer
+	 * cb may rely on the driver resume.
+	 */
+	__disable_irq();
+	os_pm_restore_tickcount();
+	sys_clock_restore_tick_and_cycle();
+	__enable_irq();
+
+	/* Subtract the pended tick from the timeout list and manually trigger a timeout process.*/
 	sys_clock_announce_process_timeout();
 }
 
-void device_resume_handler(struct k_work *item)
-{
-	pm_resume_devices_rtk();
-}
-
-void pm_work_submit(void)
-{
-	/* To minimize irq_lock time, defer time-consuming resuming and compensation
-	 * operations to be executed by the work queue
-	 */
-	extern void sys_clock_restore_tick_and_cycle(void);
-	sys_clock_restore_tick_and_cycle();
-	k_work_submit_to_queue(&rtk_pm_workq, &work_device_resume);
-	k_work_submit_to_queue(&rtk_pm_workq, &work_timeout_process);
-}
-
 /* Initialize power system */
-static int rtl87x2x_power_init(void)
+static int rtl8752h_power_init(void)
 {
 	int ret = 0;
+
+	os_pm_init();
+
 #ifdef CONFIG_PM_DEVICE
 	irq_connect_dynamic(System_IRQn, 1, System_Handler, NULL, 0);
 	irq_enable(System_IRQn);
@@ -250,25 +220,15 @@ static int rtl87x2x_power_init(void)
 
 	platform_pm_system.stage_time[PLATFORM_PM_EXIT] = 13;
 
-	/* do devices & nvic resume in
-	 * rtk_pm_workq thread via zephyr's workq
-	 */
-	k_work_queue_init(&rtk_pm_workq);
-	k_work_queue_start(&rtk_pm_workq, rtk_pm_workq_stack_area,
-			   K_THREAD_STACK_SIZEOF(rtk_pm_workq_stack_area), RTK_PM_WORKQ_PRIORITY,
-			   NULL);
-	k_work_init(&work_timeout_process, timeout_process_handler);
-	k_work_init(&work_device_resume, device_resume_handler);
-
-	/* register callbacks to PM Store stage */
 	platform_pm_register_callback_func_with_priority((void *)pm_suspend_devices_rtk,
 							 PLATFORM_PM_STORE, 1);
-	/* do pm_work_submit after os_pm_restore(tick restore) */
-	platform_pm_register_callback_func_with_priority((void *)pm_work_submit,
-							 PLATFORM_PM_RESTORE, 2);
+	platform_pm_register_callback_func_with_priority((void *)pm_resume_devices_rtk,
+							 PLATFORM_PM_PEND, -1);
+	platform_pm_register_callback_func_with_priority(
+		(void *)pm_reusme_systick_and_process_timeout, PLATFORM_PM_PEND, INT8_MAX);
 
 	return ret;
 }
 
 /* do it after lowerstack entry */
-SYS_INIT(rtl87x2x_power_init, APPLICATION, 1);
+SYS_INIT(rtl8752h_power_init, APPLICATION, 1);
