@@ -50,6 +50,8 @@
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en)
 #define BEE_GPIO_REG_INTSATUS                        GPIO_INT_STS
 #define BEE_GPIO_REG_INT_EN                          GPIO_INT_EN
+
+extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define BEE_GPIO_WriteBit(port, bit, val)            GPIO_WriteBit(bit, val)
 #define BEE_GPIO_ReadOutputDataBit(port, bit)        GPIO_ReadOutputDataBit(bit)
@@ -196,6 +198,18 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 		ret = -ENOTSUP;
 		return ret;
 	}
+
+#ifdef CONFIG_PM_DEVICE
+	if (flags & BEE_GPIO_INPUT_PM_WAKEUP && flags & GPIO_INT_EDGE) {
+		LOG_WRN("port=%s, pin=%d is configured as wakeup and edge trigger at the same time",
+			port->name, pin);
+		if (debounce_ms) {
+			LOG_WRN("port=%s, pin=%d is configured as wakeup, debounce enable and edge "
+				"trigger at the same time",
+				port->name, pin);
+		}
+	}
+#endif
 
 	if (flags == GPIO_DISCONNECTED) {
 		Pinmux_Deinit(pad_pin);
@@ -389,6 +403,18 @@ static int gpio_bee_pin_interrupt_configure(const struct device *port, gpio_pin_
 
 	port_base = config->port_base;
 
+#ifdef CONFIG_PM_DEVICE
+	if (data->list.array[pin].mode == PM_PAD_WAKEUP && mode == GPIO_INT_MODE_EDGE) {
+		LOG_WRN("port=%s, pin=%d is configured as wakeup and edge trigger at the same time",
+			port->name, pin);
+		if (data->pin_debounce_ms[pin]) {
+			LOG_WRN("port=%s, pin=%d is configured as wakeup, debounce enable and edge "
+				"trigger at the same time",
+				port->name, pin);
+		}
+	}
+#endif
+
 #ifdef CONFIG_GPIO_ENABLE_DISABLE_INTERRUPT
 	if (mode == GPIO_INT_MODE_DISABLE_ONLY) {
 		BEE_GPIO_MaskINTConfig(port_base, gpio_bit, ENABLE);
@@ -547,12 +573,18 @@ static void wakeup_pad_pm_suspend(const struct device *port, struct pm_pad_node 
 		} else {
 #endif
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
-			extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 			uint32_t GPIO_Pin_Swap = GPIO_SwapDebPinBit(port_base, BIT(gpio_num));
 			bool high_trigger = port_base->GPIO_EXT_DEB_POL_CTL & GPIO_Pin_Swap;
+			bool edge_trigger = port_base->GPIO_INT_LV & BIT(gpio_num);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-		bool high_trigger = port_base->INTPOLARITY & BIT(gpio_num);
+			bool high_trigger = port_base->INTPOLARITY & BIT(gpio_num);
+			bool edge_trigger = port_base->INTTYPE & BIT(gpio_num);
 #endif
+
+			if (edge_trigger) {
+				pad_node->read_before_dlps =
+					BEE_GPIO_ReadInputData(port_base) & BIT(gpio_num);
+			}
 
 			BEE_Pad_SetControlMode(pad_num, PAD_SW_MODE);
 			BEE_System_WakeUpPinEnable(
@@ -593,6 +625,48 @@ static void wakeup_pad_pm_resume(const struct device *port, struct pm_pad_node *
 	System_WakeUpPinDisable(pad_num);
 	Pinmux_Config(pad_num, DWGPIO);
 	BEE_Pad_SetControlMode(pad_num, PAD_PINMUX_MODE);
+}
+
+static void wakeup_edge_trigger(const struct device *port, struct pm_pad_node *pad_node)
+{
+	const struct gpio_bee_config *config = port->config;
+	struct gpio_bee_data *data = port->data;
+	GPIO_TypeDef *port_base = config->port_base;
+	uint8_t pad_num, gpio_num;
+
+	pad_num = pad_node->pad_num;
+	gpio_num = pad_node->gpio_num;
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+	uint32_t GPIO_Pin_Swap = GPIO_SwapDebPinBit(port_base, BIT(gpio_num));
+	bool high_trigger = port_base->GPIO_EXT_DEB_POL_CTL & GPIO_Pin_Swap;
+	bool edge_trigger = port_base->GPIO_INT_LV & BIT(gpio_num);
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+	bool high_trigger = port_base->INTPOLARITY & BIT(gpio_num);
+	bool edge_trigger = port_base->INTTYPE & BIT(gpio_num);
+#endif
+	bool trigger_cb = false;
+	bool deb_enable = !!data->pin_debounce_ms[gpio_num];
+	bool read_after_dlps = BEE_GPIO_ReadInputData(port_base) & BIT(gpio_num);
+
+	if (!deb_enable) {
+		if (edge_trigger) {
+			BEE_GPIO_ClearINTPendingBit(port_base, BIT(gpio_num));
+			if (high_trigger) {
+				if (pad_node->read_before_dlps == 0 && read_after_dlps == 1) {
+					trigger_cb = true;
+				}
+			} else {
+				if (pad_node->read_before_dlps == 1 && read_after_dlps == 0) {
+					trigger_cb = true;
+				}
+			}
+		}
+
+		if (trigger_cb) {
+			gpio_fire_callbacks(&data->cb, port, BIT(gpio_num));
+		}
+	}
 }
 
 static int gpio_bee_pm_action(const struct device *port, enum pm_device_action action)
@@ -653,6 +727,19 @@ static int gpio_bee_pm_action(const struct device *port, enum pm_device_action a
 		}
 
 		GPIO_DLPSExit(port_base, &data->store_buf);
+
+		SYS_SLIST_FOR_EACH_CONTAINER(&data->list.list, pad_node, node) {
+			pad_num = pad_node->pad_num;
+			gpio_num = pad_node->gpio_num;
+			switch (pad_node->mode) {
+			case PM_PAD_INPUT:
+			case PM_PAD_WAKEUP:
+				wakeup_edge_trigger(port, pad_node);
+				break;
+			default:
+				break;
+			}
+		}
 
 		break;
 	default:
