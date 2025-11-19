@@ -57,6 +57,7 @@ struct pm_pad_node {
 	sys_snode_t node;
 	uint8_t pad_num;
 	uint8_t gpio_num;
+	bool read_before_dlps;
 	enum pm_pad_mode mode;
 };
 
