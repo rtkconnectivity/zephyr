@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2025 Realtek Semiconductor Corp.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/pm/pm.h>
@@ -5,6 +11,7 @@
 #include <zephyr/kernel_structs.h>
 #include <zephyr/init.h>
 #include <string.h>
+#include <stdint.h>
 #include <zephyr/drivers/timer/system_timer.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/device_runtime.h>
@@ -19,16 +26,25 @@
 #include <power_manager_unit_platform.h>
 #include <pm.h>
 #include <rtl_pinmux.h>
+#include "os_pm.h"
+#include <trace.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_DECLARE(soc, CONFIG_SOC_LOG_LEVEL);
+LOG_MODULE_REGISTER(rtl87x2g_pm, LOG_LEVEL_INF);
 
-volatile PINMUXStoreReg_Typedef Pinmux_StoreReg;
-extern void Pinmux_DLPSEnter(void *PeriReg, void *StoreBuf);
-extern void Pinmux_DLPSExit(void *PeriReg, void *StoreBuf);
+struct k_work work_timeout_process;
+struct k_work work_device_resume;
+
+TYPE_SECTION_START_EXTERN(const struct device *, pm_device_slots);
+
+/* Number of devices successfully suspended. */
+static size_t num_susp_rtk;
+
 extern void NMI_Handler(void);
 extern void sys_clock_announce_process_timeout(void);
 extern void pad_short_pulse_wake_up(int Status);
+extern void sys_clock_restore_tick_and_cycle(void);
+extern void os_pm_restore_tickcount(void);
 
 volatile uint32_t CPU_StoreReg[6];
 volatile uint8_t CPU_StoreReg_IPR[96];
@@ -58,8 +74,6 @@ static void CPU_DLPS_Enter(void)
 	/* peripheral reg store */
 	Peripheral_StoreReg[0] = SoC_VENDOR->u_008.REG_LOW_PRI_INT_MODE;
 	Peripheral_StoreReg[1] = SoC_VENDOR->u_00C.REG_LOW_PRI_INT_EN;
-
-	return;
 }
 
 void CPU_DLPS_Exit(void)
@@ -80,9 +94,9 @@ void CPU_DLPS_Exit(void)
 	 * But because all interrupts are masked, these interrupts are pending.
 	 */
 	if ((CPU_StoreReg[0] & CPU_StoreReg[3]) || (CPU_StoreReg[1] & CPU_StoreReg[4]) ||
-		(CPU_StoreReg[2] & CPU_StoreReg[5])) {
+	    (CPU_StoreReg[2] & CPU_StoreReg[5])) {
 		LOG_ERR("miss interrupt: pending register: 0x%x, 0x%x, 0x%x", CPU_StoreReg[3],
-					   CPU_StoreReg[4], CPU_StoreReg[5]);
+			CPU_StoreReg[4], CPU_StoreReg[5]);
 	}
 
 	/* Skip System_IRQn, WDG_IRQn, RXI300_IRQn, RXI300_SEC_IRQn,
@@ -97,30 +111,7 @@ void CPU_DLPS_Exit(void)
 	NVIC->ISER[0] = CPU_StoreReg[0];
 	NVIC->ISER[1] = CPU_StoreReg[1];
 	NVIC->ISER[2] = CPU_StoreReg[2];
-
-	return;
 }
-
-void pm_state_set(enum pm_state state, uint8_t substate_id)
-{
-	ARG_UNUSED(state);
-	ARG_UNUSED(substate_id);
-	return;
-}
-
-void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
-{
-	ARG_UNUSED(state);
-	ARG_UNUSED(substate_id);
-	return;
-}
-
-#ifdef CONFIG_PM_DEVICE
-TYPE_SECTION_START_EXTERN(const struct device *, pm_device_slots);
-
-#if !defined(CONFIG_PM_DEVICE_RUNTIME_EXCLUSIVE)
-/* Number of devices successfully suspended. */
-static size_t num_susp_rtk;
 
 static int pm_suspend_devices_rtk(void)
 {
@@ -128,8 +119,6 @@ static int pm_suspend_devices_rtk(void)
 	Pad_ClearAllWakeupINT();
 	System_WakeupDebounceClear(0);
 	CPU_DLPS_Enter();
-
-	Pinmux_DLPSEnter(PINMUX, (void *)&Pinmux_StoreReg);
 
 	const struct device *devs;
 	size_t devc;
@@ -145,9 +134,7 @@ static int pm_suspend_devices_rtk(void)
 		 * devices with runtime PM enabled.
 		 */
 		if (!device_is_ready(dev) || pm_device_is_busy(dev) ||
-			pm_device_state_is_locked(dev) ||
-			pm_device_wakeup_is_enabled(dev) ||
-			pm_device_runtime_is_enabled(dev)) {
+		    pm_device_wakeup_is_enabled(dev) || pm_device_runtime_is_enabled(dev)) {
 			continue;
 		}
 
@@ -156,62 +143,48 @@ static int pm_suspend_devices_rtk(void)
 		if ((ret == -ENOSYS) || (ret == -ENOTSUP) || (ret == -EALREADY)) {
 			continue;
 		} else if (ret < 0) {
-			LOG_ERR("Device %s did not enter %s state (%d)",
-				dev->name,
-				pm_device_state_str(PM_DEVICE_STATE_SUSPENDED),
-				ret);
+			LOG_ERR("Device %s did not enter %s state (%d)", dev->name,
+				pm_device_state_str(PM_DEVICE_STATE_SUSPENDED), ret);
 			return ret;
 		}
 
 		TYPE_SECTION_START(pm_device_slots)[num_susp_rtk] = dev;
 		num_susp_rtk++;
 	}
-
 	return 0;
 }
 
 void pm_resume_devices_rtk(void)
 {
-	Pinmux_DLPSExit(PINMUX, (void *)&Pinmux_StoreReg);
 	for (int i = (num_susp_rtk - 1); i >= 0; i--) {
 		pm_device_action_run(TYPE_SECTION_START(pm_device_slots)[i],
-					PM_DEVICE_ACTION_RESUME);
+				     PM_DEVICE_ACTION_RESUME);
 	}
 
 	CPU_DLPS_Exit();
 
 	num_susp_rtk = 0;
 }
-#endif  /* !CONFIG_PM_DEVICE_RUNTIME_EXCLUSIVE */
-#endif	/* CONFIG_PM_DEVICE */
 
-#define RTK_PM_WORKQ_STACK_SIZE 512
-#define RTK_PM_WORKQ_PRIORITY K_HIGHEST_THREAD_PRIO
-
-K_THREAD_STACK_DEFINE(rtk_pm_workq_stack_area, RTK_PM_WORKQ_STACK_SIZE);
-
-struct k_work_q rtk_pm_workq;
-
-struct k_work work_timeout_process;
-struct k_work work_device_resume;
-
-void timeout_process_handler(struct k_work *item)
+void pm_state_exit_post_ops(enum pm_state state, uint8_t substate_id)
 {
+	ARG_UNUSED(state);
+	ARG_UNUSED(substate_id);
+}
+
+void pm_reusme_systick_and_process_timeout(void)
+{
+	/* Restore systick after driver resume to ensure no systick isr is triggered and exclude
+	 * timer is timeout out and executed. Restore the sys clock of Zephyr. Note: exclude timer
+	 * cb may rely on the driver resume.
+	 */
+	__disable_irq();
+	os_pm_restore_tickcount();
+	sys_clock_restore_tick_and_cycle();
+	__enable_irq();
+
+	/* Subtract the pended tick from the timeout list and manually trigger a timeout process. */
 	sys_clock_announce_process_timeout();
-	return;
-}
-
-void device_resume_handler(struct k_work *item)
-{
-	pm_resume_devices_rtk();
-	return;
-}
-
-void submit_items_to_rtk_pm_workq(void)
-{
-	k_work_submit_to_queue(&rtk_pm_workq, &work_device_resume);
-	k_work_submit_to_queue(&rtk_pm_workq, &work_timeout_process);
-	return;
 }
 
 /* Initialize power system */
@@ -219,33 +192,20 @@ static int rtl87x2g_power_init(void)
 {
 	int ret = 0;
 
+	/* Init essential APIs related to OS for RTK PM. */
+	os_pm_init();
+
 	bt_power_mode_set(BTPOWER_DEEP_SLEEP);
 	power_mode_set(POWER_DLPS_MODE);
-	z_arm_nmi_set_handler(NMI_Handler);
-	k_work_queue_init(&rtk_pm_workq);
-	k_work_queue_start(&rtk_pm_workq, rtk_pm_workq_stack_area,
-				   K_THREAD_STACK_SIZEOF(rtk_pm_workq_stack_area),
-				   RTK_PM_WORKQ_PRIORITY, NULL);
-	k_work_init(&work_timeout_process, timeout_process_handler);
-	k_work_init(&work_device_resume, device_resume_handler);
-	platform_pm_register_callback_func_with_priority((void *)pm_suspend_devices_rtk,
-		PLATFORM_PM_STORE, 1);
-	/* do timeout function process and devices & nvic resume in
-	 * rtk_pm_workq thread via zephyr's workq mechanism.
-	 */
-	platform_pm_register_callback_func_with_priority((void *)submit_items_to_rtk_pm_workq,
-		PLATFORM_PM_RESTORE, 1);
 
-	/* The rtl87x2g Zephyr has not registered platform_pm_system.schedule_bottom_half_callback
-	 * in rtk power manager. Therefore,
-	 * we need to fine-tune platform_pm_system.stage_time[PLATFORM_PM_PEND]. The default value
-	 * is 100 (equivalent to 3.125ms), which is too large,
-	 * causing the system to wake up too early and thereby increasing power consumption.
-	 * In the Zephyr environment, change this default value to 20.
-	 * If the app has additional registered pend functions, consider increasing this value
-	 * accordingly to ensure the system does not oversleep.
-	 */
-	platform_pm_system.stage_time[PLATFORM_PM_PEND] = 20;
+	z_arm_nmi_set_handler(NMI_Handler);
+
+	platform_pm_register_callback_func_with_priority((void *)pm_suspend_devices_rtk,
+							 PLATFORM_PM_STORE, 1);
+	platform_pm_register_callback_func_with_priority((void *)pm_resume_devices_rtk,
+							 PLATFORM_PM_PEND, -1);
+	platform_pm_register_callback_func_with_priority(
+		(void *)pm_reusme_systick_and_process_timeout, PLATFORM_PM_PEND, INT8_MAX);
 
 	return ret;
 }

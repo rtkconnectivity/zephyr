@@ -37,6 +37,20 @@ config IDLE_STACK_SIZE
 config NUM_METAIRQ_PRIORITIES
 	default 1
 
+config RUNTIME_NMI
+	default y
+
+if PM
+config BT
+	default y
+
+config PM_DEVICE
+	default y
+endif
+
+config REALTEK_USING_SDK_LIB
+	default y if PM || PM_DEVICE
+
 rsource "Kconfig.defconfig.rtl87*"
 
 endif # SOC_SERIES_RTL87X2G

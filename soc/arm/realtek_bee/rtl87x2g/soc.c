@@ -92,8 +92,6 @@ static int rtk_platform_init(void)
 
 	os_init();
 
-	os_pm_init();
-
 	secure_os_func_ptr_init();
 	RamVectorTableUpdate(SVC_VECTORn, (IRQ_Fun)z_arm_svc);
 
