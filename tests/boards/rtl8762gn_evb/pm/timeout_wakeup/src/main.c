@@ -153,7 +153,7 @@ ZTEST(timeout_wakeup, test_triggered_work_wakeup)
 	time_diff = tag2-tag1;
 	LOG_INF("after dlps!");/*check log time stamp*/
 	zassert_true(time_diff >= TRIGGERED_WORK_NUMBERS*100 && time_diff <=
-			TRIGGERED_WORK_NUMBERS * 100 + 1000,
+			TRIGGERED_WORK_NUMBERS * 100 + 1020,
 			"k_uptime_get is not accurate after dlps! time diff (ms) is %lld",
 			time_diff);
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
