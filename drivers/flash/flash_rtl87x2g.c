@@ -102,7 +102,7 @@ static int flash_rtl87x2g_write(const struct device *dev, off_t offset,
 			flash_nor_write_locked(FLASH_ADDR + offset, (uint8_t *)tmp, len);
 			k_free(tmp);
 		} else {
-			LOG_ERR("k_malloc %x0x for flash data transfer station failed", len);
+			LOG_ERR("k_malloc 0x%x for flash data transfer station failed", len);
 		}
 		return 0;
 	}

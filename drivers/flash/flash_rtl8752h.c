@@ -129,7 +129,7 @@ static int flash_rtl8752h_write(const struct device *dev, off_t offset,
 				return -EIO;
 			}
 		} else {
-			LOG_ERR("k_malloc %x0x for flash data transfer station failed", len);
+			LOG_ERR("k_malloc 0x%x for flash data transfer station failed", len);
 		}
 		return 0;
 	}
