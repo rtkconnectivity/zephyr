@@ -16,6 +16,8 @@ static int thread_yield_check;
 /* This is used to indicate the completion of processing for thread3 */
 static int thread3_state;
 
+void *id4;
+
 void thread1(void *argument)
 {
 	bool status;
@@ -74,8 +76,7 @@ void thread3(void *argument)
 	/* Restore the priority of the current thread */
 	os_task_priority_set(id, prio);
 	status = os_task_priority_get(id, &rv);
-	zassert_equal(rv, prio, "Expected priority to be changed to %d, not %d", prio,
-		      rv);
+	zassert_equal(rv, prio, "Expected priority to be changed to %d, not %d", prio, rv);
 
 	/* Try to set unsupported priority and assert failure */
 	status = os_task_priority_set(id, 7);
@@ -88,6 +89,16 @@ void thread3(void *argument)
 	do {
 		os_delay(100);
 	} while (1);
+}
+
+void thread_delete_self(void *argument)
+{
+	bool status;
+
+	id4 = NULL;
+	status = os_task_delete(NULL);
+
+	zassert_true(false, "Deleting self (NULL) would not return here!");
 }
 
 ZTEST(osif_task_apis, test_thread_prio)
@@ -133,4 +144,18 @@ ZTEST(osif_task_apis, test_thread_apis)
 		os_delay(100);
 	} while (thread_yield_check != 2);
 }
+
+ZTEST(osif_task_apis, test_delete_self_with_null)
+{
+	uint32_t task_param;
+	bool status;
+
+	status = os_task_create(&id4, "delete_self", thread_delete_self, &task_param, STACKSZ, 5);
+	zassert_true(status == true, "Failed to create self-delete thread");
+
+	os_delay(100);
+
+	zassert_true(id4 == NULL, "Failed to delete thread!");
+}
+
 ZTEST_SUITE(osif_task_apis, NULL, NULL, NULL, NULL, NULL);
