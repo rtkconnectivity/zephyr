@@ -316,7 +316,7 @@ static int bee_udc_caps(const struct device *dev)
 
 	data->caps.hs = true;
 	data->caps.rwup = true;
-	data->caps.mps0 = 16;
+	data->caps.mps0 = UDC_MPS0_16;
 
 	return 0;
 }
