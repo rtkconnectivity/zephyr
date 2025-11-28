@@ -1,0 +1,7 @@
+description: |
+    This binding provides resources required to build and run the
+    bee_pm_device.
+
+compatible: "bee-pm-device-spi"
+
+include: [spi-device.yaml]

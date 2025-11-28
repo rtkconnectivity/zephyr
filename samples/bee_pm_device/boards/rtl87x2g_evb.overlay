@@ -1,0 +1,382 @@
+/*
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/dt-bindings/gpio/realtek-bee-gpio.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/input/keymap.h>
+#include <zephyr/dt-bindings/led/led.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+/*
+ * P0_0 GPIO(TEST OUT)
+ * P0_1 GPIO(TEST IN)
+ * P0_2 PWM6
+ * P0_4 GPIO(TEST AON_QDECX)
+ * P0_5 GPIO(TEST AON_QDECX)
+ * P0_6 KSCAN_R0
+ * P0_7 KSCAN_R1
+ * P1_0 SWD
+ * P1_1 SWD
+ * P1_2
+ * P1_3 AON_QDECX_A
+ * P1_4 AON_QDECX_B
+ * P1_5
+ * P1_6
+ * P1_7
+ * P2_2 I2C0_CLK
+ * P2_3 I2C0_DAT
+ * P2_4 ADC
+ * P2_6 KSCAN_C0
+ * P2_7 KSCAN_C1
+ * P3_0
+ * P3_1
+ * P3_2 UART2_TX
+ * P3_3 UART2_RX
+ * P3_4 CAN_TX
+ * P3_5 CAN_RX
+ * P3_6
+ * P3_7
+ * P4_0 SPI0_CLK
+ * P4_1 SPI0_MO
+ * P4_2 SPI0_MI
+ * P4_3 GPIO(SPI0_CS)
+ * P4_4 UART3_TX(DMA)
+ * P4_5 UART3_RX(DMA)
+ * P4_6
+ * P4_7
+ * P5_0
+ * P5_1
+ * P5_2
+ * P5_3
+ * P5_4
+ * P5_5
+ * P9_3 SDHC
+ * P9_4 SDHC
+ * P9_5 SDHC
+ * P9_6 SDHC
+ * P9_7 SDHC
+ * P10_0 SDHC
+ */
+
+/ {
+	resources {
+		compatible = "bee-pm-device-gpio";
+		// P0_0
+		out-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+		// P0_1
+		in-gpios =
+		<&gpioa 1 (GPIO_ACTIVE_HIGH
+				| BEE_GPIO_INPUT_DEBOUNCE_MS(8)
+				| BEE_GPIO_INPUT_PM_WAKEUP)>;
+	};
+
+	chosen {
+		zephyr,keyboard-scan = &kscan_input;
+	};
+
+	zephyr,user {
+		io-channels = <&adc 4>;
+	};
+
+	aliases {
+		test-uart-dma = &uart3;
+		test-counter-timer = &timer5;
+		test-pwm = &pwm6;
+		test-rtc = &rtc;
+		test-aon-qdec = &aon_qdec;
+		test-qenca = &phase_a;
+		test-qencb = &phase_b;
+		test-i2c = &i2c0;
+		test-can = &can;
+		test-sdmmc = &sdhc0;
+	};
+
+	encoder-emulate {
+		compatible = "gpio-leds";
+		phase_a: phase_a {
+		// P0_4
+		gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;
+		};
+		phase_b: phase_b {
+		// P0_5
+		gpios = <&gpioa 5 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&uart2 {
+	pinctrl-0 = <&uart2_default>;
+	pinctrl-1 = <&uart2_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+	current-speed = <2000000>;
+	parity = "none";
+	stop-bits = "1";
+	data-bits = <8>;
+};
+
+&uart3 {
+	pinctrl-0 = <&uart3_default>;
+	pinctrl-1 = <&uart3_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+	current-speed = <2000000>;
+	parity = "none";
+	stop-bits = "1";
+	data-bits = <8>;
+	dmas = <&dma0 0 7 0xa>, <&dma0 1 6 0x10021>;
+	dma-names = "rx", "tx";
+};
+
+&dma0 {
+	status = "okay";
+};
+
+&gpioa {
+	status = "okay";
+};
+
+&gpiob {
+	status = "okay";
+};
+
+&timer5 {
+	status = "okay";
+	prescaler = <1>;
+};
+
+&timer6 {
+	status = "okay";
+	prescaler = <1>;
+	pwm6: pwm6 {
+			status = "okay";
+			pinctrl-0 = <&pwm6_default>;
+			pinctrl-names = "default";
+	};
+};
+
+&spi0 {
+	status = "okay";
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+	// P4_3
+	cs-gpios = <&gpiob 8 GPIO_ACTIVE_LOW>;
+	test-spi@0 {
+		compatible = "bee-pm-device-spi";
+		reg = <0>;
+		spi-max-frequency = <500000>;
+	};
+};
+
+&i2c0 {
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-1 = <&i2c0_sleep>;
+	pinctrl-names = "default", "sleep";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	status = "okay";
+};
+
+&rtc {
+	status = "okay";
+	prescaler = <3200>;
+};
+
+&aon_qdec {
+	status = "okay";
+	x-counts-per-revolution = <4>;
+	x-debounce-time-ms = <5>;
+	pinctrl-0 = <&aon_qdec_default>;
+	pinctrl-names = "default";
+};
+
+&kscan {
+	pinctrl-0 = <&input_kscan_default>;
+	pinctrl-1 = <&input_kscan_sleep>;
+	pinctrl-names = "default", "sleep";
+	row-size = <2>;
+	col-size = <2>;
+	debounce-time-us = <20000>;
+	scan-time-us = <20000>;
+	release-time-us = <5000>;
+	scan-debounce-cnt = <0>;
+	status = "okay";
+	kscan_input: kscan-input {
+		compatible = "zephyr,kscan-input";
+	};
+	keymap {
+		compatible = "input-keymap";
+		keymap = <
+			MATRIX_KEY(0, 0, INPUT_KEY_1)
+			MATRIX_KEY(0, 1, INPUT_KEY_2)
+			MATRIX_KEY(1, 0, INPUT_KEY_3)
+			MATRIX_KEY(1, 1, INPUT_KEY_4)
+		>;
+		row-size = <2>;
+		col-size = <2>;
+	};
+};
+
+&adc {
+	pinctrl-0 = <&adc_default>;
+	pinctrl-names = "default";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+	channel@4 {
+		reg = <4>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+};
+
+&can {
+	pinctrl-0 = <&can_default>;
+	pinctrl-1 = <&can_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+};
+
+&sdhc0 {
+	pin-group = <0>;
+	bus-width = <4>;
+	max-bus-freq = <20000000>;
+	power-delay-ms = <0>;
+	pinctrl-0 = <&sdhc0_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&pinctrl {
+	uart2_default: uart2_default {
+		group1 {
+			psels = <BEE_PSEL(UART2_TX, P3_2, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(UART2_RX, P3_3, DIR_IN, DRV_HIGH, PULL_UP)>;
+		};
+	};
+
+	uart2_sleep: uart2_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P3_2, DIR_OUT, DRV_HIGH, PULL_UP)>;
+		};
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, P3_3, DIR_IN, DRV_HIGH, PULL_UP)>;
+			wakeup-low;
+		};
+	};
+
+	uart3_default: uart3_default {
+		group1 {
+			psels = <BEE_PSEL(UART3_TX, P4_4, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(UART3_RX, P4_5, DIR_IN, DRV_HIGH, PULL_UP)>;
+		};
+	};
+
+	uart3_sleep: uart3_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P4_4, DIR_OUT, DRV_HIGH, PULL_UP)>;
+		};
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, P4_5, DIR_IN, DRV_HIGH, PULL_UP)>;
+			wakeup-low;
+		};
+	};
+
+	spi0_default: spi0_default {
+		group1 {
+			psels = <BEE_PSEL(SPI0_CLK_MASTER, P4_0, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SPI0_MO_MASTER, P4_1, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SPI0_MI_MASTER, P4_2, DIR_OUT, DRV_HIGH, PULL_UP)>;
+		};
+	};
+
+	pwm6_default: pwm6_default {
+		group1 {
+			psels = <BEE_PSEL(TIMER_PWM6, P0_2, DIR_OUT, DRV_HIGH, PULL_UP)>;
+		};
+	};
+
+	aon_qdec_default: aon_qdec_default {
+		group1 {
+			psels = <BEE_PSEL(QDPH0_IN_P1_3_P1_4, P1_3, DIR_IN, DRV_LOW, PULL_NONE)>,
+			<BEE_PSEL(QDPH0_IN_P1_3_P1_4, P1_4, DIR_IN, DRV_LOW, PULL_NONE)>;
+		};
+	};
+
+	i2c0_default: i2c0_default {
+		group1 {
+			psels = <BEE_PSEL(I2C0_CLK, P2_2, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(I2C0_DAT, P2_3, DIR_OUT, DRV_HIGH, PULL_UP)>;
+		};
+	};
+
+	i2c0_sleep: i2c0_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P2_2, DIR_OUT, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SW_MODE, P2_3, DIR_OUT, DRV_HIGH, PULL_UP)>;
+		};
+	};
+
+	input_kscan_default: input_kscan_default {
+		group1 {
+			psels = <BEE_PSEL(KEY_COL_0, P0_6, DIR_OUT, DRV_LOW, PULL_NONE)>,
+			<BEE_PSEL(KEY_COL_1, P0_7, DIR_OUT, DRV_LOW, PULL_NONE)>;
+		};
+		group2 {
+			psels = <BEE_PSEL(KEY_ROW_0, P2_6, DIR_IN, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(KEY_ROW_1, P2_7, DIR_IN, DRV_HIGH, PULL_UP)>;
+			bias-pull-strong;
+		};
+	};
+
+	input_kscan_sleep: input_kscan_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P0_6, DIR_OUT, DRV_LOW, PULL_NONE)>,
+			<BEE_PSEL(SW_MODE, P0_7, DIR_OUT, DRV_LOW, PULL_NONE)>;
+		};
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, P2_6, DIR_IN, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SW_MODE, P2_7, DIR_IN, DRV_HIGH, PULL_UP)>;
+			bias-pull-strong;
+			wakeup-low;
+		};
+	};
+
+	adc_default: adc_default {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P2_4, DIR_IN, DRV_LOW, PULL_DOWN)>;
+		};
+	};
+
+	can_default: can_default {
+		group1 {
+			psels = <BEE_PSEL(A2C_TX, P3_4, DIR_OUT, DRV_HIGH, PULL_NONE)>,
+				<BEE_PSEL(A2C_RX, P3_5, DIR_OUT, DRV_HIGH, PULL_NONE)>;
+		};
+	};
+
+	can_sleep: can_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P3_4, DIR_OUT, DRV_HIGH, PULL_UP)>;
+		};
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, P3_5, DIR_IN, DRV_HIGH, PULL_UP)>;
+			wakeup-low;
+		};
+	};
+
+	sdhc0_default: sdhc0_default {
+		group1 {
+			psels = <BEE_PSEL(SDHC0_CLK_P9_4, P9_4, DIR_IN, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SDHC0_CMD_P9_3, P9_3, DIR_IN, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SDHC0_D0_P10_0, P10_0, DIR_IN, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SDHC0_D1_P9_7, P9_7, DIR_IN, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SDHC0_D2_P9_6, P9_6, DIR_IN, DRV_HIGH, PULL_UP)>,
+			<BEE_PSEL(SDHC0_D3_P9_5, P9_5, DIR_IN, DRV_HIGH, PULL_UP)>;
+			current-level = <1>;
+		};
+	};
+};

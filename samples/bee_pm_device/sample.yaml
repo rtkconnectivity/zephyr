@@ -1,0 +1,6 @@
+sample:
+  description: Bee pm device sample
+  name: bee pm device
+common:
+  tags: introduction
+  harness: console
