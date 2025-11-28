@@ -127,7 +127,7 @@ static int pm_suspend_devices_rtk(void)
 
 	num_susp_rtk = 0;
 
-	for (const struct device *dev = devs + devc - 1; dev >= devs; dev--) {
+	for (const struct device *dev = devs; dev < devs + devc; dev++) {
 		int ret;
 
 		/* Ignore uninitialized devices, busy devices, wake up sources, and
