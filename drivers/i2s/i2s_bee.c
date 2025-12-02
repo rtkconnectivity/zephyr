@@ -24,14 +24,56 @@
 
 #include <zephyr/drivers/dma/dma_bee.h>
 #include <zephyr/drivers/dma.h>
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#include <rtl_gdma.h>
+#include <rtl_i2s.h>
+#include <rtl_pinmux.h>
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_gdma.h>
 #include <rtl876x_i2s.h>
 #include <rtl876x_pinmux.h>
+#endif
 
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 
 #include "trace.h"
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define BEE_I2S_TX_CH_L_R    I2S_CH_L_R
+#define BEE_I2S_TX_CH_R_L    I2S_CH_R_L
+#define BEE_I2S_TX_CH_L_L    I2S_CH_L_L
+#define BEE_I2S_TX_CH_R_R    I2S_CH_R_R
+#define BEE_I2S_RX_CH_L_R    I2S_CH_L_R
+#define BEE_I2S_RX_CH_R_L    I2S_CH_R_L
+#define BEE_I2S_RX_CH_L_L    I2S_CH_L_L
+#define BEE_I2S_RX_CH_R_R    I2S_CH_R_R
+#define BEE_I2S_TX_MSB_First I2S_MSB_First
+#define BEE_I2S_TX_LSB_First I2S_LSB_First
+#define BEE_I2S_RX_MSB_First I2S_MSB_First
+#define BEE_I2S_RX_LSB_First I2S_LSB_First
+#define BEE_I2S_TX_FIFO_ADDR I2S_TX_FIFO_WR_ADDR
+#define BEE_I2S_RX_FIFO_ADDR I2S_RX_FIFO_RD_ADDR
+
+#define BEE_I2S_WithExtCodecCmd(i2s, cmd) I2S_WithExtCodecCmd(i2s, cmd)
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#define BEE_I2S_TX_CH_L_R    I2S_TX_CH_L_R
+#define BEE_I2S_TX_CH_R_L    I2S_TX_CH_R_L
+#define BEE_I2S_TX_CH_L_L    I2S_TX_CH_L_L
+#define BEE_I2S_TX_CH_R_R    I2S_TX_CH_R_R
+#define BEE_I2S_RX_CH_L_R    I2S_RX_CH_L_R
+#define BEE_I2S_RX_CH_R_L    I2S_RX_CH_R_L
+#define BEE_I2S_RX_CH_L_L    I2S_RX_CH_L_L
+#define BEE_I2S_RX_CH_R_R    I2S_RX_CH_R_R
+#define BEE_I2S_TX_MSB_First I2S_TX_MSB_First
+#define BEE_I2S_TX_LSB_First I2S_TX_LSB_First
+#define BEE_I2S_RX_MSB_First I2S_RX_MSB_First
+#define BEE_I2S_RX_LSB_First I2S_RX_LSB_First
+#define BEE_I2S_TX_FIFO_ADDR TX_DR
+#define BEE_I2S_RX_FIFO_ADDR RX_DR
+
+#define BEE_I2S_WithExtCodecCmd(i2s, cmd) I2S0_WithExtCodecCmd(cmd)
+#endif
 
 LOG_MODULE_REGISTER(i2s_bee, CONFIG_I2S_LOG_LEVEL);
 
@@ -83,6 +125,7 @@ struct i2s_bee_config {
 	uint32_t clkid;
 	const struct pinctrl_dev_config *pinctrl;
 	void (*irq_config_func)(const struct device *dev);
+	bool internal_codec;
 };
 
 /* Device run time data */
@@ -524,6 +567,16 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 	const struct i2s_bee_config *dev_cfg = dev->config;
 	struct i2s_bee_data *dev_data = dev->data;
 	I2S_TypeDef *base = (I2S_TypeDef *)dev_cfg->base;
+	uint32_t *blck_mi, *blck_ni;
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+	I2SChannelType_TypeDef *channel_type;
+	I2SDataFormat_TypeDef *data_format;
+	I2SDataWidth_TypeDef *data_width;
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+	uint32_t *channel_type;
+	uint32_t *data_format;
+	uint32_t *data_width;
+#endif
 
 	I2S_InitTypeDef I2S_InitStruct;
 
@@ -551,12 +604,34 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 #endif
 	}
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+	blck_mi = &I2S_InitStruct.I2S_TxBClockMi;
+	blck_ni = &I2S_InitStruct.I2S_TxBClockNi;
+	channel_type = &I2S_InitStruct.I2S_TxChannelType;
+	data_format = &I2S_InitStruct.I2S_TxDataFormat;
+	data_width = &I2S_InitStruct.I2S_TxDataWidth;
+	I2S_InitStruct.I2S_TxBClockDiv = 63;
+	I2S_InitStruct.I2S_RxBClockDiv = 63;
+	I2S_InitStruct.I2S_TxChannelWidth = I2S_Width_32Bits;
+	I2S_InitStruct.I2S_RxChannelWidth = I2S_Width_32Bits;
+	I2S_InitStruct.I2S_TxFifoUsed = I2S_FIFO_USE_0_REG_0;
+	I2S_InitStruct.I2S_RxFifoUsed = I2S_FIFO_USE_0_REG_0;
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+	blck_mi = &I2S_InitStruct.I2S_BClockMi;
+	blck_ni = &I2S_InitStruct.I2S_BClockNi;
+	channel_type = &I2S_InitStruct.I2S_ChannelType;
+	data_format = &I2S_InitStruct.I2S_DataFormat;
+	data_width = &I2S_InitStruct.I2S_DataWidth;
+	I2S_InitStruct.I2S_MCLKOutput = I2S_MCLK_128fs;
+	I2S_InitStruct.I2S_DMACmd = I2S_DMA_ENABLE;
+#endif
+
 	if (i2s_cfg->frame_clk_freq == 8000) {
-		I2S_InitStruct.I2S_BClockMi = 0x186A;
-		I2S_InitStruct.I2S_BClockNi = 0x50;
+		*blck_mi = 0x186A;
+		*blck_ni = 0x50;
 	} else if (i2s_cfg->frame_clk_freq == 16000) {
-		I2S_InitStruct.I2S_BClockMi = 0x186A;
-		I2S_InitStruct.I2S_BClockNi = 0xA0;
+		*blck_mi = 0x186A;
+		*blck_ni = 0xA0;
 	} else if (i2s_cfg->frame_clk_freq == 0) {
 		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
 					(clock_control_subsys_t)&dev_cfg->clkid);
@@ -569,21 +644,28 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 	}
 
 	if (i2s_cfg->word_size == 8) {
-		I2S_InitStruct.I2S_DataWidth = I2S_Width_8Bits;
+		*data_width = I2S_Width_8Bits;
 	} else if (i2s_cfg->word_size == 16) {
-		I2S_InitStruct.I2S_DataWidth = I2S_Width_16Bits;
+		*data_width = I2S_Width_16Bits;
 	} else if (i2s_cfg->word_size == 24) {
-		I2S_InitStruct.I2S_DataWidth = I2S_Width_24Bits;
+		*data_width = I2S_Width_24Bits;
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+	} else if (i2s_cfg->word_size == 20) {
+		*data_width = I2S_Width_20Bits;
+	} else if (i2s_cfg->word_size == 32) {
+		*data_width = I2S_Width_32Bits;
+#endif
 	} else {
 		LOG_ERR("invalid i2s word size: %d", i2s_cfg->word_size);
 		i2s_set_satus(dev_data, dir, I2S_STATE_NOT_READY);
 		return -EINVAL;
 	}
 
-	if (i2s_cfg->channels == 1) {
-		I2S_InitStruct.I2S_ChannelType = I2S_Channel_Mono;
+	/* channels == 0 for i2s codec tx pdm */
+	if (i2s_cfg->channels == 1 || i2s_cfg->channels == 0) {
+		*channel_type = I2S_Channel_Mono;
 	} else if (i2s_cfg->channels == 2) {
-		I2S_InitStruct.I2S_ChannelType = I2S_Channel_stereo;
+		*channel_type = I2S_Channel_stereo;
 	} else {
 		LOG_ERR("invalid i2s channels: %d", i2s_cfg->channels);
 		i2s_set_satus(dev_data, dir, I2S_STATE_NOT_READY);
@@ -591,14 +673,14 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 	}
 
 	if ((i2s_cfg->format & I2S_FMT_DATA_FORMAT_MASK) == I2S_FMT_DATA_FORMAT_I2S) {
-		I2S_InitStruct.I2S_DataFormat = I2S_Mode;
+		*data_format = I2S_Mode;
 	} else if ((i2s_cfg->format & I2S_FMT_DATA_FORMAT_MASK) == I2S_FMT_DATA_FORMAT_PCM_SHORT) {
-		I2S_InitStruct.I2S_DataFormat = PCM_Mode_A;
+		*data_format = PCM_Mode_A;
 	} else if ((i2s_cfg->format & I2S_FMT_DATA_FORMAT_MASK) == I2S_FMT_DATA_FORMAT_PCM_LONG) {
-		I2S_InitStruct.I2S_DataFormat = PCM_Mode_B;
+		*data_format = PCM_Mode_B;
 	} else if ((i2s_cfg->format & I2S_FMT_DATA_FORMAT_MASK) ==
 		   I2S_FMT_DATA_FORMAT_LEFT_JUSTIFIED) {
-		I2S_InitStruct.I2S_DataFormat = Left_Justified_Mode;
+		*data_format = Left_Justified_Mode;
 	} else {
 		LOG_ERR("invalid i2s format: 0x%x", i2s_cfg->format);
 		i2s_set_satus(dev_data, dir, I2S_STATE_NOT_READY);
@@ -606,11 +688,11 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 	}
 
 	if ((i2s_cfg->format & I2S_FMT_DATA_ORDER_LSB) == I2S_FMT_DATA_ORDER_LSB) {
-		I2S_InitStruct.I2S_TxBitSequence = I2S_TX_LSB_First;
-		I2S_InitStruct.I2S_RxBitSequence = I2S_RX_LSB_First;
+		I2S_InitStruct.I2S_TxBitSequence = BEE_I2S_TX_LSB_First;
+		I2S_InitStruct.I2S_RxBitSequence = BEE_I2S_RX_LSB_First;
 	} else {
-		I2S_InitStruct.I2S_TxBitSequence = I2S_TX_MSB_First;
-		I2S_InitStruct.I2S_RxBitSequence = I2S_RX_MSB_First;
+		I2S_InitStruct.I2S_TxBitSequence = BEE_I2S_TX_MSB_First;
+		I2S_InitStruct.I2S_RxBitSequence = BEE_I2S_RX_MSB_First;
 	}
 
 	if ((i2s_cfg->options & I2S_OPT_BIT_CLK_SLAVE) == I2S_OPT_BIT_CLK_SLAVE) {
@@ -628,15 +710,25 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 	}
 
 	I2S_InitStruct.I2S_ClockSource = I2S_CLK_40M;
-	I2S_InitStruct.I2S_TxChSequence = I2S_TX_CH_L_R;
-	I2S_InitStruct.I2S_RxChSequence = I2S_RX_CH_L_R;
-	I2S_InitStruct.I2S_MCLKOutput = I2S_MCLK_128fs;
-	I2S_InitStruct.I2S_DMACmd = I2S_DMA_ENABLE;
+	I2S_InitStruct.I2S_TxChSequence = BEE_I2S_TX_CH_L_R;
+	I2S_InitStruct.I2S_RxChSequence = BEE_I2S_RX_CH_L_R;
 #if defined(CONFIG_I2S_BEE_TX)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+	I2S_InitStruct.I2S_TxWaterlevel = 1;
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
 	I2S_InitStruct.I2S_TxWaterlevel = 64 - dev_data->dma_tx.dma_cfg.dest_burst_length;
+#endif
 #endif
 #if defined(CONFIG_I2S_BEE_RX)
 	I2S_InitStruct.I2S_RxWaterlevel = dev_data->dma_rx.dma_cfg.source_burst_length;
+#endif
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+	I2S_InitStruct.I2S_RxBClockMi = I2S_InitStruct.I2S_TxBClockMi;
+	I2S_InitStruct.I2S_RxBClockNi = I2S_InitStruct.I2S_TxBClockNi;
+	I2S_InitStruct.I2S_RxChannelType = I2S_InitStruct.I2S_TxChannelType;
+	I2S_InitStruct.I2S_RxDataFormat = I2S_InitStruct.I2S_TxDataFormat;
+	I2S_InitStruct.I2S_RxDataWidth = I2S_InitStruct.I2S_TxDataWidth;
 #endif
 
 	/* pinctrl */
@@ -646,6 +738,8 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&dev_cfg->clkid);
 
 	I2S_Init(base, &I2S_InitStruct);
+
+	BEE_I2S_WithExtCodecCmd(base, (!dev_cfg->internal_codec));
 
 	if (dir == I2S_DIR_TX) {
 #if defined(CONFIG_I2S_BEE_TX)
@@ -839,12 +933,12 @@ static int i2s_bee_init(const struct device *dev)
 	/* Configure dma tx config */
 	memset(&(dev_data->dma_tx.blk_cfg[0]), 0, sizeof(dev_data->dma_tx.blk_cfg[0]));
 	memset(&(dev_data->dma_tx.blk_cfg[1]), 0, sizeof(dev_data->dma_tx.blk_cfg[1]));
-	dev_data->dma_tx.blk_cfg[0].dest_address = (uint32_t)(&(base->TX_DR));
+	dev_data->dma_tx.blk_cfg[0].dest_address = (uint32_t)(&(base->BEE_I2S_TX_FIFO_ADDR));
 	dev_data->dma_tx.blk_cfg[0].source_address = 0; /* not ready */
 	dev_data->dma_tx.blk_cfg[0].source_addr_adj = dev_data->dma_tx.src_addr_increment;
 	dev_data->dma_tx.blk_cfg[0].dest_addr_adj = dev_data->dma_tx.dst_addr_increment;
 	dev_data->dma_tx.blk_cfg[0].next_block = &(dev_data->dma_tx.blk_cfg[1]);
-	dev_data->dma_tx.blk_cfg[1].dest_address = (uint32_t)(&(base->TX_DR));
+	dev_data->dma_tx.blk_cfg[1].dest_address = (uint32_t)(&(base->BEE_I2S_TX_FIFO_ADDR));
 	dev_data->dma_tx.blk_cfg[1].source_address = 0; /* not ready */
 	dev_data->dma_tx.blk_cfg[1].source_addr_adj = dev_data->dma_tx.src_addr_increment;
 	dev_data->dma_tx.blk_cfg[1].dest_addr_adj = dev_data->dma_tx.dst_addr_increment;
@@ -864,12 +958,12 @@ static int i2s_bee_init(const struct device *dev)
 	/* Configure dma rx config */
 	memset(&(dev_data->dma_rx.blk_cfg[0]), 0, sizeof(dev_data->dma_rx.blk_cfg[0]));
 	memset(&(dev_data->dma_rx.blk_cfg[1]), 0, sizeof(dev_data->dma_rx.blk_cfg[1]));
-	dev_data->dma_rx.blk_cfg[0].source_address = (uint32_t)(&(base->RX_DR));
+	dev_data->dma_rx.blk_cfg[0].source_address = (uint32_t)(&(base->BEE_I2S_RX_FIFO_ADDR));
 	dev_data->dma_rx.blk_cfg[0].dest_address = 0; /* dest not ready */
 	dev_data->dma_rx.blk_cfg[0].source_addr_adj = dev_data->dma_rx.src_addr_increment;
 	dev_data->dma_rx.blk_cfg[0].dest_addr_adj = dev_data->dma_rx.dst_addr_increment;
 	dev_data->dma_rx.blk_cfg[0].next_block = &(dev_data->dma_rx.blk_cfg[1]);
-	dev_data->dma_rx.blk_cfg[1].source_address = (uint32_t)(&(base->RX_DR));
+	dev_data->dma_rx.blk_cfg[1].source_address = (uint32_t)(&(base->BEE_I2S_RX_FIFO_ADDR));
 	dev_data->dma_rx.blk_cfg[1].dest_address = 0; /* dest not ready */
 	dev_data->dma_rx.blk_cfg[1].source_addr_adj = dev_data->dma_rx.src_addr_increment;
 	dev_data->dma_rx.blk_cfg[1].dest_addr_adj = dev_data->dma_rx.dst_addr_increment;
@@ -949,6 +1043,8 @@ static const struct i2s_driver_api i2s_bee_driver_api = {
 		.clkid = DT_INST_CLOCKS_CELL(index, id),                                           \
 		.irq_config_func = i2s_bee_irq_config_func_##index,                                \
 		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                  \
+		.internal_codec = DT_NODE_HAS_COMPAT_STATUS(DT_INST_CHILD(index, codec_0),         \
+							    realtek_bee_codec, okay),              \
 	};                                                                                         \
                                                                                                    \
 	static struct i2s_bee_data i2s_bee_data_##index = {I2S_DMA_INIT(index)};                   \

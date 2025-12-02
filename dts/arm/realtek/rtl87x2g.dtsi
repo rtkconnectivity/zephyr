@@ -546,6 +546,26 @@
 			status = "disabled";
 		};
 
+		i2s0: i2s0@40020000 {
+			compatible = "realtek,bee-i2s";
+			reg = <0x40020000 0x68>;
+			interrupts = <64 0>, <65 0>;
+			clocks = <&cctl APB_CLK(I2S0)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		i2s1: i2s1@40021000 {
+			compatible = "realtek,bee-i2s";
+			reg = <0x40021000 0x68>;
+			interrupts = <66 0>, <67 0>;
+			clocks = <&cctl APB_CLK(I2S1)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
 		can: can@40038000 {
 			compatible = "realtek,bee-can";
 			reg = <0x40038000 0x34c>;
