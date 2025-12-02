@@ -54,7 +54,7 @@ properties:
   mic-type:
     type: string
     description: |
-      Specify the channel 0 mic type, which can be dmic or amic.
+      Specify the channel 0/1 mic type, which can be dmic or amic.
     enum:
       - "amic"
       - "dmic"
@@ -62,7 +62,7 @@ properties:
   dmic-data-latch:
     type: string
     description: |
-      Specify the channel 0 dmic data latch type.
+      Specify the channel 0/1 dmic data latch type.
     enum:
       - "falling_latch"
       - "rising_latch"
@@ -70,15 +70,21 @@ properties:
   ad-gain:
     type: int
     description: |
-      Specify the channel 0 ADC digital volume.
+      Specify the channel 0/1 ADC digital volume.
       0x2F - 0dB, step 0.375dB, range -17.625dB ~ 30dB
 
   boost-gain:
     type: string
     description: |
-      Specify the channel 0 boost gain.
+      Specify the channel 0/1 boost gain.
     enum:
       - "0dB"
       - "12dB"
       - "24dB"
       - "36dB"
+
+  da-gain:
+    type: int
+    description: |
+      Specify the DAC gain control.
+      0x0 - 0xAF
