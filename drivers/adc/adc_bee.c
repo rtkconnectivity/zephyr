@@ -31,6 +31,11 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(adc_bee, CONFIG_ADC_LOG_LEVEL);
 
+#ifdef CONFIG_PM_DEVICE
+	extern void ADC_DLPSEnter(void *PeriReg, void *StoreBuf);
+	extern void ADC_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif
+
 struct adc_bee_config {
 	uint32_t reg;
 	uint16_t clkid;
@@ -210,9 +215,6 @@ static int adc_bee_pm_action(const struct device *dev, enum pm_device_action act
 	const struct adc_bee_config *cfg = dev->config;
 	ADC_TypeDef *adc = (ADC_TypeDef *)cfg->reg;
 	int err;
-
-	extern void ADC_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void ADC_DLPSExit(void *PeriReg, void *StoreBuf);
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:

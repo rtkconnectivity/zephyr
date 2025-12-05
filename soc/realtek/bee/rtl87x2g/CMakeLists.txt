@@ -24,4 +24,5 @@ zephyr_library_sources(power.c)
 zephyr_code_relocate(FILES power.c LOCATION ITCM)
 zephyr_code_relocate(FILES ${ZEPHYR_BASE}/subsys/pm/device.c LOCATION ITCM)
 zephyr_code_relocate(FILES ${ZEPHYR_BASE}/arch/arm/core/nmi.c LOCATION ITCM) #for z_arm_nmi
+zephyr_code_relocate(FILES ${ZEPHYR_BASE}/drivers/pinctrl/pinctrl_bee.c LOCATION ITCM) #272bytes
 endif()
