@@ -43,6 +43,13 @@
 
 LOG_MODULE_REGISTER(counter_bee_timer, CONFIG_COUNTER_LOG_LEVEL);
 
+#ifdef CONFIG_PM_DEVICE
+	extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+	extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
+	extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+	extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif
+
 struct counter_bee_ch_data {
 	counter_alarm_callback_t callback;
 	void *user_data;
@@ -305,10 +312,6 @@ static int counter_bee_timer_pm_action(const struct device *dev, enum pm_device_
 	struct counter_bee_data *data = dev->data;
 	void *timer_base = (void *)cfg->reg;
 	int err;
-	extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
-	extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:

@@ -36,6 +36,10 @@ extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
 								int8_t priority);
 
 #endif
+
+extern void KEYSCAN_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void KEYSCAN_DLPSExit(void *PeriReg, void *StoreBuf, uint32_t scanmode, uint32_t manual_sel);
+
 #endif
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
@@ -111,6 +115,9 @@ struct kscan_bee_data {
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 	/* If timer started, do not configure auto scan during resume */
 	bool timer_started;
+#endif
+#ifdef CONFIG_PM_DEVICE
+	KEYSCANStoreReg_Typedef store_buf;
 #endif
 };
 
@@ -577,8 +584,10 @@ static int kscan_bee_pm_action(const struct device *dev, enum pm_device_action a
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
 		const struct pinctrl_state *state;
-		/* Move pins to sleep state */
 
+		KEYSCAN_DLPSEnter((void *)config->reg, &data->store_buf);
+
+		/* Move pins to sleep state */
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 		if (!data->press_rows) {
 			ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
@@ -629,16 +638,17 @@ exit:
 
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE
 		if (is_pad_wakeup) {
-			kscan_bee_init_driver(dev, KeyScan_Manual_Scan_Mode,
-					      KeyScan_Manual_Sel_Bit);
+			KEYSCAN_DLPSExit((void *)config->reg, &data->store_buf,
+					 KeyScan_Manual_Scan_Mode, KeyScan_Manual_Sel_Bit);
 		} else {
 			if (data->timer_started == false) {
-				kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode,
-						      KeyScan_Manual_Sel_Key);
+				KEYSCAN_DLPSExit((void *)config->reg, &data->store_buf,
+					 KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
 			}
 		}
 #else
-		kscan_bee_init_driver(dev, KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
+		KEYSCAN_DLPSExit((void *)config->reg, &data->store_buf,
+				KeyScan_Auto_Scan_Mode, KeyScan_Manual_Sel_Key);
 #endif
 
 		break;

@@ -67,6 +67,11 @@ static const struct device *const devices[] = {
 	DT_FOREACH_STATUS_OKAY(DT_DRV_COMPAT, DEVICE_DT_GET_AND_COMMA)};
 #endif
 
+#ifdef CONFIG_PM_DEVICE
+	extern void UART_DLPSEnter(void *PeriReg, void *StoreBuf);
+	extern void UART_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif
+
 static const uint32_t RTL_UART_BAUDRATE_TABLE[][3] = {
 	{271, 10, 0x24A}, /* 9600    */
 	{150, 8, 0x3EF},  /* 19200   */
@@ -1224,9 +1229,6 @@ static int uart_bee_pm_action(const struct device *dev, enum pm_device_action ac
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
 	int err;
-
-	extern void UART_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void UART_DLPSExit(void *PeriReg, void *StoreBuf);
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:

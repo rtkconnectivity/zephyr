@@ -72,6 +72,11 @@ extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 
 LOG_MODULE_REGISTER(gpio_bee, CONFIG_GPIO_LOG_LEVEL);
 
+#ifdef CONFIG_PM_DEVICE
+	extern void GPIO_DLPSEnter(void *PeriReg, void *StoreBuf);
+	extern void GPIO_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif
+
 static int gpio_bee_gpio2pad(uint8_t port_num, uint32_t pin)
 {
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
@@ -676,9 +681,6 @@ static int gpio_bee_pm_action(const struct device *port, enum pm_device_action a
 	GPIO_TypeDef *port_base = config->port_base;
 	struct pm_pad_node *pad_node;
 	uint8_t pad_num, gpio_num;
-
-	extern void GPIO_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void GPIO_DLPSExit(void *PeriReg, void *StoreBuf);
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:

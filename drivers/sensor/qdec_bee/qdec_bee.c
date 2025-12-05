@@ -27,6 +27,11 @@ LOG_MODULE_REGISTER(qdec_bee, CONFIG_SENSOR_LOG_LEVEL);
 #define FULL_ANGLE       360
 #define MAX_ACC_CNT_BITS 16
 
+#ifdef CONFIG_PM_DEVICE
+	extern void QDEC_DLPSEnter(void *PeriReg, void *StoreBuf);
+	extern void QDEC_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif
+
 struct qdec_bee_axis_data {
 	int32_t acc;
 	int16_t round;
@@ -343,9 +348,6 @@ static int qdec_bee_pm_action(const struct device *dev, enum pm_device_action ac
 	QDEC_TypeDef *qdec = (QDEC_TypeDef *)config->reg;
 	uint16_t acc_cnt;
 	int err;
-
-	extern void QDEC_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void QDEC_DLPSExit(void *PeriReg, void *StoreBuf);
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:

@@ -32,6 +32,11 @@ LOG_MODULE_REGISTER(i2c_bee, CONFIG_I2C_LOG_LEVEL);
 #include <rtl876x_rcc.h>
 #endif
 
+#ifdef CONFIG_PM_DEVICE
+	extern void I2C_DLPSEnter(void *PeriReg, void *StoreBuf);
+	extern void I2C_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif
+
 #define I2C_TIMEOUT 0xFFFFF
 
 struct i2c_bee_config {
@@ -391,9 +396,6 @@ static int i2c_bee_pm_action(const struct device *dev, enum pm_device_action act
 	const struct i2c_bee_config *cfg = dev->config;
 	I2C_TypeDef *i2c = (I2C_TypeDef *)cfg->reg;
 	int err;
-
-	extern void I2C_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void I2C_DLPSExit(void *PeriReg, void *StoreBuf);
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
