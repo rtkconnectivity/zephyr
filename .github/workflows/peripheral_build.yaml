@@ -11,13 +11,13 @@ jobs:
     steps:
       - name: Check disk before cleanup
         run: |
-          echo "=== 清理前磁盘状态 ==="
+          echo "=== Clear the pre-disk state ==="
           df -h
-          echo "=== Docker 镜像/层占用 ==="
+          echo "=== Docker image/layer occupation ==="
           docker system df -v || true
-          echo "=== 工作目录占用 ==="
-          du -sh /home/runner/_work/* || true
-          echo "=== Actions 缓存占用 ==="
+          echo "=== workspace occupation ==="
+          du -sh /home/runner/_w/* || true
+          echo "=== Actions cache occupation ==="
           du -sh /home/runner/_work/_temp/* /home/runner/_work/_github_home/* 2>/dev/null || true
       
       - name: Find and clean large directories
@@ -29,11 +29,8 @@ jobs:
           sudo du -sh /usr/local/* 2>/dev/null | sort -hr
           sudo du -sh /var/lib/* 2>/dev/null | sort -hr
 
-      - name: Deep Clean Cache & Residue
+      - name: Clean Cache
         run: |
-          # Remove specific Docker images that are no longer needed
-          docker rmi $(docker images -f "dangling=true" -q) || true
-          
           # Prune unused Docker objects (images, containers, volumes, and networks)
           docker system prune -f || true
       
