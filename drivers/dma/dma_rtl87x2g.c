@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020, Realtek Semiconductor Corporation.
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,14 +14,28 @@
 #include <zephyr/irq.h>
 #include <zephyr/kernel.h>
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #include <rtl_rcc.h>
 #include <rtl_gdma.h>
+#endif
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define RTL87X2G_DMA_REG_STATUS_ERR   GDMA_STATUSERR_L
+#define RTL87X2G_DMA_REG_STATUS_TFR   GDMA_STATUSTFR_L
+#define RTL87X2G_DMA_REG_STATUS_BLOCK GDMA_STATUSBLOCK_L
+#endif
 
 #include <trace.h>
 
 BUILD_ASSERT(CONFIG_HEAP_MEM_POOL_SIZE > 0);
 
-#define DBG_DIRECT_SHOW 0
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define DMA_HAS_MULTI_BLOCK_MODE(id)                                                               \
+	((id) == 0 || (id) == 1 || (id) == 2 || (id) == 3 || (id) == 4 || (id) == 5 ||             \
+	 (id) == 6 || (id) == 7 || (id) == 8)
+#endif
+
+#define DBG_DIRECT_SHOW 1
 LOG_MODULE_REGISTER(dma_rtl87x2g, CONFIG_DMA_LOG_LEVEL);
 
 struct dma_rtl87x2g_config {
@@ -29,7 +43,10 @@ struct dma_rtl87x2g_config {
 	uint32_t channels;
 	uint16_t clkid;
 	void (*irq_configure)(void);
-	uint32_t channel_base_table[];
+	struct {
+		volatile uint32_t channel_base;
+		uint8_t channel_num;
+	} channel_table[];
 };
 
 struct dma_rtl87x2g_channel {
@@ -37,22 +54,22 @@ struct dma_rtl87x2g_channel {
 	void *user_data;
 	bool busy;
 	struct dma_config cfg;
+	bool cyclic;
 	uint32_t total_size;
 	GDMA_LLIDef *p_dma_lli;
 };
 
-struct dma_rtl87x2g_data {
-	struct dma_rtl87x2g_channel *channels;
+struct dma_rtl87x2g_isr_param {
+	const struct device *dev;
+	uint8_t channel_id;
 };
 
-static int dma_rtl87x2g_ch2num(uint32_t reg, uint32_t ch)
-{
-	if ((GDMA_TypeDef *)reg == GDMA0) {
-		return ch;
-	} else {
-		return -EIO;
-	}
-}
+struct dma_rtl87x2g_data {
+	/* this needs to be the first member */
+	struct dma_context ctx;
+	atomic_t channel_flags;
+	struct dma_rtl87x2g_channel *channels;
+};
 
 extern FlagStatus GDMA_GetSuspendChannelStatus(GDMA_ChannelTypeDef *GDMA_Channelx);
 
@@ -73,23 +90,18 @@ static int dma_rtl87x2g_configure(const struct device *dev, uint32_t channel,
 	DBG_DIRECT("[%s] channel=%d, channel_direction=%d, block_size=%d, "
 		   "source_addr_adj=%d dest_addr_adj=%d, "
 		   "source_data_size=%d, dest_data_size=%d, source_burst_length=%d, "
-		   "dest_burst_length=%d, dma_cfg->dma_slot=%d, line%d", __func__,
-		   channel, dma_cfg->channel_direction, dma_cfg->head_block->block_size,
+		   "dest_burst_length=%d, dma_cfg->dma_slot=%d, line%d",
+		   __func__, channel, dma_cfg->channel_direction, dma_cfg->head_block->block_size,
 		   dma_cfg->head_block->source_addr_adj, dma_cfg->head_block->dest_addr_adj,
 		   dma_cfg->source_data_size, dma_cfg->dest_data_size, dma_cfg->source_burst_length,
 		   dma_cfg->dest_burst_length, dma_cfg->dma_slot, __LINE__);
-	DBG_DIRECT(
-		"[dma_rtl87x2g_configure] channel=%d, source_address=%x, dest_address=%x, line%d",
-		channel, dma_cfg->head_block->source_address, dma_cfg->head_block->dest_address,
-		__LINE__);
+	DBG_DIRECT("[%s] channel=%d, source_address=%x, dest_address=%x, line%d", __func__, channel,
+		   dma_cfg->head_block->source_address, dma_cfg->head_block->dest_address,
+		   __LINE__);
 #endif
 
-	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
-	if (dma_channel_num < 0) {
-		return -EINVAL;
-	}
-
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
+	dma_channel_num = cfg->channel_table[channel].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
 
 	GDMA_InitTypeDef dma_init_struct;
 
@@ -102,20 +114,26 @@ static int dma_rtl87x2g_configure(const struct device *dev, uint32_t channel,
 		return -EINVAL;
 	}
 
+	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num) && dma_cfg->block_count != 1) {
+		LOG_ERR("dma channel%d does not support chained block transfer", dma_channel_num);
+		return -ENOTSUP;
+	}
+
 	if (dma_cfg->source_chaining_en || dma_cfg->dest_chaining_en) {
 		LOG_ERR("src/dest chaining not supported.");
 		return -ENOTSUP;
 	}
 
-	if (data->channels[channel].p_dma_lli != NULL) {
-		k_free(data->channels[channel].p_dma_lli);
-	}
-
-	data->channels[channel].p_dma_lli = k_malloc(sizeof(GDMA_LLIDef) * dma_cfg->block_count);
-
-	if (data->channels[channel].p_dma_lli == NULL) {
-		LOG_ERR("p_dma_lli malloc fail");
-		return -EINVAL;
+	if (DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
+		if (data->channels[channel].p_dma_lli != NULL) {
+			k_free(data->channels[channel].p_dma_lli);
+		}
+		data->channels[channel].p_dma_lli =
+			k_malloc(sizeof(GDMA_LLIDef) * dma_cfg->block_count);
+		if (data->channels[channel].p_dma_lli == NULL) {
+			LOG_ERR("p_dma_lli malloc fail");
+			return -EINVAL;
+		}
 	}
 
 	if (dma_cfg->head_block->source_gather_count != 0 ||
@@ -249,13 +267,8 @@ static int dma_rtl87x2g_configure(const struct device *dev, uint32_t channel,
 
 	dma_init_struct.GDMA_ChannelNum = dma_channel_num;
 	dma_init_struct.GDMA_DIR = dma_cfg->channel_direction;
-	if (dma_cfg->channel_direction == PERIPHERAL_TO_MEMORY) {
-		dma_init_struct.GDMA_BufferSize =
-			dma_cfg->head_block->block_size / dma_cfg->dest_data_size;
-	} else {
-		dma_init_struct.GDMA_BufferSize =
-			dma_cfg->head_block->block_size / dma_cfg->source_data_size;
-	}
+	dma_init_struct.GDMA_BufferSize =
+		dma_cfg->head_block->block_size / dma_cfg->source_data_size;
 
 	if (dma_cfg->channel_direction == MEMORY_TO_PERIPHERAL) {
 		dma_init_struct.GDMA_DestHandshake = dma_cfg->dma_slot;
@@ -263,73 +276,82 @@ static int dma_rtl87x2g_configure(const struct device *dev, uint32_t channel,
 		dma_init_struct.GDMA_SourceHandshake = dma_cfg->dma_slot;
 	}
 
-	dma_init_struct.GDMA_ChannelPriority = dma_cfg->channel_priority;
-	dma_init_struct.GDMA_Multi_Block_En = ENABLE;
-	dma_init_struct.GDMA_Multi_Block_Mode = LLI_TRANSFER;
-	dma_init_struct.GDMA_Multi_Block_Struct = (uint32_t)(data->channels[channel].p_dma_lli);
-
-	GDMA_Init(dma_channel, &dma_init_struct);
-	cur_block = dma_cfg->head_block;
-	data->channels[channel].total_size = 0;
-	for (uint8_t i = 0; i < dma_cfg->block_count; i++) {
-		if (cur_block == NULL) {
-			LOG_ERR("block%d dose not exsist", i);
-			return -EINVAL;
-		}
-
-		data->channels[channel].p_dma_lli[i].SAR = (uint32_t)(cur_block->source_address);
-		data->channels[channel].p_dma_lli[i].DAR = (uint32_t)(cur_block->dest_address);
-		data->channels[channel].p_dma_lli[i].LLP =
-			(i < dma_cfg->block_count - 1)
-				? (uint32_t)(&(data->channels[channel].p_dma_lli[i + 1]))
-				: (dma_cfg->cyclic ? (uint32_t)(data->channels[channel].p_dma_lli)
-						   : 0);
-
-		data->channels[channel].p_dma_lli[i].CTL_LOW =
-			BIT(0) | (dma_init_struct.GDMA_DestinationDataSize << 1) |
-			(dma_init_struct.GDMA_SourceDataSize << 4) |
-			(cur_block->dest_addr_adj << 7) | (cur_block->source_addr_adj << 9) |
-			(dma_init_struct.GDMA_DestinationMsize << 11) |
-			(dma_init_struct.GDMA_SourceMsize << 14) |
-			(dma_cfg->channel_direction << 20) |
-			((i < dma_cfg->block_count - 1)
-				 ? (dma_init_struct.GDMA_Multi_Block_Mode & LLP_SELECTED_BIT)
-				 : 0);
-
-		if (dma_cfg->channel_direction == PERIPHERAL_TO_MEMORY) {
-			data->channels[channel].p_dma_lli[i].CTL_HIGH =
-				cur_block->block_size / dma_cfg->dest_data_size;
-		} else {
-			data->channels[channel].p_dma_lli[i].CTL_HIGH =
-				cur_block->block_size / dma_cfg->source_data_size;
-		}
-
-		data->channels[channel].total_size += cur_block->block_size;
-
 #if DBG_DIRECT_SHOW
-		DBG_DIRECT(
-			"[dma_rtl87x2g_configure] channel=%d p_dma_lli[%d], channel_direction=%d, "
-			"block_size=%d, source_addr_adj=%d dest_addr_adj=%d, "
-			"source_data_size=%d, dest_data_size=%d, source_burst_length=%d, "
-			"dest_burst_length=%d, dma_cfg->dma_slot=%d, line%d",
-
-			channel, i, dma_cfg->channel_direction, cur_block->block_size,
-			cur_block->source_addr_adj, cur_block->dest_addr_adj,
-			dma_cfg->source_data_size, dma_cfg->dest_data_size,
-			dma_cfg->source_burst_length, dma_cfg->dest_burst_length, dma_cfg->dma_slot,
-			__LINE__);
-		DBG_DIRECT("[%s] channel=%d p_dma_lli[%d], source_address=%x, "
-			   "dest_address=%x, LLP=0x%x, line%d", __func__,
-			   channel, i, cur_block->source_address, cur_block->dest_address,
-			   data->channels[channel].p_dma_lli[i].LLP, __LINE__);
+	DBG_DIRECT("[%s] channel=%d, dma_init_struct.GDMA_BufferSize=%d, line%d", __func__, channel,
+		   dma_init_struct.GDMA_BufferSize, __LINE__);
 #endif
 
-		cur_block = cur_block->next_block;
-	}
+	dma_init_struct.GDMA_SourceInc = dma_cfg->head_block->source_addr_adj;
+	dma_init_struct.GDMA_DestinationInc = dma_cfg->head_block->dest_addr_adj;
+	dma_init_struct.GDMA_SourceAddr = dma_cfg->head_block->source_address;
+	dma_init_struct.GDMA_DestinationAddr = dma_cfg->head_block->dest_address;
+	dma_init_struct.GDMA_ChannelPriority = dma_cfg->channel_priority;
 
-	data->channels[channel].callback = dma_cfg->dma_callback;
-	data->channels[channel].user_data = dma_cfg->user_data;
-	data->channels[channel].cfg = *dma_cfg;
+	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
+		dma_init_struct.GDMA_Multi_Block_En = DISABLE;
+		GDMA_Init(dma_channel, &dma_init_struct);
+
+		data->channels[channel].callback = dma_cfg->dma_callback;
+		data->channels[channel].user_data = dma_cfg->user_data;
+		data->channels[channel].cfg = *dma_cfg;
+		data->channels[channel].total_size = dma_cfg->head_block->block_size;
+	} else {
+		dma_init_struct.GDMA_Multi_Block_En = ENABLE;
+		dma_init_struct.GDMA_Multi_Block_Mode = LLI_TRANSFER;
+		dma_init_struct.GDMA_Multi_Block_Struct =
+			(uint32_t)(data->channels[channel].p_dma_lli);
+
+		GDMA_Init(dma_channel, &dma_init_struct);
+		cur_block = dma_cfg->head_block;
+		data->channels[channel].total_size = 0;
+		for (uint8_t i = 0; i < dma_cfg->block_count; i++) {
+			if (cur_block == NULL) {
+				LOG_ERR("block%d dose not exsist", i);
+				return -EINVAL;
+			}
+
+			data->channels[channel].p_dma_lli[i].SAR =
+				(uint32_t)(cur_block->source_address);
+			data->channels[channel].p_dma_lli[i].DAR =
+				(uint32_t)(cur_block->dest_address);
+			data->channels[channel].p_dma_lli[i].LLP =
+				(i < dma_cfg->block_count - 1)
+					? (uint32_t)(&(data->channels[channel].p_dma_lli[i + 1]))
+					: (dma_cfg->cyclic
+						   ? (uint32_t)(data->channels[channel].p_dma_lli)
+						   : 0);
+
+			data->channels[channel].p_dma_lli[i].CTL_LOW =
+				BIT(0) | (dma_init_struct.GDMA_DestinationDataSize << 1) |
+				(dma_init_struct.GDMA_SourceDataSize << 4) |
+				(cur_block->dest_addr_adj << 7) |
+				(cur_block->source_addr_adj << 9) |
+				(dma_init_struct.GDMA_DestinationMsize << 11) |
+				(dma_init_struct.GDMA_SourceMsize << 14) |
+				(dma_cfg->channel_direction << 20) |
+				(dma_cfg->cyclic ? (dma_init_struct.GDMA_Multi_Block_Mode &
+						    LLP_SELECTED_BIT)
+				 : (i < dma_cfg->block_count - 1)
+					 ? (dma_init_struct.GDMA_Multi_Block_Mode &
+					    LLP_SELECTED_BIT)
+					 : 0);
+			data->channels[channel].p_dma_lli[i].CTL_HIGH =
+				cur_block->block_size / dma_cfg->source_data_size;
+
+			data->channels[channel].cyclic = dma_cfg->cyclic;
+			if (dma_cfg->cyclic) {
+				data->channels[channel].total_size = cur_block->block_size;
+			} else {
+				data->channels[channel].total_size += cur_block->block_size;
+			}
+
+			cur_block = cur_block->next_block;
+		}
+
+		data->channels[channel].callback = dma_cfg->dma_callback;
+		data->channels[channel].user_data = dma_cfg->user_data;
+		data->channels[channel].cfg = *dma_cfg;
+	}
 
 	return 0;
 }
@@ -345,12 +367,8 @@ static int dma_rtl87x2g_reload(const struct device *dev, uint32_t channel, uint3
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
 
-	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
-	if (dma_channel_num < 0) {
-		return -EINVAL;
-	}
-
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
+	dma_channel_num = cfg->channel_table[channel].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("reload channel must be < %" PRIu32 " (%" PRIu32 ")", cfg->channels,
@@ -364,23 +382,31 @@ static int dma_rtl87x2g_reload(const struct device *dev, uint32_t channel, uint3
 
 	GDMA_Cmd(dma_channel_num, DISABLE);
 
-	if (data->channels[channel].p_dma_lli == NULL) {
-		LOG_ERR("configure dma before reload");
-		return -EINVAL;
-	}
+	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
+		GDMA_SetBufferSize(dma_channel, size);
+		GDMA_SetSourceAddress(dma_channel, src);
+		GDMA_SetDestinationAddress(dma_channel, dst);
 
-	data->channels[channel].p_dma_lli[0].SAR = (uint32_t)src;
-	data->channels[channel].p_dma_lli[0].DAR = (uint32_t)dst;
-	data->channels[channel].p_dma_lli[0].LLP = 0;
-	if (data->channels->cfg.channel_direction == PERIPHERAL_TO_MEMORY) {
-		data->channels[channel].p_dma_lli[0].CTL_HIGH =
-			(size / data->channels[channel].cfg.dest_data_size);
+		data->channels[channel].total_size = size;
 	} else {
-		data->channels[channel].p_dma_lli[0].CTL_HIGH =
-			(size / data->channels[channel].cfg.source_data_size);
-	}
+		if (data->channels[channel].p_dma_lli == NULL) {
+			LOG_ERR("configure dma before reload");
+			return -EINVAL;
+		}
 
-	data->channels[channel].total_size = size;
+		data->channels[channel].p_dma_lli[0].SAR = (uint32_t)src;
+		data->channels[channel].p_dma_lli[0].DAR = (uint32_t)dst;
+		data->channels[channel].p_dma_lli[0].LLP = 0;
+		if (data->channels->cfg.channel_direction == PERIPHERAL_TO_MEMORY) {
+			data->channels[channel].p_dma_lli[0].CTL_HIGH =
+				(size / data->channels[channel].cfg.dest_data_size);
+		} else {
+			data->channels[channel].p_dma_lli[0].CTL_HIGH =
+				(size / data->channels[channel].cfg.source_data_size);
+		}
+
+		data->channels[channel].total_size = size;
+	}
 
 	return 0;
 }
@@ -395,12 +421,8 @@ static int dma_rtl87x2g_start(const struct device *dev, uint32_t channel)
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
 
-	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
-	if (dma_channel_num < 0) {
-		return -EINVAL;
-	}
-
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
+	dma_channel_num = cfg->channel_table[channel].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("start channel must be < %" PRIu32 " (%" PRIu32 ")", cfg->channels,
@@ -412,27 +434,35 @@ static int dma_rtl87x2g_start(const struct device *dev, uint32_t channel)
 		GDMA_INTConfig(dma_channel_num, GDMA_INT_Error, ENABLE);
 	}
 
-	GDMA_INTConfig(dma_channel_num, GDMA_INT_Block | GDMA_INT_Transfer, ENABLE);
+	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
+		GDMA_INTConfig(dma_channel_num, GDMA_INT_Transfer, ENABLE);
+		data->channels[channel].busy = true;
+		GDMA_Cmd(dma_channel_num, ENABLE);
+	} else {
+		GDMA_INTConfig(dma_channel_num, GDMA_INT_Block | GDMA_INT_Transfer, ENABLE);
 
-	data->channels[channel].busy = true;
+		data->channels[channel].busy = true;
 
-	dma_channel->GDMA_CTLx_H = data->channels[channel].p_dma_lli[0].CTL_HIGH;
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+		dma_channel->GDMA_CTLx_H = data->channels[channel].p_dma_lli[0].CTL_HIGH;
 
-	GDMA_CFGx_L_TypeDef gdma_0x40 = {.d32 = dma_channel->GDMA_CFGx_L};
-	GDMA_CTLx_L_TypeDef gdma_0x18 = {.d32 = dma_channel->GDMA_CTLx_L};
+		GDMA_CFGx_L_TypeDef gdma_0x40 = {.d32 = dma_channel->GDMA_CFGx_L};
+		GDMA_CTLx_L_TypeDef gdma_0x18 = {.d32 = dma_channel->GDMA_CTLx_L};
 
-	dma_channel->GDMA_LLPx_L = (uint32_t)(data->channels[channel].p_dma_lli);
-	gdma_0x18.b.llp_dst_en = 1;
-	gdma_0x18.b.llp_src_en = 1;
-	gdma_0x40.b.reload_src = 0;
-	gdma_0x40.b.reload_dst = 0;
-	dma_channel->GDMA_CTLx_L = gdma_0x18.d32;
-	dma_channel->GDMA_CFGx_L = gdma_0x40.d32;
+		dma_channel->GDMA_LLPx_L = (uint32_t)(data->channels[channel].p_dma_lli);
+		gdma_0x18.b.llp_dst_en = 1;
+		gdma_0x18.b.llp_src_en = 1;
+		gdma_0x40.b.reload_src = 0;
+		gdma_0x40.b.reload_dst = 0;
+		dma_channel->GDMA_CTLx_L = gdma_0x18.d32;
+		dma_channel->GDMA_CFGx_L = gdma_0x40.d32;
+#endif
 
-	GDMA_SetSourceAddress(dma_channel, 0);
-	GDMA_SetDestinationAddress(dma_channel, 0);
+		GDMA_SetSourceAddress(dma_channel, 0);
+		GDMA_SetDestinationAddress(dma_channel, 0);
 
-	GDMA_Cmd(dma_channel_num, ENABLE);
+		GDMA_Cmd(dma_channel_num, ENABLE);
+	}
 
 	return 0;
 }
@@ -447,20 +477,23 @@ static int dma_rtl87x2g_stop(const struct device *dev, uint32_t channel)
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
 
-	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
-	if (dma_channel_num < 0) {
-		return -EINVAL;
-	}
-
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
+	dma_channel_num = cfg->channel_table[channel].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("stop channel must be < %" PRIu32 " (%" PRIu32 ")", cfg->channels, channel);
 		return -EINVAL;
 	}
 
-	GDMA_INTConfig(dma_channel_num, GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block,
-		       DISABLE);
+	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
+		GDMA_INTConfig(dma_channel_num, GDMA_INT_Transfer | GDMA_INT_Error, DISABLE);
+		GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer | GDMA_INT_Error);
+	} else {
+		GDMA_INTConfig(dma_channel_num, GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block,
+			       DISABLE);
+		GDMA_ClearINTPendingBit(dma_channel_num,
+					GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block);
+	}
 
 	GDMA_Cmd(dma_channel_num, DISABLE);
 	data->channels[channel].busy = false;
@@ -475,12 +508,8 @@ static int dma_rtl87x2g_suspend(const struct device *dev, uint32_t channel)
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
 
-	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
-	if (dma_channel_num < 0) {
-		return -EINVAL;
-	}
-
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
+	dma_channel_num = cfg->channel_table[channel].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("suspend channel must be < %" PRIu32 " (%" PRIu32 ")", cfg->channels,
@@ -505,12 +534,8 @@ static int dma_rtl87x2g_resume(const struct device *dev, uint32_t channel)
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
 
-	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, channel);
-	if (dma_channel_num < 0) {
-		return -EINVAL;
-	}
-
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
+	dma_channel_num = cfg->channel_table[channel].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("resume channel must be < %" PRIu32 " (%" PRIu32 ")", cfg->channels,
@@ -537,16 +562,12 @@ static int dma_rtl87x2g_get_status(const struct device *dev, uint32_t ch, struct
 {
 	const struct dma_rtl87x2g_config *cfg = dev->config;
 	struct dma_rtl87x2g_data *data = dev->data;
+	bool suspending;
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
-	bool suspending;
 
-	dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, ch);
-	if (dma_channel_num < 0) {
-		return -EINVAL;
-	}
-
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
+	dma_channel_num = cfg->channel_table[ch].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[ch].channel_base;
 	suspending = GDMA_GetSuspendChannelStatus(dma_channel);
 
 	if (ch >= cfg->channels) {
@@ -557,6 +578,9 @@ static int dma_rtl87x2g_get_status(const struct device *dev, uint32_t ch, struct
 	stat->busy = data->channels[ch].busy;
 	if (data->channels[ch].busy) {
 		GDMA_SuspendCmd(dma_channel, ENABLE);
+		while (!GDMA_GetSuspendChannelStatus(dma_channel))
+			;
+
 		stat->pending_length =
 			data->channels[ch].total_size - GDMA_GetTransferLen(dma_channel);
 
@@ -588,18 +612,13 @@ static bool dma_rtl87x2g_api_chan_filter(const struct device *dev, int ch, void 
 static int dma_rtl87x2g_init(const struct device *dev)
 {
 	const struct dma_rtl87x2g_config *cfg = dev->config;
+	struct dma_rtl87x2g_data *data = dev->data;
 	int dma_channel_num;
-
-	RCC_PeriphClockCmd(APBPeriph_GDMA, APBPeriph_GDMA_CLOCK, ENABLE);
 
 	(void)clock_control_on(RTL87X2G_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 	for (uint32_t i = 0; i < cfg->channels; i++) {
-		dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, i);
-		if (dma_channel_num < 0) {
-			return -EINVAL;
-		}
-
+		dma_channel_num = cfg->channel_table[i].channel_num;
 		if (dma_channel_num >= 0) {
 			GDMA_INTConfig(dma_channel_num,
 				       GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block,
@@ -610,53 +629,75 @@ static int dma_rtl87x2g_init(const struct device *dev)
 
 	cfg->irq_configure();
 
+	data->channel_flags = ATOMIC_INIT(0);
+	data->ctx.atomic = &data->channel_flags;
+	data->ctx.dma_channels = cfg->channels;
+
 	return 0;
 }
 
-static void dma_rtl87x2g_isr(const struct device *dev)
+static void dma_rtl87x2g_isr(struct dma_rtl87x2g_isr_param *param)
 {
+	const struct device *dev = param->dev;
 	const struct dma_rtl87x2g_config *cfg = dev->config;
 	struct dma_rtl87x2g_data *data = dev->data;
+	uint8_t i = param->channel_id;
 	int dma_channel_num;
 	uint32_t errflag, ftfflag, blockflag;
 	int err = 0;
 	GDMA_ChannelTypeDef *dma_channel;
 
-	for (uint32_t i = 0; i < cfg->channels; i++) {
-		dma_channel_num = dma_rtl87x2g_ch2num(cfg->reg, i);
-		if (dma_channel_num < 0) {
-			return -EINVAL;
-		}
-
-		dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_base_table[dma_channel_num];
-		errflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_STATUSERR_L & BIT(dma_channel_num);
-		ftfflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_STATUSTFR_L & BIT(dma_channel_num);
-		blockflag = ((GDMA_TypeDef *)cfg->reg)->GDMA_STATUSBLOCK_L & BIT(dma_channel_num);
-
-		GDMA_ClearINTPendingBit(dma_channel_num,
-					GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block);
+	dma_channel_num = cfg->channel_table[i].channel_num;
+	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[i].channel_base;
+	errflag = ((GDMA_TypeDef *)cfg->reg)->RTL87X2G_DMA_REG_STATUS_ERR & BIT(dma_channel_num);
+	ftfflag = ((GDMA_TypeDef *)cfg->reg)->RTL87X2G_DMA_REG_STATUS_TFR & BIT(dma_channel_num);
+	blockflag =
+		((GDMA_TypeDef *)cfg->reg)->RTL87X2G_DMA_REG_STATUS_BLOCK & BIT(dma_channel_num);
 
 #if DBG_DIRECT_SHOW
-		DBG_DIRECT("[%s] channel %d transferlen%d callback %x ftfflag%d "
-			   "errflag%d blockflag%d complete_callback_en%d", __func__,
-			   i, GDMA_GetTransferLen(dma_channel), data->channels[i].callback, ftfflag,
-			   errflag, blockflag, data->channels[i].cfg.complete_callback_en);
+	DBG_DIRECT("[%s] channel %d transferlen%d callback%x ftfflag%d "
+		   "errflag%d blockflag%d complete_callback_en%d",
+		   __func__, i, GDMA_GetTransferLen(dma_channel), data->channels[i].callback,
+		   ftfflag, errflag, blockflag, data->channels[i].cfg.complete_callback_en);
 #endif
 
+	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
+		if (errflag == 0 && ftfflag == 0) {
+			return;
+		}
+
+		GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
+
+		if (errflag) {
+			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
+			err = -EIO;
+		}
+
+		data->channels[i].busy = false;
+
+		if (data->channels[i].callback) {
+			data->channels[i].callback(dev, data->channels[i].user_data, i, err);
+		}
+	} else {
 		if (errflag == 0 && ftfflag == 0 && blockflag == 0) {
-			continue;
+			return;
 		}
 
 		if (errflag) {
+			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
 			err = -EIO;
 		}
 
 		if (ftfflag) {
+			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
 			data->channels[i].busy = false;
 		}
 
 		if (blockflag) {
-			data->channels[i].total_size -= GDMA_GetTransferLen(dma_channel);
+			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Block);
+			if (!data->channels[i].cyclic) {
+				data->channels[i].total_size -= GDMA_GetTransferLen(dma_channel);
+			}
 		}
 
 		if (data->channels[i].callback) {
@@ -682,15 +723,36 @@ static const struct dma_driver_api dma_rtl87x2g_driver_api = {
 };
 
 #define IRQ_CONFIGURE(n, index)                                                                    \
-	IRQ_CONNECT(DT_INST_IRQ_BY_IDX(index, n, irq), DT_INST_IRQ_BY_IDX(index, n, priority),     \
-		    dma_rtl87x2g_isr, DEVICE_DT_INST_GET(index), 0);                               \
+	irq_disable(DT_INST_IRQ_BY_IDX(index, n, irq));                                            \
+	irq_connect_dynamic(                                                                       \
+		DT_INST_IRQ_BY_IDX(index, n, irq), DT_INST_IRQ_BY_IDX(index, n, priority),         \
+		(const void *)dma_rtl87x2g_isr, &dma_rtl87x2g_##index##_isr_param[n], 0);          \
 	irq_enable(DT_INST_IRQ_BY_IDX(index, n, irq));
 
 #define CONFIGURE_ALL_IRQS(index, n) LISTIFY(n, IRQ_CONFIGURE, (), index)
 
-#define DMA_CHANNER_BASE(n, index, dma_port) (GDMA##dma_port##_Channel##n##_BASE)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define DMA_CHANNER_TABLE                                                                          \
+	.channel_table = {                                                                         \
+		{GDMA0_Channel0_BASE, GDMA_CH_NUM0}, {GDMA0_Channel1_BASE, GDMA_CH_NUM1},          \
+		{GDMA0_Channel2_BASE, GDMA_CH_NUM2}, {GDMA0_Channel3_BASE, GDMA_CH_NUM3},          \
+		{GDMA0_Channel4_BASE, GDMA_CH_NUM4}, {GDMA0_Channel5_BASE, GDMA_CH_NUM5},          \
+		{GDMA0_Channel6_BASE, GDMA_CH_NUM6}, {GDMA0_Channel7_BASE, GDMA_CH_NUM7},          \
+		{GDMA0_Channel8_BASE, GDMA_CH_NUM8},                                               \
+	}
+#endif
+
+#define ALL_ISR_PARAM_CONFIGURE(n, index)                                                          \
+	{                                                                                          \
+		.dev = DEVICE_DT_INST_GET(index),                                                  \
+		.channel_id = n,                                                                   \
+	},
+
+#define CONFIGURE_ALL_ISR_PARAMS(index, n) LISTIFY(n, ALL_ISR_PARAM_CONFIGURE, (), index)
 
 #define RTL87X2G_DMA_INIT(index)                                                                   \
+	static struct dma_rtl87x2g_isr_param dma_rtl87x2g_##index##_isr_param[] = {                \
+		CONFIGURE_ALL_ISR_PARAMS(index, DT_NUM_IRQS(DT_DRV_INST(index)))};                 \
 	static void dma_rtl87x2g_##index##_irq_configure(void)                                     \
 	{                                                                                          \
 		CONFIGURE_ALL_IRQS(index, DT_NUM_IRQS(DT_DRV_INST(index)));                        \
@@ -699,16 +761,15 @@ static const struct dma_driver_api dma_rtl87x2g_driver_api = {
 		.reg = DT_INST_REG_ADDR(index),                                                    \
 		.channels = DT_INST_PROP(index, dma_channels),                                     \
 		.clkid = DT_INST_CLOCKS_CELL(index, id),                                           \
-		.irq_configure = dma_rtl87x2g_##index##_irq_configure,                             \
-		.channel_base_table = {LISTIFY(DT_INST_PROP(index, dma_channels),                  \
-					       DMA_CHANNER_BASE, (,), index,                      \
-					       DT_INST_PROP(index, dma_port))},                    \
+		.irq_configure = &dma_rtl87x2g_##index##_irq_configure,                            \
+		DMA_CHANNER_TABLE,                                                                 \
 	};                                                                                         \
                                                                                                    \
 	static struct dma_rtl87x2g_channel                                                         \
 		dma_rtl87x2g_##index##_channels[DT_INST_PROP(index, dma_channels)];                \
 	ATOMIC_DEFINE(dma_rtl87x2g_atomic##index, DT_INST_PROP(index, dma_channels));              \
 	static struct dma_rtl87x2g_data dma_rtl87x2g_##index##_data = {                            \
+		.ctx.magic = 0x47494749,                                                           \
 		.channels = dma_rtl87x2g_##index##_channels,                                       \
 	};                                                                                         \
                                                                                                    \
