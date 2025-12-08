@@ -43,6 +43,9 @@ jobs:
           sudo rm -rf /var/lib/apt/lists/*
           sudo rm -rf /tmp/* /var/tmp/* || true
           sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android /usr/local/lib/node_modules /usr/local/lib/go /usr/local/lib/ruby || true
+          sudo rm -rf /usr/local/julia1.12.2 /usr/local/aws-cli /usr/local/aws-sam-cli /usr/local/n || true
+          sudo rm -rf /usr/local/share/* || true
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
