@@ -28,6 +28,8 @@ jobs:
           sudo du -sh /opt/* 2>/dev/null | sort -hr
           sudo du -sh /usr/local/* 2>/dev/null | sort -hr
           sudo du -sh /var/lib/* 2>/dev/null | sort -hr
+          echo "=== 隐藏缓存目录 ==="
+          du -sh /home/runner/.cache/* /home/runner/.local/* 2>/dev/null || true
 
       - name: Clean Cache
         run: |
@@ -38,6 +40,10 @@ jobs:
           sudo rm -rf /var/lib/apt/lists/*
           sudo rm -rf /tmp/* /var/tmp/* || true
           sudo rm -rf /opt/hostedtoolcache/* || true
+          rm -rf /home/runner/work/* || true
+          rm -rf /home/runner/.cache/west /home/runner/.cache/zephyr-sdk/* || true
+          sudo rm -rf /opt/az/* /opt/google/* || true
+          sudo rm -rf /usr/local/share/boost/* || true
           
           echo "=== 清理后磁盘状态 ==="
           df -h
