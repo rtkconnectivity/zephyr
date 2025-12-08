@@ -6,16 +6,19 @@ on:
   schedule:
     - cron: "0 0 * * *"
 jobs:
-  Build-peripheral:
+  disk-cleanup:
     runs-on: ubuntu-latest
-
-    container:
-      image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
-      options: '--entrypoint /bin/bash'
-
     steps:
-      - name: Clean Docker cache
+      - name: Check disk before
         run: |
+          echo "=== 拉取前磁盘状态 ==="
+          df -h
+          docker system df || true
+
+      - name: Free up disk space
+        run: |
+          echo "=== 开始清理磁盘 ==="
+          
           # Clean up Docker images and containers
           docker system prune -f
           docker image prune -a -f
@@ -26,6 +29,23 @@ jobs:
           # Show disk space usage
           df -h
 
+          # 6. 显示清理结果
+          echo "=== 磁盘使用情况 ==="
+          df -h
+          
+          echo "=== Docker 磁盘使用 ==="
+          docker system df || true
+
+  # 主构建 Job，等待清理完成
+  build:
+    needs: disk-cleanup  # 关键：等待清理完成
+    runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
+      options: '--entrypoint /bin/bash'
+
+    steps:
       - name: set_env
         run: |
           if [ "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "pull_request_target" ];then
