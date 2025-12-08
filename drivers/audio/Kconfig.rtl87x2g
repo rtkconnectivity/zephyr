@@ -1,0 +1,13 @@
+# RTL87X2G codec configuration
+
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config AUDIO_RTL87X2G
+	bool "RTL87X2G MCU codec controller driver"
+	default y
+	depends on DT_HAS_REALTEK_RTL87X2G_CODEC_ENABLED
+	select I2S
+	select USE_HAL_REALTEK_CODEC
+	help
+	  Enable the rtl87x2g codec driver.

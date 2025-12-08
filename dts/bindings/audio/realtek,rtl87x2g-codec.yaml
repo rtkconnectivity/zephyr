@@ -1,0 +1,90 @@
+# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  RTL87X2G CODEC.
+
+compatible: "realtek,rtl87x2g-codec"
+
+include: [i2s-device.yaml, pinctrl-device.yaml]
+
+properties:
+  channel-sequence:
+    type: string
+    description: |
+      Specify the I2S Tx/Rx channel sequence.
+    enum:
+      - "l_r"
+      - "r_l"
+      - "l_l"
+      - "r_r"
+
+  mic-bias:
+    type: string
+    description: |
+      Specify the MICBIAS voltage.
+    enum:
+      - "1_507"
+      - "1_62"
+      - "1_705"
+      - "1_8"
+      - "1_906"
+      - "2_025"
+      - "2_16"
+      - "2_314"
+
+  mic-bst-gain:
+    type: string
+    description: |
+      Specify the MICBST gain.
+    enum:
+      - "0dB"
+      - "20dB"
+      - "30dB"
+      - "40dB"
+
+  mic-bst-mode:
+    type: string
+    description: |
+      Specify the MICBST mode.
+    enum:
+      - "single"
+      - "differential"
+
+  mic-type:
+    type: string
+    description: |
+      Specify the channel 0/1 mic type, which can be dmic or amic.
+    enum:
+      - "amic"
+      - "dmic"
+
+  dmic-data-latch:
+    type: string
+    description: |
+      Specify the channel 0/1 dmic data latch type.
+    enum:
+      - "falling_latch"
+      - "rising_latch"
+
+  ad-gain:
+    type: int
+    description: |
+      Specify the channel 0/1 ADC digital volume.
+      0x2F - 0dB, step 0.375dB, range -17.625dB ~ 30dB
+
+  boost-gain:
+    type: string
+    description: |
+      Specify the channel 0/1 boost gain.
+    enum:
+      - "0dB"
+      - "12dB"
+      - "24dB"
+      - "36dB"
+
+  da-gain:
+    type: int
+    description: |
+      Specify the DAC gain control.
+      0x0 - 0xAF
