@@ -28,6 +28,7 @@ jobs:
           sudo du -sh /opt/* 2>/dev/null | sort -hr
           sudo du -sh /usr/local/* 2>/dev/null | sort -hr
           sudo du -sh /var/lib/* 2>/dev/null | sort -hr
+          sudo du -sh /usr/local/* 2>/dev/null | sort -hr
           echo "=== 隐藏缓存目录 ==="
           du -sh /home/runner/.cache/* /home/runner/.local/* 2>/dev/null || true
           echo "=== /var/lib/docker 总占用 ==="
