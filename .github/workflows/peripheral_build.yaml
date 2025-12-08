@@ -9,11 +9,31 @@ jobs:
   Build-peripheral:
     runs-on: ubuntu-latest
 
-    container:
-      image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
-      options: '--entrypoint /bin/bash'
+    # container:
+    #   image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
+    #   options: '--entrypoint /bin/bash'
 
     steps:
+      - name: Clean Docker cache
+        run: |
+          # Clean up Docker images and containers
+          docker system prune -f
+          docker image prune -a -f
+          # Clean up apt cache
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo rm -rf /tmp/*
+          # Show disk space usage
+          df -h
+      
+      - name: Run in container
+        uses: docker://ghcr.io/zephyrproject-rtos/ci:v0.26.11
+        with:
+          entrypoint: /bin/bash
+          args: |
+            apt-get clean && rm -rf /var/lib/apt/lists/*
+            df -h
+
       - name: set_env
         run: |
           if [ "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "pull_request_target" ];then
@@ -110,5 +130,7 @@ jobs:
           cd realtek-zephyr-project/zephyr
           echo "============= build rtl87x2g_evb ============="
           west build -b rtl87x2g_evb samples/bluetooth/peripheral -p
+          rm -rf build
           echo "============= build rtl8752h_evb ============="
           west build -b rtl8752h_evb/rtl8752htv samples/bluetooth/peripheral -p
+          rm -rf build
