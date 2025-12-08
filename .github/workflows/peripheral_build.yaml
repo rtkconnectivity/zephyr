@@ -31,25 +31,14 @@ jobs:
 
       - name: Deep Clean Cache & Residue
         run: |
-          echo "=== 1. 彻底清理Docker（含镜像层/临时文件） ==="
-          docker system prune -af --volumes || true
-          rm -rf /var/lib/docker/*  # 直接删Docker根目录（彻底清除镜像层缓存）
-          rm -rf /var/lib/docker/tmp/*  # 清理镜像解压临时文件
+          # Remove specific Docker images that are no longer needed
+          docker rmi $(docker images -f "dangling=true" -q) || true
           
-          echo "=== 2. 清理GitHub Actions缓存 ==="
-          # 删除Actions内置缓存、临时目录
-          rm -rf /home/runner/_work/_temp/*
-          rm -rf /home/runner/_work/_github_home/*
-          rm -rf /home/runner/_work/_github_workflow/*
-
-          rm -rf /home/runner/_work/*  # 清空所有job的工作目录（无重要数据）
-          
-          echo "=== 4. 清理系统级大文件（补充） ==="
-          # 删预装软件（释放基础空间）
-          rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/*
-          # 删APT/临时文件
-          apt-get clean
-          rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+          # Prune unused Docker objects (images, containers, volumes, and networks)
+          docker system prune -f || true
+      
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
           
           echo "=== 清理后磁盘状态 ==="
           df -h
