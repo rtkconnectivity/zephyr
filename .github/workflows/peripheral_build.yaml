@@ -37,6 +37,7 @@ jobs:
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
           sudo rm -rf /tmp/* /var/tmp/* || true
+          sudo rm -rf /opt/hostedtoolcache/* || true
           
           echo "=== 清理后磁盘状态 ==="
           df -h
