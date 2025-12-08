@@ -16,9 +16,9 @@ jobs:
           echo "=== Docker image/layer occupation ==="
           docker system df -v || true
           echo "=== workspace occupation ==="
-          du -sh /home/runner/_w/* || true
+          du -sh /home/runner/work/* || true
           echo "=== Actions cache occupation ==="
-          du -sh /home/runner/_work/_temp/* /home/runner/_work/_github_home/* 2>/dev/null || true
+          du -sh /home/runner/work/_temp/* /home/runner/work/_github_home/* 2>/dev/null || true
       
       - name: Find and clean large directories
         run: |
@@ -36,6 +36,7 @@ jobs:
       
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
+          sudo rm -rf /tmp/* /var/tmp/* || true
           
           echo "=== 清理后磁盘状态 ==="
           df -h
