@@ -32,11 +32,7 @@ jobs:
           du -sh /home/runner/.cache/* /home/runner/.local/* 2>/dev/null || true
           echo "=== /var/lib/docker 总占用 ==="
           sudo du -sh /var/lib/docker
-          echo "=== /var/lib/docker 子目录占用 ==="
-          sudo du -sh /var/lib/docker/*
-          echo "=== /dev/root 分区实时状态 ==="
-          sudo df -h /var/lib/docker  # 确认该目录在/dev/root分区
-
+  
       - name: Clean Cache
         run: |
           # Prune unused Docker objects (images, containers, volumes, and networks)
@@ -51,6 +47,9 @@ jobs:
           sudo rm -rf /opt/az/* /opt/google/* || true
           sudo rm -rf /usr/local/share/boost/* || true
           sudo rm -rf /var/lib/docker/tmp/*
+          sudo rm -rf /usr/local/lib/android || true # Android SDK，2-3G
+          sudo rm -rf /usr/local/julia1.12.2 || true # 1G
+          sudo rm -rf /opt/microsoft/* || true       # 微软工具，783M
           
           echo "=== 清理后磁盘状态 ==="
           df -h
