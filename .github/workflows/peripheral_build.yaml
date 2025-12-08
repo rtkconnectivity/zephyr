@@ -31,11 +31,11 @@ jobs:
           echo "=== 隐藏缓存目录 ==="
           du -sh /home/runner/.cache/* /home/runner/.local/* 2>/dev/null || true
           echo "=== /var/lib/docker 总占用 ==="
-          du -sh /var/lib/docker
+          sudo du -sh /var/lib/docker
           echo "=== /var/lib/docker 子目录占用 ==="
-          du -sh /var/lib/docker/*
+          sudo du -sh /var/lib/docker/*
           echo "=== /dev/root 分区实时状态 ==="
-          df -h /var/lib/docker  # 确认该目录在/dev/root分区
+          sudo df -h /var/lib/docker  # 确认该目录在/dev/root分区
 
       - name: Clean Cache
         run: |
