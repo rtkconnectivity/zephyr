@@ -41,15 +41,10 @@ jobs:
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
           sudo rm -rf /tmp/* /var/tmp/* || true
-          sudo rm -rf /opt/hostedtoolcache/* || true
-          rm -rf /home/runner/work/* || true
-          rm -rf /home/runner/.cache/west /home/runner/.cache/zephyr-sdk/* || true
-          sudo rm -rf /opt/az/* /opt/google/* || true
-          sudo rm -rf /usr/local/share/boost/* || true
-          sudo rm -rf /var/lib/docker/tmp/*
-          sudo rm -rf /usr/local/lib/android || true # Android SDK，2-3G
-          sudo rm -rf /usr/local/julia1.12.2 || true # 1G
-          sudo rm -rf /opt/microsoft/* || true       # 微软工具，783M
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           
           echo "=== 清理后磁盘状态 ==="
           df -h
