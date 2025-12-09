@@ -113,3 +113,8 @@ config USE_HAL_REALTEK_PINMUX
 	bool
 	help
 	  Enable HAL REALTEK PINMUX driver
+
+config USE_HAL_REALTEK_SDHC
+	bool
+	help
+	  Enable HAL REALTEK SDHC driver
