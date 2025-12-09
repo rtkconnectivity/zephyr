@@ -19,20 +19,6 @@ jobs:
           du -sh /home/runner/work/* || true
           echo "=== Actions cache occupation ==="
           du -sh /home/runner/work/_temp/* /home/runner/work/_github_home/* 2>/dev/null || true
-
-      - name: Find and clean large directories
-        run: |
-          echo "=== 查找大文件/目录 ==="
-          
-          # 1. 查看各目录大小
-          sudo du -sh /opt/* 2>/dev/null | sort -hr
-          sudo du -sh /usr/local/* 2>/dev/null | sort -hr
-          sudo du -sh /var/lib/* 2>/dev/null | sort -hr
-          sudo du -sh /usr/local/* 2>/dev/null | sort -hr
-          echo "=== 隐藏缓存目录 ==="
-          du -sh /home/runner/.cache/* /home/runner/.local/* 2>/dev/null || true
-          echo "=== /var/lib/docker 总占用 ==="
-          sudo du -sh /var/lib/docker
   
       - name: Clean Cache
         run: |
@@ -46,18 +32,16 @@ jobs:
           sudo rm -rf /usr/local/lib/android /usr/local/lib/node_modules /usr/local/lib/go /usr/local/lib/ruby || true
           sudo rm -rf /usr/local/julia1.12.2 /usr/local/aws-cli /usr/local/aws-sam-cli /usr/local/n || true
           sudo rm -rf /usr/local/share/* || true
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY" 
+          sudo rm -rf /opt/ghc || true
           docker system prune -af
           
           echo "=== 清理后磁盘状态 ==="
           df -h
           echo "=== 剩余可用空间 ==="
           df -B 1G / | awk 'NR==2 {print $4 " GB"}'
-  # 主构建 Job，等待清理完成
+
   build:
-    needs: disk-cleanup  # 关键：等待清理完成
+    needs: disk-cleanup
     runs-on: ubuntu-latest
 
     container:
