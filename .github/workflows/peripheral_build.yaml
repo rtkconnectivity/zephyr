@@ -6,7 +6,7 @@ on:
   schedule:
     - cron: "0 0 * * *"
 jobs:
-  disk-cleanup:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Check disk before cleanup
@@ -40,15 +40,6 @@ jobs:
           echo "=== 剩余可用空间 ==="
           df -B 1G / | awk 'NR==2 {print $4 " GB"}'
 
-  build:
-    needs: disk-cleanup
-    runs-on: ubuntu-latest
-
-    container:
-      image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
-      options: '--entrypoint /bin/bash'
-
-    steps:
       - name: set_env
         run: |
           if [ "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "pull_request_target" ];then
