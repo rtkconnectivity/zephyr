@@ -52,7 +52,8 @@ jobs:
           sudo rm -rf /usr/local/share/* || true
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" 
+          docker system prune -af
           
           echo "=== 清理后磁盘状态 ==="
           df -h
