@@ -19,11 +19,7 @@ jobs:
           du -sh /home/runner/work/* || true
           echo "=== Actions cache occupation ==="
           du -sh /home/runner/work/_temp/* /home/runner/work/_github_home/* 2>/dev/null || true
-          echo "=== inode 使用 ==="
-          df -i /dev/root  # 查看inode是否耗尽（Used%需<90%）
-          echo "=== /tmp 挂载方式 ==="
-          mount | grep /tmp  # 查看是否为tmpfs且大小极小
-      
+
       - name: Find and clean large directories
         run: |
           echo "=== 查找大文件/目录 ==="
