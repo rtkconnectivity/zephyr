@@ -11,32 +11,32 @@ jobs:
     steps:
       - name: Check disk before cleanup
         run: |
-          echo "=== 清理前磁盘状态 ==="
+          echo "=== Clear the pre-disk state ==="
           df -h
-          echo "=== Docker 镜像/层占用 ==="
+          echo "=== Docker image/layer occupation ==="
           docker system df -v || true
       
       - name: Find and clean large directories
         run: |
-          echo "=== 查找大文件/目录 ==="
+          echo "=== Search for large files/directories ==="
           
-          # 1. 查看各目录大小
+          # 1. Check the size of each directory
           sudo du -sh /opt/* 2>/dev/null | sort -hr
           sudo du -sh /usr/local/* 2>/dev/null | sort -hr
           sudo du -sh /var/lib/* 2>/dev/null | sort -hr
   
       - name: Deep Docker diagnostics
         run: |
-          echo "=== Docker 诊断 ==="
+          echo "=== Docker diagnostics ==="
           docker system df
           docker info | grep -A 10 "Storage Driver"
           docker info | grep "Docker Root Dir"
-          echo "======= 第1次检查 ======="
-          echo "1. 磁盘空间:"
+          echo "======= 1st check ======="
+          echo "1. Disk space:"
           df -h
           echo ""
           
-          echo "2. INODE 状态:"
+          echo "2. INODE state:"
           df -i
           echo ""
 
@@ -52,13 +52,13 @@ jobs:
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
           
-          echo "=== 清理后磁盘状态 ==="
+          echo "=== The disk state after cleaning ==="
           df -h
-          echo "=== 剩余可用空间 ==="
+          echo "=== Remaining available space ==="
           df -B 1G / | awk 'NR==2 {print $4 " GB"}'
-  # 主构建 Job，等待清理完成
+
   build:
-    needs: disk-cleanup  # 关键：等待清理完成
+    needs: disk-cleanup
     runs-on: ubuntu-latest
 
     container:
