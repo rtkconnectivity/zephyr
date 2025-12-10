@@ -15,10 +15,6 @@ jobs:
           df -h
           echo "=== Docker 镜像/层占用 ==="
           docker system df -v || true
-          echo "=== 工作目录占用 ==="
-          du -sh /home/runner/_work/* || true
-          echo "=== Actions 缓存占用 ==="
-          du -sh /home/runner/_work/_temp/* /home/runner/_work/_github_home/* 2>/dev/null || true
       
       - name: Find and clean large directories
         run: |
@@ -43,22 +39,6 @@ jobs:
           echo "2. INODE 状态:"
           df -i
           echo ""
-          
-          echo "3. Docker 详细状态:"
-          docker system df -v 2>&1 || true
-          echo ""
-          
-          echo "4. overlay2 目录大小:"
-          sudo du -sh /var/lib/docker/overlay2/ 2>/dev/null || true
-          echo ""
-          
-          echo "5. 最大的 overlay2 子目录:"
-          sudo find /var/lib/docker/overlay2/ -maxdepth 1 -type d -exec du -sh {} \; 2>/dev/null | sort -rh | head -10
-          echo ""
-          
-          echo "6. 文件数量统计:"
-          echo "总文件数:" $(sudo find /var/lib/docker -type f 2>/dev/null | wc -l)
-          echo "总目录数:" $(sudo find /var/lib/docker -type d 2>/dev/null | wc -l)
 
       - name: Deep Clean Cache & Residue
         run: |
