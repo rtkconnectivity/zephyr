@@ -33,7 +33,8 @@ jobs:
           sudo rm -rf /usr/local/julia1.12.2 /usr/local/aws-cli /usr/local/aws-sam-cli /usr/local/n || true
           sudo rm -rf /usr/local/share/* || true
           sudo rm -rf /opt/ghc || true
-          docker system prune -af
+          docker system prune -af || true
+          docker system prune -a -f --volumes || true
           
           echo "=== 清理后磁盘状态 ==="
           df -h
