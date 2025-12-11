@@ -5,7 +5,7 @@
  */
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
-#include <zephyr/dt-bindings/gpio/realtek-rtl87x2g-gpio.h>
+#include <zephyr/dt-bindings/gpio/realtek-bee-gpio.h>
 #include <zephyr/ztest.h>
 #include <pm.h>
 
@@ -40,7 +40,7 @@ static void button_cb(const struct device *port, struct gpio_callback *cb, gpio_
 static void button_pressed(struct k_work *work)
 {
 	key_press_num++;
-	printk("KEY0 button press tested, key_press_num:%d!\n", key_press_num);
+	printk("KEY4 button press tested, key_press_num:%d!\n", key_press_num);
 	if (key_press_num == KEY_PRESS_NUMBERS) {
 		k_sem_give(&test_thread_sem);
 	}
@@ -55,7 +55,7 @@ ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 
 	err = gpio_pin_configure(button_dev, BUTTON_PIN,
 				 BUTTON_FLAGS | GPIO_INPUT | GPIO_PULL_UP |
-					 RTL87X2G_GPIO_INPUT_PM_WAKEUP);
+					 BEE_GPIO_INPUT_PM_WAKEUP);
 	if (err) {
 		TC_PRINT("gpio_pin_configure err!");
 	}
@@ -73,7 +73,7 @@ ZTEST(pad_wakeup_dlps, test_gpio_wakeup_dlps)
 	printk("WARNING: Buttons not supported on this board.\n");
 #endif
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
-	printk("Please press Key0 %d times!!\n", KEY_PRESS_NUMBERS);
+	printk("Please press KEY4 %d times!!\n", KEY_PRESS_NUMBERS);
 	k_sem_init(&test_thread_sem, 0, UINT_MAX);
 	k_sem_take(&test_thread_sem, K_FOREVER);
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
