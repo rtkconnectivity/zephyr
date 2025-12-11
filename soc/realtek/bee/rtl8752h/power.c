@@ -20,10 +20,18 @@
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(soc, CONFIG_SOC_LOG_LEVEL);
-#define REALTEK_POWER_LOG 0
+#define REALTEK_POWER_LOG            0
+#define REALTEK_PM_DEVICE_STATISTICS 0
+#define REALTEK_PM_STATISTICS        0
+
+#if REALTEK_PM_DEVICE_STATISTICS
+#include <power_manager_slave.h>
+#include <platform_utils_int.h>
+uint32_t start[10], end[10], diff[10];
+uint32_t dev_addr[10];
+#endif
 
 /* ROM Extern Variables and Functions */
-/* #include <power_manager_unit_platform.h> */
 extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
 								PlatformPMStage pf_pm_stage,
 								int8_t priority);
@@ -49,10 +57,8 @@ volatile uint32_t PeriIntStoreReg;
  * So, it should be restored right now,
  * rather than restore it at a delayable work.
  */
-static void CPU_DLPS_Enter(void)
+__ramfunc static void CPU_DLPS_Enter(void)
 {
-	POWER_LOG("%s is called", __func__);
-
 	/* store NVIC registers */
 	CPU_StoreReg[0] = NVIC->ISER[0];
 	CPU_StoreReg[1] = NVIC->ISPR[0];
@@ -63,7 +69,6 @@ static void CPU_DLPS_Enter(void)
 
 	/* store VTOR */
 	CPU_StoreReg[2] = SCB->VTOR;
-	POWER_LOG("store SCB->VTOR=%x", SCB->VTOR);
 
 	/* store Vendor register */
 	PeriIntStoreReg = PERIPHINT->EN;
@@ -71,8 +76,6 @@ static void CPU_DLPS_Enter(void)
 
 static void CPU_DLPS_Exit(void)
 {
-	POWER_LOG("%s is called", __func__);
-
 	/* restore NVIC registers */
 	/* Don't restore NVIC pending register, but report warning */
 	/* NVIC->ISPR[0] = CPU_StoreReg[1]; */
@@ -95,7 +98,6 @@ static void CPU_DLPS_Exit(void)
 
 	/* restore VTOR */
 	SCB->VTOR = CPU_StoreReg[2];
-	POWER_LOG("restore SCB->VTOR=%x", SCB->VTOR);
 
 	/* restore Vendor register */
 	PERIPHINT->EN = PeriIntStoreReg;
@@ -153,7 +155,14 @@ static int pm_suspend_devices_rtk(void)
 			continue;
 		}
 
+#if REALTEK_PM_DEVICE_STATISTICS
+		POWER_MANAGER_GET_TIMESTAMP(start[num_susp_rtk]);
+#endif
 		ret = pm_device_action_run(dev, PM_DEVICE_ACTION_SUSPEND);
+#if REALTEK_PM_DEVICE_STATISTICS
+		POWER_MANAGER_GET_TIMESTAMP(end[num_susp_rtk]);
+		dev_addr[num_susp_rtk] = (uint32_t)dev;
+#endif
 		/* ignore devices not supporting or already at the given state */
 		if ((ret == -ENOSYS) || (ret == -ENOTSUP) || (ret == -EALREADY)) {
 			continue;
@@ -215,17 +224,31 @@ static int rtl8752h_power_init(void)
 	lps_mode_set(PLATFORM_DLPS_PFM);
 	z_arm_nmi_set_handler(NMI_Handler);
 
-	LOG_INF("set pm exit_stage_time from %d to %d",
-		platform_pm_system.stage_time[PLATFORM_PM_EXIT], 13);
+	LOG_INF("Original EXIT stage time = %d, Original ENTER stage time = %d",
+		platform_pm_system.stage_time[PLATFORM_PM_EXIT],
+		platform_pm_system.stage_time[PLATFORM_PM_ENTER]);
 
-	platform_pm_system.stage_time[PLATFORM_PM_EXIT] = 13;
+	platform_pm_system.stage_time[PLATFORM_PM_EXIT] = 30;
+	platform_pm_system.stage_time[PLATFORM_PM_ENTER] = 50;
+
+	LOG_INF("Updated EXIT stage time = %d, Updated ENTER stage time = %d",
+		platform_pm_system.stage_time[PLATFORM_PM_EXIT],
+		platform_pm_system.stage_time[PLATFORM_PM_ENTER]);
 
 	platform_pm_register_callback_func_with_priority((void *)pm_suspend_devices_rtk,
-							 PLATFORM_PM_STORE, 1);
+							 PLATFORM_PM_ENTER, 1);
 	platform_pm_register_callback_func_with_priority((void *)pm_resume_devices_rtk,
 							 PLATFORM_PM_PEND, -1);
 	platform_pm_register_callback_func_with_priority(
 		(void *)pm_reusme_systick_and_process_timeout, PLATFORM_PM_PEND, INT8_MAX);
+
+#if REALTEK_PM_STATISTICS
+	platform_pm_feature_cfg.platform_stage_time = 1;
+	platform_pm_feature_cfg.platform_statistics = 1;
+	platform_pm_feature_cfg.platform_check_dbg = 1;
+	platform_pm_feature_cfg.platform_enter_dbg = 1;
+	platform_pm_feature_cfg.platform_exit_dbg = 1;
+#endif
 
 	return ret;
 }
