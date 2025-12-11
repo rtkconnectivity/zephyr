@@ -74,6 +74,11 @@ config USE_HAL_REALTEK_SPI
 	help
 	  Enable HAL REALTEK SPI driver
 
+config USE_HAL_REALTEK_SPI3W
+	bool "enable realtek spi3w"
+	help
+	  Enable HAL REALTEK SPI3W driver
+
 config USE_HAL_REALTEK_IR
 	bool
 	help
