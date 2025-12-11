@@ -6,110 +6,7 @@ on:
   schedule:
     - cron: "0 0 * * *"
 jobs:
-  disk-cleanup:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check disk before cleanup
-        run: |
-          echo "=== Clear the pre-disk state ==="
-          df -h
-          echo "=== Docker image/layer occupation ==="
-          docker system df -v || true
-      
-      - name: Find and clean large directories
-        run: |
-          echo "=== Search for large files/directories ==="
-          
-          # 1. Check the size of each directory
-          sudo du -sh /opt/* 2>/dev/null | sort -hr
-          sudo du -sh /usr/local/* 2>/dev/null | sort -hr
-          sudo du -sh /var/lib/* 2>/dev/null | sort -hr
-  
-      - name: Deep Docker diagnostics
-        run: |
-          echo "=== Docker diagnostics ==="
-          docker system df
-          docker info | grep -A 10 "Storage Driver"
-          docker info | grep "Docker Root Dir"
-          echo "======= 1st check ======="
-          echo "1. Disk space:"
-          df -h
-          echo ""
-          
-          echo "2. INODE state:"
-          df -i
-          echo ""
-
-      - name: Deep Clean Cache & Residue
-        run: |
-          # Remove specific Docker images that are no longer needed
-          docker rmi $(docker image ls -aq) || true
-          
-          # Prune unused Docker objects (images, containers, volumes, and networks)
-          docker system prune -f || true
-          docker system prune -a -f --volumes || true
-
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          
-          echo "=== The disk state after cleaning ==="
-          df -h
-          echo "=== Remaining available space ==="
-          df -B 1G / | awk 'NR==2 {print $4 " GB"}'
-
-      - name: 显示完整系统信息
-        run: |
-          echo "======= RUNNER 硬件信息 ======="
-          echo "Runner 名称: ${{ runner.name }}"
-          echo "Runner OS: ${{ runner.os }}"
-          echo "Runner Arch: ${{ runner.arch }}"
-          echo "Runner Temp Dir: ${{ runner.temp }}"
-          echo "Runner Tool Cache: ${{ runner.tool_cache }}"
-          echo ""
-          
-          echo "======= 磁盘信息 ======="
-          echo "工作空间: ${{ github.workspace }}"
-          echo ""
-          df -h
-          echo ""
-          echo "inode 使用情况:"
-          df -i
-          echo ""
-          lsblk
-          echo ""
-          
-          echo "======= CPU 和内存 ======="
-          lscpu | grep -E "(Architecture|CPU\(s\)|Thread|Core|Model name|MHz)"
-          echo ""
-          free -h
-          echo ""
-          cat /proc/meminfo | grep -E "(MemTotal|MemFree|MemAvailable|SwapTotal|SwapFree)"
-          echo ""
-          
-          echo "======= 系统版本 ======="
-          cat /etc/os-release
-          echo ""
-          uname -a
-          echo ""
-          lsb_release -a 2>/dev/null || echo "没有 lsb_release"
-          echo ""
-          
-          echo "======= Docker 信息 ======="
-          docker version
-          echo ""
-          docker info
-          echo ""
-          echo "Docker 存储驱动:"
-          docker info 2>/dev/null | grep -A5 "Storage Driver"
-          echo ""
-          echo "Docker 根目录:"
-          docker info 2>/dev/null | grep "Docker Root Dir"
-          echo ""
-
   build:
-    needs: disk-cleanup
     runs-on: ubuntu-latest
 
     container:
@@ -118,12 +15,15 @@ jobs:
       volumes:
         - /opt/hostedtoolcache:/mnt/hostedtoolcache
         - /var/lib/apt/lists:/mnt/lib/apt/lists
+        - /usr/local/share/boost:/mnt/local/share/boost
 
     steps:
       - name: Clean Out Deletable Files
         run: |
           rm -rf /mnt/hostedtoolcache/*
           rm -rf /mnt/lib/apt/lists/*
+          rm -rf /mnt/local/share/boost/*
+
           df -h
 
       - name: set_env
