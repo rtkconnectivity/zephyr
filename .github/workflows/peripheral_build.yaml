@@ -12,8 +12,19 @@ jobs:
     container:
       image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
       options: '--entrypoint /bin/bash'
+      volumes:
+        - /opt/hostedtoolcache:/mnt/hostedtoolcache
+        - /var/lib/apt/lists:/mnt/lib/apt/lists
+        - /usr/local/share/boost:/mnt/local/share/boost
 
     steps:
+      - name: Clean Out Deletable Files
+        run: |
+          rm -rf /mnt/hostedtoolcache/*
+          rm -rf /mnt/lib/apt/lists/*
+          rm -rf /mnt/local/share/boost/*
+          df -h
+
       - name: set_env
         run: |
           if [ "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "pull_request_target" ];then
@@ -110,5 +121,7 @@ jobs:
           cd realtek-zephyr-project/zephyr
           echo "============= build rtl87x2g_evb ============="
           west build -b rtl87x2g_evb samples/bluetooth/peripheral -p
+          rm -rf build
           echo "============= build rtl8752h_evb ============="
           west build -b rtl8752h_evb/rtl8752htv samples/bluetooth/peripheral -p
+          rm -rf build
