@@ -117,11 +117,14 @@ jobs:
       options: '--entrypoint /bin/bash'
       volumes:
         - /opt/hostedtoolcache:/mnt/hostedtoolcache
+        - /var/lib/apt/lists:/mnt/lib/apt/lists
 
     steps:
       - name: Clean Out Deletable Files
-        run: rm -rf /mnt/hostedtoolcache/*
-        shell: bash
+        run: |
+          rm -rf /mnt/hostedtoolcache/
+          rm -rf /mnt/lib/apt/lists/*
+          df -h
 
       - name: set_env
         run: |
