@@ -122,7 +122,7 @@ jobs:
     steps:
       - name: Clean Out Deletable Files
         run: |
-          rm -rf /mnt/hostedtoolcache/
+          rm -rf /mnt/hostedtoolcache/*
           rm -rf /mnt/lib/apt/lists/*
           df -h
 
