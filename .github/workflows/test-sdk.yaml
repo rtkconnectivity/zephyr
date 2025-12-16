@@ -1,0 +1,147 @@
+name: test download sdk
+run-name: test
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        attempt: [1, 2, 3, 4, 5]
+      fail-fast: false
+
+    env:
+      ZSDK_VERSION: "0.16.0"
+      HOSTTYPE: "x86_64"
+
+    container:
+      image: ghcr.io/zephyrproject-rtos/ci-base:latest
+      options: '--entrypoint /bin/bash'
+
+    steps:
+      - name: check size
+        run: |
+          df -h
+          ls -al /.
+          du -h --max-depth=1 /.
+          ls -al /opt/
+          du -h --max-depth=1 /opt
+          sudo rm -rf /opt/fvps
+          echo "-----------------------"
+          df -h
+          echo "-----------------------"
+          du -h --max-depth=1 /opt
+
+      - name: set_env
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "pull_request_target" ];then
+            echo "This is pull request"
+            echo "EVENT_TRIGER_REF=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+          fi
+          if [ "${{ github.event_name }}" = "push" ];then
+            echo "This is push"
+            echo "EVENT_TRIGER_REF=${{ github.ref }}" >> $GITHUB_ENV
+          fi
+
+      - name: setup sdk
+        shell: bash
+        run: |
+          mkdir -p /opt/toolchains
+          cd /opt/toolchains
+          wget -q --show-progress --progress=bar:force:noscroll https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${ZSDK_VERSION}/zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+          tar xf zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+          zephyr-sdk-${ZSDK_VERSION}/setup.sh -t all -h -c
+          rm zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+          echo "zephyr sdk -> zephyr-sdk-${ZSDK_VERSION}"
+          ls /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}
+          du -sh /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}
+          /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}/setup.sh -c
+          echo " "
+          df -h
+      
+      - name: print_env
+        run: |
+          echo "sdk-version -> ${ZSDK_VERSION}"
+          echo "event_triger_ref: ${EVENT_TRIGER_REF}"
+          echo "${{ github.event.pull_request.head.sha || github.ref }}"
+      
+      - name: checkout manifest
+        uses: actions/checkout@v4
+        with:
+          repository: "rtkconnectivity/realtek-zephyr-project.git"
+          path: "realtek-zephyr-project"
+          ref: "main"
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: west update
+        shell: bash
+        run: |
+            cd realtek-zephyr-project
+            west init -m https://github.com/rtkconnectivity/realtek-zephyr-project --mr main
+            west update
+            echo "workspace: $(west topdir)"
+            echo "current: $(pwd)"
+
+      - name: check zephyr path and manifest_rev
+        shell: bash
+        run: |
+            echo "GITHUB_REPOSITORY -> $GITHUB_REPOSITORY"
+            cd realtek-zephyr-project
+            readarray -t project_list <<< "$(west list)"
+            EVENT_PROJECT_PATH=""
+            for i in "${project_list[@]}"
+              do
+                  project_detail=($i)
+                  project_url=`echo ${project_detail[3]}`
+                  repository_name=`echo "$GITHUB_REPOSITORY" | awk -F/ '{print $NF}'`
+                  if [[ $project_url == *"${repository_name}" ]]
+                  then
+                      EVENT_PROJECT_PATH=`echo ${project_detail[1]}`
+                      echo "EVENT_PROJECT_PATH=$EVENT_PROJECT_PATH" >> $GITHUB_ENV
+                      echo "EVENT_PROJECT_PATH -> $EVENT_PROJECT_PATH"
+                      echo "GITHUB_ENV -> $GITHUB_ENV"
+                      break
+                  fi
+              done
+              if [ -z "$EVENT_PROJECT_PATH" ]
+              then
+                  echo "logic error, can not find local path for ${GITHUB_REPOSITY}"
+                  exit 1
+              fi
+              cd $EVENT_PROJECT_PATH
+              git log --reverse -1
+              echo "need to checkout ${GITHUB_REPOSITORY} in realtek-zephyr-project/$EVENT_PROJECT_PATH"
+              echo "manifest_rev=$( git rev-parse manifest-rev )" >> $GITHUB_ENV
+
+      - name: checkout event triggered ref
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          path: ${{ format('{0}/{1}','realtek-zephyr-project',env.EVENT_PROJECT_PATH) }}
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+          clean: false
+
+      - name: after check temp module
+        shell: bash
+        run: |
+          cd realtek-zephyr-project/$EVENT_PROJECT_PATH
+          echo "manifest_rev -> ${manifest_rev}"
+          git branch manifest-rev $manifest_rev
+
+      - name: do build
+        shell: bash
+        run: |
+          cd realtek-zephyr-project/zephyr
+          echo "============= build rtl87x2g_evb ============="
+          west build -b rtl87x2g_evb samples/bluetooth/peripheral -p
+          rm -rf build
+          echo "============= build rtl8752h_evb ============="
+          west build -b rtl8752h_evb/rtl8752htv samples/bluetooth/peripheral -p
+          rm -rf build
