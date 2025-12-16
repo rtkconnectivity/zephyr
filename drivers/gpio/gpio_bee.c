@@ -50,7 +50,7 @@
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en)
 #define BEE_GPIO_REG_INTSATUS                        GPIO_INT_STS
 #define BEE_GPIO_REG_INT_EN                          GPIO_INT_EN
-
+#define BEE_GPIO_REG_DR                              GPIO_DR
 extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define BEE_GPIO_WriteBit(port, bit, val)            GPIO_WriteBit(bit, val)
@@ -68,13 +68,14 @@ extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en, 0)
 #define BEE_GPIO_REG_INTSATUS                        INTSTATUS
 #define BEE_GPIO_REG_INT_EN                          INTEN
+#define BEE_GPIO_REG_DR                              DATAOUT
 #endif
 
 LOG_MODULE_REGISTER(gpio_bee, CONFIG_GPIO_LOG_LEVEL);
 
 #ifdef CONFIG_PM_DEVICE
-	extern void GPIO_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void GPIO_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void GPIO_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void GPIO_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
 static int gpio_bee_gpio2pad(uint8_t port_num, uint32_t pin)
@@ -295,6 +296,10 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 	}
 
 #ifdef CONFIG_PM_DEVICE
+	GPIO_DLPSEnter(port_base, &data->store_buf);
+#endif
+
+#ifdef CONFIG_PM_DEVICE
 	sys_snode_t *prev;
 
 	if (flags & GPIO_OUTPUT) {
@@ -340,8 +345,10 @@ static int gpio_bee_port_set_masked_raw(const struct device *port, gpio_port_pin
 					gpio_port_value_t value)
 {
 	const struct gpio_bee_config *config = port->config;
+	struct gpio_bee_data *data;
 	GPIO_TypeDef *port_base;
 
+	data = port->data;
 	port_base = config->port_base;
 
 	gpio_port_pins_t pins_value = BEE_GPIO_ReadInputData(port_base);
@@ -349,17 +356,27 @@ static int gpio_bee_port_set_masked_raw(const struct device *port, gpio_port_pin
 	pins_value = (pins_value & ~mask) | (mask & value);
 	BEE_GPIO_Write(port_base, pins_value);
 
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.gpio_reg[0] = port_base->BEE_GPIO_REG_DR;
+#endif
+
 	return 0;
 }
 
 static int gpio_bee_port_set_bits_raw(const struct device *port, gpio_port_pins_t pins)
 {
 	const struct gpio_bee_config *config = port->config;
+	struct gpio_bee_data *data;
 	GPIO_TypeDef *port_base;
 
+	data = port->data;
 	port_base = config->port_base;
 
 	BEE_GPIO_SetBits(port_base, pins);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.gpio_reg[0] = port_base->BEE_GPIO_REG_DR;
+#endif
 
 	return 0;
 }
@@ -367,11 +384,17 @@ static int gpio_bee_port_set_bits_raw(const struct device *port, gpio_port_pins_
 static int gpio_bee_port_clear_bits_raw(const struct device *port, gpio_port_pins_t pins)
 {
 	const struct gpio_bee_config *config = port->config;
+	struct gpio_bee_data *data;
 	GPIO_TypeDef *port_base;
 
+	data = port->data;
 	port_base = config->port_base;
 
 	BEE_GPIO_ResetBits(port_base, pins);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.gpio_reg[0] = port_base->BEE_GPIO_REG_DR;
+#endif
 
 	return 0;
 }
@@ -379,8 +402,10 @@ static int gpio_bee_port_clear_bits_raw(const struct device *port, gpio_port_pin
 static int gpio_bee_port_toggle_bits(const struct device *port, gpio_port_pins_t pins)
 {
 	const struct gpio_bee_config *config = port->config;
+	struct gpio_bee_data *data;
 	GPIO_TypeDef *port_base;
 
+	data = port->data;
 	port_base = config->port_base;
 
 	uint32_t pins_value = BEE_GPIO_ReadInputData(port_base);
@@ -389,6 +414,10 @@ static int gpio_bee_port_toggle_bits(const struct device *port, gpio_port_pins_t
 	BEE_GPIO_Write(port_base, pins_value);
 	LOG_DBG("port=%s, pin=0x%x, pins_value=0x%x, line%d\n", port->name, pins, pins_value,
 		__LINE__);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.gpio_reg[0] = port_base->BEE_GPIO_REG_DR;
+#endif
 
 	return 0;
 }
@@ -487,6 +516,10 @@ static int gpio_bee_pin_interrupt_configure(const struct device *port, gpio_pin_
 	BEE_GPIO_ClearINTPendingBit(port_base, gpio_bit);
 	BEE_GPIO_MaskINTConfig(port_base, gpio_bit, DISABLE);
 
+#ifdef CONFIG_PM_DEVICE
+	GPIO_DLPSEnter(port_base, &data->store_buf);
+#endif
+
 	return 0;
 }
 
@@ -580,8 +613,8 @@ static void wakeup_pad_pm_suspend(const struct device *port, struct pm_pad_node 
 			bool high_trigger = port_base->GPIO_EXT_DEB_POL_CTL & GPIO_Pin_Swap;
 			bool edge_trigger = port_base->GPIO_INT_LV & BIT(gpio_num);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-			bool high_trigger = port_base->INTPOLARITY & BIT(gpio_num);
-			bool edge_trigger = port_base->INTTYPE & BIT(gpio_num);
+		bool high_trigger = port_base->INTPOLARITY & BIT(gpio_num);
+		bool edge_trigger = port_base->INTTYPE & BIT(gpio_num);
 #endif
 
 			if (edge_trigger) {
@@ -703,8 +736,6 @@ static int gpio_bee_pm_action(const struct device *port, enum pm_device_action a
 				break;
 			}
 		}
-
-		GPIO_DLPSEnter(port_base, &data->store_buf);
 
 		break;
 	case PM_DEVICE_ACTION_RESUME:

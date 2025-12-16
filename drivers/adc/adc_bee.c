@@ -21,8 +21,16 @@
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #include <rtl_adc.h>
 #include <adc_lib.h>
+
+#define BEE_ADC_SCHED_CTRL ADC_SCHED_CTRL
+#define BEE_ADC_CTRL_INT   ADC_CTRL_INT
+#define BEE_ADC_DIG_CTRL   ADC_DIG_CTRL
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_adc.h>
+
+#define BEE_ADC_SCHED_CTRL SCHCR
+#define BEE_ADC_CTRL_INT   INTCR
+#define BEE_ADC_DIG_CTRL   CR
 #endif
 
 #define ADC_CONTEXT_USES_KERNEL_TIMER
@@ -32,8 +40,8 @@
 LOG_MODULE_REGISTER(adc_bee, CONFIG_ADC_LOG_LEVEL);
 
 #ifdef CONFIG_PM_DEVICE
-	extern void ADC_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void ADC_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void ADC_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void ADC_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
 struct adc_bee_config {
@@ -89,6 +97,10 @@ static int adc_bee_start_read(const struct device *dev, const struct adc_sequenc
 
 	ADC_BitMapConfig(adc, BIT(cfg->channels) - 1, DISABLE);
 	ADC_BitMapConfig(adc, sequence->channels, ENABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.adc_reg[1] = adc->BEE_ADC_SCHED_CTRL;
+#endif
 
 	data->buffer = sequence->buffer;
 	adc_context_start_read(&data->ctx, sequence);
@@ -166,6 +178,11 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 
 	ADC_INTConfig(adc, ADC_INT_ONE_SHOT_DONE, ENABLE);
 	ADC_Cmd(adc, ADC_ONE_SHOT_MODE, ENABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.adc_reg[2] = adc->BEE_ADC_CTRL_INT;
+	data->store_buf.adc_reg[0] = adc->BEE_ADC_DIG_CTRL;
+#endif
 }
 
 static void adc_context_update_buffer_pointer(struct adc_context *ctx, bool repeat_sampling)
@@ -204,6 +221,10 @@ static void adc_bee_isr(const struct device *dev)
 		ADC_Cmd(adc, ADC_ONE_SHOT_MODE, DISABLE);
 		ADC_INTConfig(adc, ADC_INT_ONE_SHOT_DONE, DISABLE);
 		ADC_ClearINTPendingBit(adc, ADC_INT_ONE_SHOT_DONE);
+#ifdef CONFIG_PM_DEVICE
+		data->store_buf.adc_reg[2] = adc->BEE_ADC_CTRL_INT;
+		data->store_buf.adc_reg[0] = adc->BEE_ADC_DIG_CTRL;
+#endif
 		adc_context_on_sampling_done(&data->ctx, dev);
 	}
 }
@@ -218,9 +239,6 @@ static int adc_bee_pm_action(const struct device *dev, enum pm_device_action act
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-
-		ADC_DLPSEnter(adc, &data->store_buf);
-
 		/* Move pins to sleep state */
 		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
 		if ((err < 0) && (err != -ENOENT)) {
@@ -257,6 +275,7 @@ static int adc_bee_init(const struct device *dev)
 {
 	struct adc_bee_data *data = dev->data;
 	const struct adc_bee_config *cfg = dev->config;
+	ADC_TypeDef *adc = (ADC_TypeDef *)cfg->reg;
 	int ret;
 
 	data->dev = dev;
@@ -286,7 +305,11 @@ static int adc_bee_init(const struct device *dev)
 
 	adc_init_struct.ADC_SchIndex[cfg->channels - 1] = INTERNAL_VBAT_MODE;
 
-	ADC_Init(ADC, &adc_init_struct);
+	ADC_Init(adc, &adc_init_struct);
+
+#ifdef CONFIG_PM_DEVICE
+	ADC_DLPSEnter(adc, &data->store_buf);
+#endif
 
 	cfg->irq_config_func(dev);
 

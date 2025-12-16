@@ -44,10 +44,10 @@
 LOG_MODULE_REGISTER(counter_bee_timer, CONFIG_COUNTER_LOG_LEVEL);
 
 #ifdef CONFIG_PM_DEVICE
-	extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
-	extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
 struct counter_bee_ch_data {
@@ -315,13 +315,6 @@ static int counter_bee_timer_pm_action(const struct device *dev, enum pm_device_
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-
-		if (cfg->enhanced) {
-			ENHTIM_DLPSEnter(timer_base, &data->store_buf);
-		} else {
-			TIM_DLPSEnter(timer_base, &data->store_buf);
-		}
-
 		break;
 	case PM_DEVICE_ACTION_RESUME:
 		if (cfg->enhanced) {
@@ -457,6 +450,9 @@ static int counter_bee_timer_init(const struct device *dev)
 		ENHTIM_Init((ENHTIM_TypeDef *)timer_base, &enh_tim_init_struct);
 		LOG_DBG("enhed %s, ctrl=%x, line%d\n", dev->name,
 			((ENHTIM_TypeDef *)timer_base)->BEE_ENH_TIM_REG_CR, __LINE__);
+#ifdef CONFIG_PM_DEVICE
+		ENHTIM_DLPSEnter(timer_base, &data->store_buf);
+#endif
 	} else {
 		TIM_TimeBaseInitTypeDef timer_init_struct;
 		TIM_StructInit(&timer_init_struct);
@@ -470,6 +466,9 @@ static int counter_bee_timer_init(const struct device *dev)
 		TIM_TimeBaseInit((TIM_TypeDef *)timer_base, &timer_init_struct);
 		LOG_DBG("not enhed %s, ctrl=%x, line%d\n", dev->name,
 			((TIM_TypeDef *)timer_base)->BEE_TIM_REG_CONTROLREG, __LINE__);
+#ifdef CONFIG_PM_DEVICE
+		TIM_DLPSEnter(timer_base, &data->store_buf);
+#endif
 	}
 
 	return 0;

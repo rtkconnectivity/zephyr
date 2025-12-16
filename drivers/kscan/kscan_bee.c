@@ -184,6 +184,12 @@ static int kscan_bee_init_driver(const struct device *dev, uint32_t scanmode, ui
 
 	KeyScan_Cmd(keyscan, ENABLE);
 
+#ifdef CONFIG_PM_DEVICE
+	struct kscan_bee_data *data = dev->data;
+
+	KEYSCAN_DLPSEnter(keyscan, &data->store_buf);
+#endif
+
 	return 0;
 }
 
@@ -584,8 +590,6 @@ static int kscan_bee_pm_action(const struct device *dev, enum pm_device_action a
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
 		const struct pinctrl_state *state;
-
-		KEYSCAN_DLPSEnter((void *)config->reg, &data->store_buf);
 
 		/* Move pins to sleep state */
 #if !CONFIG_BEE_KSCAN_AUTOSCAN_MODE

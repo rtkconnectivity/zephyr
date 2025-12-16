@@ -28,8 +28,8 @@ LOG_MODULE_REGISTER(qdec_bee, CONFIG_SENSOR_LOG_LEVEL);
 #define MAX_ACC_CNT_BITS 16
 
 #ifdef CONFIG_PM_DEVICE
-	extern void QDEC_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void QDEC_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void QDEC_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void QDEC_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
 struct qdec_bee_axis_data {
@@ -255,6 +255,9 @@ static int qdec_bee_trigger_set(const struct device *dev, const struct sensor_tr
 #endif
 	}
 
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.qdec_reg[4] = qdec->INT_MASK;
+#endif
 	return 0;
 }
 
@@ -351,7 +354,6 @@ static int qdec_bee_pm_action(const struct device *dev, enum pm_device_action ac
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-		QDEC_DLPSEnter(qdec, &data->store_buf);
 #if CONFIG_BEE_QDEC_X_AXIS_ENABLE
 		acc_cnt = QDEC_GetAxisCount(qdec, QDEC_AXIS_X);
 		data->x.pm_acc = data->x.round * 65536 + acc_cnt + data->x.pm_acc;
@@ -493,6 +495,10 @@ static int qdec_bee_init(const struct device *dev)
 	QDEC_INTConfig(qdec, QDEC_Z_INT_NEW_DATA, ENABLE);
 	QDEC_INTConfig(qdec, QDEC_Z_INT_ILLEGAL, ENABLE);
 	QDEC_Cmd(qdec, QDEC_AXIS_Z, ENABLE);
+#endif
+
+#ifdef CONFIG_PM_DEVICE
+	QDEC_DLPSEnter(qdec, &data->store_buf);
 #endif
 
 	config->irq_connect();
