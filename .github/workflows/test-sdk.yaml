@@ -26,8 +26,8 @@ jobs:
       - name: check size
         run: |
           df -h
-          ls -al /.
-          du -h --max-depth=1 /.
+          ls -al /
+          du -h --max-depth=1 / 2>/dev/null
           ls -al /opt/
           du -h --max-depth=1 /opt
           sudo rm -rf /opt/fvps
