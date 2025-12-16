@@ -36,6 +36,11 @@ LOG_MODULE_REGISTER(ir_bee, CONFIG_IR_LOG_LEVEL);
 #define IR_HAS_TX_DMA DT_DMAS_HAS_NAME(DT_NODELABEL(ir), tx)
 #define IR_HAS_RX_DMA DT_DMAS_HAS_NAME(DT_NODELABEL(ir), rx)
 
+#ifdef CONFIG_PM_DEVICE
+extern void IR_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void IR_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif
+
 #if (IR_HAS_TX_DMA)
 struct tx_stream {
 	const struct device *dma_dev;
@@ -114,7 +119,6 @@ static void ir_bee_dma_rx_cb(const struct device *dma_dev, void *user_data, uint
 	DBG_DIRECT("[%s] line%d", __func__, __LINE__);
 #endif
 	struct device *dev = (struct device *)user_data;
-	const struct ir_bee_config *cfg = dev->config;
 	struct ir_bee_data *data = dev->data;
 	struct ir_event evt;
 
@@ -190,8 +194,12 @@ static int ir_bee_set_freq(const struct device *dev, uint32_t freq, uint8_t duty
 
 static int ir_bee_tx_init(const struct device *dev)
 {
+	const struct ir_bee_config *config = dev->config;
 	struct ir_bee_data *data = dev->data;
+	IR_TypeDef *ir;
 	int err;
+
+	ir = config->ir;
 
 	err = ir_bee_config_tx_pin(dev);
 	if (err < 0) {
@@ -216,6 +224,10 @@ static int ir_bee_tx_init(const struct device *dev)
 	IR_Init(&IR_InitStruct);
 
 	IR_Cmd(IR_MODE_TX, DISABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	IR_DLPSEnter(ir, &data->store_buf);
+#endif
 
 	return 0;
 }
@@ -299,8 +311,12 @@ static int ir_bee_tx(const struct device *dev, const uint32_t *buf, size_t len)
 
 static int ir_bee_rx_init(const struct device *dev)
 {
+	const struct ir_bee_config *config = dev->config;
 	struct ir_bee_data *data = dev->data;
+	IR_TypeDef *ir;
 	int err;
+
+	ir = config->ir;
 
 	err = ir_bee_config_rx_pin(dev);
 	if (err < 0) {
@@ -342,6 +358,10 @@ static int ir_bee_rx_init(const struct device *dev)
 
 	IR_ClearRxFIFO();
 	IR_Cmd(IR_MODE_RX, ENABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	IR_DLPSEnter(ir, &data->store_buf);
+#endif
 
 	return 0;
 }
@@ -479,7 +499,6 @@ static void ir_bee_isr(const struct device *dev)
 	struct ir_bee_data *data = dev->data;
 	uint8_t tx_len = data->tx_len;
 	struct ir_event evt;
-	uint8_t rx_len;
 
 	memset(&evt, 0, sizeof(evt));
 
@@ -508,6 +527,8 @@ static void ir_bee_isr(const struct device *dev)
 	}
 
 #if !IR_HAS_RX_DMA
+	uint8_t rx_len;
+
 	if (IR_GetINTStatus(IR_INT_RF_LEVEL)) {
 		IR_ClearINTPendingBit(IR_INT_RF_LEVEL_CLR);
 
@@ -608,14 +629,8 @@ static int ir_bee_pm_action(const struct device *dev, enum pm_device_action acti
 	IR_TypeDef *ir = config->ir;
 	int err;
 
-	extern void IR_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void IR_DLPSExit(void *PeriReg, void *StoreBuf);
-
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-
-		IR_DLPSEnter(ir, &data->store_buf);
-
 		/* Move pins to sleep state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
 		if ((err < 0) && (err != -ENOENT)) {

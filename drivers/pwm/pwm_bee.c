@@ -38,10 +38,10 @@
 LOG_MODULE_REGISTER(pwm_bee, CONFIG_PWM_LOG_LEVEL);
 
 #ifdef CONFIG_PM_DEVICE
-	extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
-	extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
 struct pwm_bee_data {
@@ -113,6 +113,10 @@ static int pwm_bee_set_cycles(const struct device *dev, uint32_t channel, uint32
 
 		ENHTIM_Cmd((ENHTIM_TypeDef *)timer_base, DISABLE);
 		ENHTIM_Cmd((ENHTIM_TypeDef *)timer_base, ENABLE);
+
+#ifdef CONFIG_PM_DEVICE
+		ENHTIM_DLPSEnter(timer_base, &data->store_buf);
+#endif
 	} else {
 		if (flags & PWM_POLARITY_INVERTED) {
 			if (period_cycles == 0U || pulse_cycles == 0U) {
@@ -140,6 +144,10 @@ static int pwm_bee_set_cycles(const struct device *dev, uint32_t channel, uint32
 		}
 		TIM_Cmd((TIM_TypeDef *)timer_base, DISABLE);
 		TIM_Cmd((TIM_TypeDef *)timer_base, ENABLE);
+
+#ifdef CONFIG_PM_DEVICE
+		TIM_DLPSEnter(timer_base, &data->store_buf);
+#endif
 	}
 
 #ifdef CONFIG_PM_DEVICE
@@ -173,13 +181,6 @@ static int pwm_bee_pm_action(const struct device *dev, enum pm_device_action act
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-
-		if (config->is_enhanced) {
-			ENHTIM_DLPSEnter(timer_base, &data->store_buf);
-		} else {
-			TIM_DLPSEnter(timer_base, &data->store_buf);
-		}
-
 		/* Move pins to sleep state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
 		if (err == -ENOENT) {
@@ -317,6 +318,9 @@ static int pwm_bee_init(const struct device *dev)
 		enh_tim_init_struct.ENHTIM_MaxCount = UINT32_MAX;
 		enh_tim_init_struct.ENHTIM_CCValue = UINT32_MAX;
 		ENHTIM_Init((ENHTIM_TypeDef *)timer_base, &enh_tim_init_struct);
+#ifdef CONFIG_PM_DEVICE
+		ENHTIM_DLPSEnter(timer_base, &data->store_buf);
+#endif
 	} else {
 		TIM_TimeBaseInitTypeDef timer_init_struct;
 		TIM_StructInit(&timer_init_struct);
@@ -330,6 +334,9 @@ static int pwm_bee_init(const struct device *dev)
 		timer_init_struct.TIM_PWM_High_Count = 0;
 		timer_init_struct.TIM_PWM_Low_Count = UINT32_MAX;
 		TIM_TimeBaseInit((TIM_TypeDef *)timer_base, &timer_init_struct);
+#ifdef CONFIG_PM_DEVICE
+		TIM_DLPSEnter(timer_base, &data->store_buf);
+#endif
 	}
 
 	return 0;

@@ -33,8 +33,8 @@ LOG_MODULE_REGISTER(i2c_bee, CONFIG_I2C_LOG_LEVEL);
 #endif
 
 #ifdef CONFIG_PM_DEVICE
-	extern void I2C_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void I2C_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void I2C_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void I2C_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
 #define I2C_TIMEOUT 0xFFFFF
@@ -111,6 +111,10 @@ static void i2c_bee_isr(const struct device *dev)
 		I2C_ClearINTPendingBit(i2c, I2C_INT_TX_EMPTY);
 		k_sem_give(&data->sync_sem);
 	}
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.i2c_reg[8] = i2c->IC_INTR_MASK;
+#endif
 }
 #endif
 
@@ -139,6 +143,9 @@ static int i2c_bee_msg_handler(const struct device *dev)
 			}
 
 			I2C_INTConfig(i2c, I2C_INT_RX_FULL | I2C_INT_TX_ABRT, ENABLE);
+#ifdef CONFIG_PM_DEVICE
+			data->store_buf.i2c_reg[8] = i2c->IC_INTR_MASK;
+#endif
 
 			/* wait for interrupt */
 #if defined(CONFIG_I2C_BEE_INTERRUPT)
@@ -164,6 +171,10 @@ static int i2c_bee_msg_handler(const struct device *dev)
 				I2C_INTConfig(i2c, I2C_INT_RX_FULL, DISABLE);
 				I2C_ClearINTPendingBit(i2c, I2C_INT_RX_FULL);
 			}
+
+#ifdef CONFIG_PM_DEVICE
+			data->store_buf.i2c_reg[8] = i2c->IC_INTR_MASK;
+#endif
 #endif
 
 			if (data->errs != I2C_Success) {
@@ -192,6 +203,9 @@ static int i2c_bee_msg_handler(const struct device *dev)
 
 			I2C_INTConfig(i2c, I2C_INT_TX_EMPTY | I2C_INT_TX_ABRT, ENABLE);
 
+#ifdef CONFIG_PM_DEVICE
+			data->store_buf.i2c_reg[8] = i2c->IC_INTR_MASK;
+#endif
 			/* wait for interrupt */
 #if defined(CONFIG_I2C_BEE_INTERRUPT)
 			k_sem_take(&data->sync_sem, K_FOREVER);
@@ -217,6 +231,10 @@ static int i2c_bee_msg_handler(const struct device *dev)
 				I2C_INTConfig(i2c, I2C_INT_TX_EMPTY, DISABLE);
 				I2C_ClearINTPendingBit(i2c, I2C_INT_TX_EMPTY);
 			}
+
+#ifdef CONFIG_PM_DEVICE
+			data->store_buf.i2c_reg[8] = i2c->IC_INTR_MASK;
+#endif
 #endif
 
 			if (data->errs != I2C_Success) {
@@ -226,6 +244,9 @@ static int i2c_bee_msg_handler(const struct device *dev)
 
 		I2C_INTConfig(i2c, I2C_INT_TX_EMPTY | I2C_INT_TX_ABRT, ENABLE);
 
+#ifdef CONFIG_PM_DEVICE
+		data->store_buf.i2c_reg[8] = i2c->IC_INTR_MASK;
+#endif
 		/* wait for interrupt */
 #if defined(CONFIG_I2C_BEE_INTERRUPT)
 		k_sem_take(&data->sync_sem, K_FOREVER);
@@ -249,6 +270,11 @@ static int i2c_bee_msg_handler(const struct device *dev)
 			I2C_INTConfig(i2c, I2C_INT_TX_EMPTY, DISABLE);
 			I2C_ClearINTPendingBit(i2c, I2C_INT_TX_EMPTY);
 		}
+
+#ifdef CONFIG_PM_DEVICE
+		data->store_buf.i2c_reg[8] = i2c->IC_INTR_MASK;
+#endif
+
 #endif
 		if (data->errs != I2C_Success) {
 			return -EIO;
@@ -328,6 +354,10 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 	/* Disable I2C device */
 	I2C_Cmd(i2c, DISABLE);
 
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.i2c_reg[11] = i2c->IC_ENABLE;
+#endif
+
 	k_sem_give(&data->bus_mutex);
 	return err;
 }
@@ -384,6 +414,11 @@ static int i2c_bee_configure(const struct device *dev, uint32_t dev_config)
 
 	/* Enable i2c device */
 	I2C_Cmd(i2c, ENABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	I2C_DLPSEnter(i2c, &data->store_buf);
+#endif
+
 error:
 	k_sem_give(&data->bus_mutex);
 
@@ -400,9 +435,6 @@ static int i2c_bee_pm_action(const struct device *dev, enum pm_device_action act
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-
-		I2C_DLPSEnter(i2c, &data->store_buf);
-
 		/* Move pins to sleep state */
 		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
 		if ((err < 0) && (err != -ENOENT)) {

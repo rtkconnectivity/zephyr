@@ -38,11 +38,17 @@
 #endif
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
-#define BEE_UART_REG_RB_THR UART_RBR_THR
-#define BEE_UART_REG_MISCR  UART_MISCR
+#define BEE_UART_REG_RB_THR        UART_RBR_THR
+#define BEE_UART_REG_MISCR         UART_MISCR
+#define BEE_UART_REG_DLM_IER       UART_DLM_IER
+#define BEE_UART_REG_RX_TIMEOUT    UART_RX_TIMEOUT
+#define BEE_UART_REG_RX_TIMEOUT_EN UART_RX_TIMEOUT_EN
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#define BEE_UART_REG_RB_THR RB_THR
-#define BEE_UART_REG_MISCR  MISCR
+#define BEE_UART_REG_RB_THR        RB_THR
+#define BEE_UART_REG_MISCR         MISCR
+#define BEE_UART_REG_DLM_IER       DLH_INTCR
+#define BEE_UART_REG_RX_TIMEOUT    RX_IDLE_TOCR
+#define BEE_UART_REG_RX_TIMEOUT_EN RX_IDLE_INTCR
 #endif
 
 #include <zephyr/logging/log.h>
@@ -63,8 +69,8 @@ static const struct device *const devices[] = {
 #endif
 
 #ifdef CONFIG_PM_DEVICE
-	extern void UART_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void UART_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void UART_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void UART_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
 static const uint32_t RTL_UART_BAUDRATE_TABLE[][3] = {
@@ -209,6 +215,9 @@ static int uart_bee_configure(const struct device *dev, const struct uart_config
 #endif
 
 	UART_Init(uart, &uart_init_struct);
+#ifdef CONFIG_PM_DEVICE
+	UART_DLPSEnter(uart, &data->store_buf);
+#endif
 
 	data->uart_config = *cfg;
 	return 0;
@@ -348,6 +357,10 @@ static void uart_bee_irq_tx_disable(const struct device *dev)
 
 	data->tx_int_en = false;
 	UART_INTConfig(uart, UART_INT_TX_FIFO_EMPTY, DISABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[2] = uart->BEE_UART_REG_DLM_IER;
+#endif
 }
 
 static int uart_bee_irq_tx_ready(const struct device *dev)
@@ -380,6 +393,12 @@ static void uart_bee_irq_rx_enable(const struct device *dev)
 	data->rx_int_en = true;
 	UART_INTConfig(uart, UART_INT_RD_AVA, ENABLE);
 	UART_INTConfig(uart, UART_INT_RX_IDLE, ENABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[2] = uart->BEE_UART_REG_DLM_IER;
+	data->store_buf.uart_reg[8] = uart->BEE_UART_REG_RX_TIMEOUT;
+	data->store_buf.uart_reg[9] = uart->BEE_UART_REG_RX_TIMEOUT_EN;
+#endif
 }
 
 static void uart_bee_irq_rx_disable(const struct device *dev)
@@ -395,6 +414,12 @@ static void uart_bee_irq_rx_disable(const struct device *dev)
 	data->rx_int_en = false;
 	UART_INTConfig(uart, UART_INT_RD_AVA, DISABLE);
 	UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[2] = uart->BEE_UART_REG_DLM_IER;
+	data->store_buf.uart_reg[8] = uart->BEE_UART_REG_RX_TIMEOUT;
+	data->store_buf.uart_reg[9] = uart->BEE_UART_REG_RX_TIMEOUT_EN;
+#endif
 }
 
 static int uart_bee_irq_rx_ready(const struct device *dev)
@@ -424,24 +449,38 @@ static void uart_bee_irq_err_enable(const struct device *dev)
 {
 	const struct uart_bee_config *config = dev->config;
 	UART_TypeDef *uart = config->uart;
+	struct uart_bee_data *data;
+
+	data = dev->data;
 
 #if DBG_DIRECT_SHOW
 	DBG_DIRECT("[%s]", __func__);
 #endif
 
 	UART_INTConfig(uart, UART_INT_RX_LINE_STS, ENABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[2] = uart->BEE_UART_REG_DLM_IER;
+#endif
 }
 
 static void uart_bee_irq_err_disable(const struct device *dev)
 {
 	const struct uart_bee_config *config = dev->config;
 	UART_TypeDef *uart = config->uart;
+	struct uart_bee_data *data;
+
+	data = dev->data;
 
 #if DBG_DIRECT_SHOW
 	DBG_DIRECT("[%s]", __func__);
 #endif
 
 	UART_INTConfig(uart, UART_INT_RX_LINE_STS, DISABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[2] = uart->BEE_UART_REG_DLM_IER;
+#endif
 }
 
 static int uart_bee_irq_is_pending(const struct device *dev)
@@ -637,6 +676,10 @@ static inline void uart_bee_dma_tx_enable(const struct device *dev)
 
 	uart->BEE_UART_REG_MISCR &= ~(0x1f << 3);
 	uart->BEE_UART_REG_MISCR |= ((16 - data->dma_tx.dma_cfg.dest_burst_length) << 3) | BIT(1);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[10] = uart->BEE_UART_REG_MISCR;
+#endif
 }
 
 static inline void uart_bee_dma_tx_disable(const struct device *dev)
@@ -646,8 +689,15 @@ static inline void uart_bee_dma_tx_disable(const struct device *dev)
 #endif
 	const struct uart_bee_config *config = dev->config;
 	UART_TypeDef *uart = config->uart;
+	struct uart_bee_data *data;
+
+	data = dev->data;
 
 	uart->BEE_UART_REG_MISCR &= ~BIT(1);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[10] = uart->BEE_UART_REG_MISCR;
+#endif
 }
 
 static inline void uart_bee_dma_rx_enable(const struct device *dev)
@@ -662,6 +712,10 @@ static inline void uart_bee_dma_rx_enable(const struct device *dev)
 	uart->BEE_UART_REG_MISCR &= ~(0x3f << 8);
 	uart->BEE_UART_REG_MISCR |= ((data->dma_rx.dma_cfg.source_burst_length) << 8) | BIT(2);
 
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[10] = uart->BEE_UART_REG_MISCR;
+#endif
+
 	data->dma_rx.enabled = true;
 }
 
@@ -675,6 +729,10 @@ static inline void uart_bee_dma_rx_disable(const struct device *dev)
 	UART_TypeDef *uart = config->uart;
 
 	uart->BEE_UART_REG_MISCR &= ~BIT(2);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[10] = uart->BEE_UART_REG_MISCR;
+#endif
 
 	data->dma_rx.enabled = false;
 }
@@ -928,6 +986,12 @@ static int uart_bee_async_rx_enable(const struct device *dev, uint8_t *rx_buf, s
 	UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
 	UART_INTConfig(uart, UART_INT_RX_IDLE, ENABLE);
 
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[2] = uart->BEE_UART_REG_DLM_IER;
+	data->store_buf.uart_reg[8] = uart->BEE_UART_REG_RX_TIMEOUT;
+	data->store_buf.uart_reg[9] = uart->BEE_UART_REG_RX_TIMEOUT_EN;
+#endif
+
 	if (dma_start(data->dma_rx.dma_dev, data->dma_rx.dma_channel)) {
 		LOG_ERR("UART ERR: RX DMA start failed!");
 		return -EFAULT;
@@ -971,6 +1035,11 @@ static int uart_bee_async_rx_disable(const struct device *dev)
 	}
 
 	UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
+
+#ifdef CONFIG_PM_DEVICE
+	data->store_buf.uart_reg[8] = uart->BEE_UART_REG_RX_TIMEOUT;
+	data->store_buf.uart_reg[9] = uart->BEE_UART_REG_RX_TIMEOUT_EN;
+#endif
 
 	/* uart_bee_dma_rx_flush(dev);*/
 
@@ -1220,9 +1289,6 @@ static int uart_bee_pm_action(const struct device *dev, enum pm_device_action ac
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-
-		UART_DLPSEnter(uart, &data->store_buf);
-
 		/* Move pins to sleep state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
 		if ((err < 0) && (err != -ENOENT)) {
