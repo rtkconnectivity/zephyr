@@ -82,10 +82,6 @@ struct dma_bee_data {
 
 extern FlagStatus GDMA_GetSuspendChannelStatus(GDMA_ChannelTypeDef *GDMA_Channelx);
 
-/*
- * API functions
- */
-
 static int dma_bee_configure(const struct device *dev, uint32_t channel, struct dma_config *dma_cfg)
 {
 	const struct dma_bee_config *cfg = dev->config;

@@ -44,9 +44,7 @@ LOG_MODULE_REGISTER(pwm_bee, CONFIG_PWM_LOG_LEVEL);
 	extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
-/** PWM data. */
 struct pwm_bee_data {
-	/** Timer clock (Hz). */
 	uint32_t tim_clk;
 #ifdef CONFIG_PM_DEVICE
 	union {
@@ -57,7 +55,6 @@ struct pwm_bee_data {
 #endif
 };
 
-/** PWM configuration. */
 struct pwm_bee_config {
 	uint32_t reg;
 	uint8_t channels;

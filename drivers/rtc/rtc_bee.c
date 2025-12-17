@@ -453,7 +453,6 @@ static void irq_handler(void)
 		/* updata tm */
 		if (data->last_update_rtc_cnt != UINT32_MAX) {
 			/* first time enter isr after set time */
-
 			data->last_update_time_sec += cnt2sec(dev, ~data->last_update_rtc_cnt);
 
 			data->last_update_rtc_cnt = UINT32_MAX;

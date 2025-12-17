@@ -247,7 +247,6 @@ static int counter_bee_rtc_init(const struct device *dev)
 	const struct counter_bee_rtc_config *cfg = dev->config;
 	struct counter_bee_rtc_data *data = dev->data;
 
-	/* use clock_control_get_rate if clock driver is available */
 	data->freq = cfg->src_clk_freq / cfg->prescaler;
 
 	cfg->irq_config(dev);

@@ -221,8 +221,7 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 		Pad_Config(pad_pin, PAD_SW_MODE, PAD_NOT_PWRON, PAD_PULL_NONE, PAD_OUT_DISABLE,
 			   PAD_OUT_HIGH);
 	} else {
-		/* config pad pull status */
-
+		/* configure pad pull status */
 		if (flags & GPIO_PULL_UP) {
 			pull_config = PAD_PULL_UP;
 		} else if (flags & GPIO_PULL_DOWN) {
@@ -231,8 +230,7 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 			pull_config = PAD_PULL_NONE;
 		}
 
-		/* config gpio */
-
+		/* configure gpio */
 		GPIO_StructInit(&gpio_init_struct);
 
 		if (debounce_ms) {
@@ -786,16 +784,6 @@ static void gpio_bee_isr(void *arg)
 	}
 }
 
-/**
- * @brief Initialize GPIO port
- *
- * Perform basic initialization of a GPIO port. The code
- * will enable the clock for corresponding peripheral.
- *
- * @param dev GPIO device struct
- *
- * @return 0
- */
 static int gpio_bee_init(const struct device *dev)
 {
 	struct gpio_bee_data *data = dev->data;

@@ -6,11 +6,6 @@
 
 #define DT_DRV_COMPAT realtek_bee_uart
 
-/**
- * @brief Driver for UART port on BEE family processor.
- * @note  Please validate for newly added series.
- */
-
 #include <zephyr/kernel.h>
 #include <zephyr/arch/cpu.h>
 #include <zephyr/sys/__assert.h>
@@ -296,8 +291,6 @@ static int uart_bee_fifo_fill(const struct device *dev, const uint8_t *tx_data, 
 	if (!(UART_GetTxFIFODataLen(uart) < UART_TX_FIFO_SIZE)) {
 		return num_tx;
 	}
-
-	/* Lock interrupts to prevent nested interrupts or thread switch */
 
 	key = irq_lock();
 
@@ -776,10 +769,7 @@ void uart_bee_dma_rx_cb(const struct device *dma_dev, void *user_data, uint32_t 
 #endif
 		async_evt_rx_buf_release(data);
 
-		/* replace the buffer when the current
-		 * is full and not the same as the next
-		 * one.
-		 */
+		/* replace the buffer when the current is full and not the same as the next one. */
 		uart_bee_dma_replace_buffer(uart_dev);
 	} else {
 #if DBG_DIRECT_SHOW
@@ -1002,8 +992,6 @@ static int uart_bee_async_rx_disable(const struct device *dev)
 
 	data->rx_next_buffer = NULL;
 	data->rx_next_buffer_len = 0;
-
-	/* When async rx is disabled, enable interruptible instance of uart to function normally */
 
 	LOG_DBG("rx: disabled");
 
@@ -1324,16 +1312,6 @@ static const struct uart_driver_api uart_bee_driver_api = {
 #endif
 };
 
-/**
- * @brief Initialize UART channel
- *
- * This routine is called to reset the chip in a quiescent state.
- * It is assumed that this function is called only once per UART.
- *
- * @param dev UART device struct
- *
- * @return 0
- */
 static int uart_bee_init(const struct device *dev)
 {
 	const struct uart_bee_config *config = dev->config;
@@ -1346,7 +1324,6 @@ static int uart_bee_init(const struct device *dev)
 	data->dev = dev;
 
 	/* Configure pinmux  */
-
 	err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 	if (err < 0) {
 		return err;
@@ -1355,7 +1332,6 @@ static int uart_bee_init(const struct device *dev)
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 	/* Configure peripheral  */
-
 	err = uart_bee_configure(dev, &data->uart_config);
 	if (err) {
 		return err;

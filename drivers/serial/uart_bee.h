@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @brief Driver for UART port on BEE family processor.
- *
- */
-
 #ifndef ZEPHYR_DRIVERS_SERIAL_UART_BEE_H_
 #define ZEPHYR_DRIVERS_SERIAL_UART_BEE_H_
 
@@ -54,7 +49,6 @@ struct uart_bee_config {
 #endif
 };
 
-/* driver data */
 #ifdef CONFIG_UART_ASYNC_API
 struct uart_dma_stream {
 	const struct device *dma_dev;

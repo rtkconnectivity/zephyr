@@ -382,6 +382,7 @@ static int i2c_bee_configure(const struct device *dev, uint32_t dev_config)
 
 	I2C_Init(i2c, &i2c_init_struct);
 
+	/* Enable i2c device */
 	I2C_Cmd(i2c, ENABLE);
 error:
 	k_sem_give(&data->bus_mutex);

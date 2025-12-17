@@ -184,8 +184,8 @@ static int counter_bee_timer_set_top_value(const struct device *dev,
 	int err = 0;
 
 	for (uint32_t i = 0; i < cfg->counter_info.channels; i++) {
-		/* Overflow can be changed only when all alarms are
-		 * disables.
+		/* Top value can be changed only when all channels are
+		 * disabled.
 		 */
 		if (data->alarm[i].callback) {
 			return -EBUSY;
@@ -373,7 +373,6 @@ static int counter_bee_timer_init(const struct device *dev)
 	void *timer_base = (void *)cfg->reg;
 	uint8_t clock_div;
 
-	/* use clock_control_get_rate if clock driver is available */
 	uint32_t pclk = 40000000;
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);

@@ -7,10 +7,6 @@
 #ifndef ZEPHYR_DRIVERS_GPIO_GPIO_BEE_H_
 #define ZEPHYR_DRIVERS_GPIO_GPIO_BEE_H_
 
-/**
- * @file header for BEE GPIO
- */
-
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/reset.h>
 #include <zephyr/drivers/gpio.h>
@@ -24,8 +20,6 @@
 #include <zephyr/sys/slist.h>
 #endif
 
-/* GPIO buses definitions */
-
 struct gpio_bee_irq_info {
 	const struct device *irq_dev;
 	uint8_t num_irq;
@@ -35,9 +29,6 @@ struct gpio_bee_irq_info {
 	} gpio_irqs[];
 };
 
-/**
- * @brief configuration of GPIO device
- */
 struct gpio_bee_config {
 	struct gpio_driver_config common;
 	uint16_t clkid;
@@ -68,9 +59,6 @@ struct pm_pad_node_list {
 
 #endif
 
-/**
- * @brief driver data
- */
 struct gpio_bee_data {
 	struct gpio_driver_data common;
 	const struct device *dev;

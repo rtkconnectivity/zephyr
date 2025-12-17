@@ -540,9 +540,6 @@ static int sdhc_bee_do_transaction(const struct device *dev, struct sdhc_command
 	return ret;
 }
 
-/*
- * Set SDHC io properties
- */
 static int sdhc_bee_set_io(const struct device *dev, struct sdhc_io *ios)
 {
 	const struct sdhc_bee_config *cfg = dev->config;
@@ -628,9 +625,6 @@ static int sdhc_bee_set_io(const struct device *dev, struct sdhc_io *ios)
 	return 0;
 }
 
-/*
- * Send CMD or CMD/DATA via SDHC
- */
 static int sdhc_bee_request(const struct device *dev, struct sdhc_command *cmd,
 			    struct sdhc_data *data)
 {
@@ -659,9 +653,6 @@ static int sdhc_bee_request(const struct device *dev, struct sdhc_command *cmd,
 	return ret;
 }
 
-/*
- * Reset SDHC controller
- */
 static int sdhc_bee_reset(const struct device *dev)
 {
 	const struct sdhc_bee_config *cfg = dev->config;
@@ -672,17 +663,11 @@ static int sdhc_bee_reset(const struct device *dev)
 	return 0;
 }
 
-/*
- * Get card presence
- */
 static int sdhc_bee_get_card_present(const struct device *dev)
 {
 	return 1;
 }
 
-/*
- * Return 0 if card is not busy, 1 if it is
- */
 static int sdhc_bee_card_busy(const struct device *dev)
 {
 	const struct sdhc_bee_config *cfg = dev->config;
@@ -691,9 +676,6 @@ static int sdhc_bee_card_busy(const struct device *dev)
 	return false;
 }
 
-/*
- * Get host properties
- */
 static int sdhc_bee_get_host_props(const struct device *dev, struct sdhc_host_props *props)
 {
 	const struct sdhc_bee_config *cfg = dev->config;
@@ -756,12 +738,6 @@ static int sdhc_bee_disable_interrupt(const struct device *dev, int sources)
 	return 0;
 }
 
-/**
- * @brief SDHC interrupt handler
- *
- * All communication is handled by the hardware automatically,
- * so the isr just handles error status.
- */
 static void sdio_bee_isr(void *arg)
 {
 	const struct device *dev = (const struct device *)arg;
@@ -777,9 +753,6 @@ static void sdio_bee_isr(void *arg)
 	}
 }
 
-/*
- * Perform early system init for SDHC
- */
 static int sdhc_bee_init(const struct device *dev)
 {
 	const struct sdhc_bee_config *cfg = dev->config;
