@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ZSDK_VERSION: "0.16.0"
+      ZSDK_VERSION: "0.17.0"
       HOSTTYPE: "x86_64"
 
     container:
@@ -24,6 +24,9 @@ jobs:
           ls -al /opt/
           du -h --max-depth=1 /opt
           sudo rm -rf /opt/fvps
+          sudo rm -rf /__t/go
+          sudo rm -rf /__t/Ruby
+          sudo rm -rf /__t/CodeQL
           echo "-----------------------"
           df -h
           echo "-----------------------"
