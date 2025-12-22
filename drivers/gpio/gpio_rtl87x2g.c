@@ -537,6 +537,9 @@ static int gpio_rtl87x2g_pm_action(const struct device *port,
 	case PM_DEVICE_ACTION_RESUME:
 
 		while (cur_output_pad_node->next_gpio_num != 0xff) {
+			Pinmux_Config(
+			pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
+			DWGPIO);
 			Pad_SetControlMode(
 			pm_pad_node_array[cur_output_pad_node->next_gpio_num].pad_num,
 			PAD_PINMUX_MODE);
@@ -545,6 +548,9 @@ static int gpio_rtl87x2g_pm_action(const struct device *port,
 		}
 
 		while (cur_wakeup_pad_node->next_gpio_num != 0xff) {
+			Pinmux_Config(
+			pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num,
+			DWGPIO);
 			Pad_SetControlMode(
 			pm_pad_node_array[cur_wakeup_pad_node->next_gpio_num].pad_num,
 			PAD_PINMUX_MODE);
