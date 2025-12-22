@@ -884,6 +884,6 @@ static int gpio_bee_init(const struct device *dev)
 	PM_DEVICE_DT_INST_DEFINE(index, gpio_bee_pm_action);                                       \
 	DEVICE_DT_INST_DEFINE(index, gpio_bee_init, PM_DEVICE_DT_INST_GET(index),                  \
 			      &gpio_bee_port##index##_data, &gpio_bee_port##index##_cfg,           \
-			      PRE_KERNEL_1, CONFIG_GPIO_INIT_PRIORITY, &gpio_bee_driver_api);
+			      POST_KERNEL, CONFIG_GPIO_INIT_PRIORITY, &gpio_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(GPIO_BEE_DEVICE_INIT)
