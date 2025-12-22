@@ -98,7 +98,7 @@ ZTEST(timeout_wakeup, test_k_thread_wakeup)
 	uint32_t wakeup_count_thread;
 
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
-	while (test_thread_sleep_num <= THREAD_SLEEP_NUMBERS) {
+	while (test_thread_sleep_num < THREAD_SLEEP_NUMBERS) {
 		k_msleep(100);
 		test_thread_sleep_num++;
 	}
