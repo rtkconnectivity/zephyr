@@ -332,7 +332,7 @@ static const struct counter_driver_api counter_bee_rtc_driver_api = {
 	};                                                                                         \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(index, counter_bee_rtc_init, NULL, &counter_bee_rtc_data_##index,    \
-			      &counter_bee_rtc_config_##index, PRE_KERNEL_1,                       \
+			      &counter_bee_rtc_config_##index, POST_KERNEL,                       \
 			      CONFIG_COUNTER_INIT_PRIORITY, &counter_bee_rtc_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BEE_RTC_INIT);

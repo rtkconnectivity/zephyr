@@ -602,7 +602,7 @@ static int rtc_bee_init(const struct device *dev)
 	};                                                                                         \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(index, rtc_bee_init, NULL, &rtc_bee_data_##index,                    \
-			      &rtc_bee_config_##index, PRE_KERNEL_1, CONFIG_RTC_INIT_PRIORITY,     \
+			      &rtc_bee_config_##index, POST_KERNEL, CONFIG_RTC_INIT_PRIORITY,     \
 			      &rtc_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(RTC_BEE_INIT);

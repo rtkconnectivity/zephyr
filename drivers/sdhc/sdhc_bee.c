@@ -670,9 +670,6 @@ static int sdhc_bee_get_card_present(const struct device *dev)
 
 static int sdhc_bee_card_busy(const struct device *dev)
 {
-	const struct sdhc_bee_config *cfg = dev->config;
-	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
-
 	return false;
 }
 
@@ -689,8 +686,6 @@ static int sdhc_bee_enable_interrupt(const struct device *dev, sdhc_interrupt_cb
 {
 	LOG_INF("[%s] line%d", __func__, __LINE__);
 	struct sdhc_bee_data *data = dev->data;
-	const struct sdhc_bee_config *cfg = dev->config;
-	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
 	int ret;
 
 	data->cb = callback;
@@ -720,8 +715,6 @@ static int sdhc_bee_disable_interrupt(const struct device *dev, int sources)
 {
 	LOG_INF("[%s] line%d", __func__, __LINE__);
 	struct sdhc_bee_data *data = dev->data;
-	const struct sdhc_bee_config *cfg = dev->config;
-	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)cfg->sdhc_base;
 	int ret;
 
 	if (sources & SDHC_INT_SDIO) {
