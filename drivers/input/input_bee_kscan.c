@@ -58,12 +58,10 @@ extern void KEYSCAN_DLPSExit(void *PeriReg, void *StoreBuf, uint32_t scanmode, u
 #define BEE_Pad_SetControlMode(pad, mode)            Pad_SetControlMode(pad, mode)
 #define BEE_Pad_SetPullMode(pad, pull)               Pad_SetPullMode(pad, pull)
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en)
-#define BEE_KSCAN_REG_CLKDIV                         KEYSCAN_CLK_DIV
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define BEE_Pad_SetControlMode(pad, mode)            Pad_ControlSelectValue(pad, mode)
 #define BEE_Pad_SetPullMode(pad, pull)               Pad_PullUpOrDownValue(pad, pull)
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en, 0)
-#define BEE_KSCAN_REG_CLKDIV                         CLKDIV
 #endif
 
 #include <zephyr/logging/log.h>
@@ -168,7 +166,7 @@ static int kscan_bee_init_driver(const struct device *dev, uint32_t scanmode, ui
 	KeyScan_Init(keyscan, &kscan_init_struct);
 
 	/* set pre guard time */
-	keyscan->BEE_KSCAN_REG_CLKDIV = (keyscan->BEE_KSCAN_REG_CLKDIV & ~(0x7 << 26)) | (6 << 26);
+	KeyScan_SetPreGuadTime(keyscan, 6);
 
 	KeyScan_INTConfig(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
 	KeyScan_ClearINTPendingBit(keyscan, KEYSCAN_INT_SCAN_END);

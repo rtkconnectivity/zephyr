@@ -22,16 +22,6 @@
 #include <rtl876x_gdma.h>
 #endif
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-#define BEE_DMA_REG_STATUS_ERR   GDMA_STATUSERR_L
-#define BEE_DMA_REG_STATUS_TFR   GDMA_STATUSTFR_L
-#define BEE_DMA_REG_STATUS_BLOCK GDMA_STATUSBLOCK_L
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#define BEE_DMA_REG_STATUS_ERR   STATUS_ERR
-#define BEE_DMA_REG_STATUS_TFR   STATUS_TFR
-#define BEE_DMA_REG_STATUS_BLOCK STATUS_BLOCK
-#endif
-
 #include <trace.h>
 
 BUILD_ASSERT(CONFIG_HEAP_MEM_POOL_SIZE > 0);
@@ -45,6 +35,7 @@ BUILD_ASSERT(CONFIG_HEAP_MEM_POOL_SIZE > 0);
 #endif
 
 #define DBG_DIRECT_SHOW 0
+
 LOG_MODULE_REGISTER(dma_bee, CONFIG_DMA_LOG_LEVEL);
 
 struct dma_bee_config {
@@ -447,29 +438,9 @@ static int dma_bee_start(const struct device *dev, uint32_t channel)
 
 		data->channels[channel].busy = true;
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-		dma_channel->GDMA_CTLx_H = data->channels[channel].p_dma_lli[0].CTL_HIGH;
-
-		GDMA_CFGx_L_TypeDef gdma_0x40 = {.d32 = dma_channel->GDMA_CFGx_L};
-		GDMA_CTLx_L_TypeDef gdma_0x18 = {.d32 = dma_channel->GDMA_CTLx_L};
-
-		dma_channel->GDMA_LLPx_L = (uint32_t)(data->channels[channel].p_dma_lli);
-		gdma_0x18.b.llp_dst_en = 1;
-		gdma_0x18.b.llp_src_en = 1;
-		gdma_0x40.b.reload_src = 0;
-		gdma_0x40.b.reload_dst = 0;
-		dma_channel->GDMA_CTLx_L = gdma_0x18.d32;
-		dma_channel->GDMA_CFGx_L = gdma_0x40.d32;
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-		dma_channel->CTL_HIGH = data->channels[channel].p_dma_lli[0].CTL_HIGH;
-
-		uint32_t gdma_0x40 = dma_channel->CFG_LOW;
-		uint32_t gdma_0x18 = dma_channel->CTL_LOW;
-
-		dma_channel->LLP = (uint32_t)(data->channels[channel].p_dma_lli);
-		dma_channel->CTL_LOW = gdma_0x18 | BIT27 | BIT28;
-		dma_channel->CFG_LOW = gdma_0x40 & ~(BIT30 | BIT31);
-#endif
+		GDMA_SetBufferSize(dma_channel, data->channels[channel].p_dma_lli[0].CTL_HIGH);
+		GDMA_SetLLPAddress(dma_channel, (uint32_t)(data->channels[channel].p_dma_lli));
+		GDMA_ResetBlockTransfer(dma_channel);
 
 		GDMA_SetSourceAddress(dma_channel, 0);
 		GDMA_SetDestinationAddress(dma_channel, 0);
@@ -662,9 +633,9 @@ static void dma_bee_isr(struct dma_bee_isr_param *param)
 
 	dma_channel_num = cfg->channel_table[i].channel_num;
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[i].channel_base;
-	errflag = ((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_ERR & BIT(dma_channel_num);
-	ftfflag = ((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_TFR & BIT(dma_channel_num);
-	blockflag = ((GDMA_TypeDef *)cfg->reg)->BEE_DMA_REG_STATUS_BLOCK & BIT(dma_channel_num);
+	errflag = GDMA_GetErrorINTStatus(dma_channel_num);
+	ftfflag = GDMA_GetTransferINTStatus(dma_channel_num);
+	blockflag = GDMA_GetBlockINTStatus(dma_channel_num);
 
 #if DBG_DIRECT_SHOW
 	DBG_DIRECT("[%s] channel %d transferlen%d callback%x ftfflag%d "
@@ -735,6 +706,7 @@ static const struct dma_driver_api dma_bee_driver_api = {
 };
 
 #define IRQ_CONFIGURE(n, index)                                                                    \
+	irq_disable(DT_INST_IRQ_BY_IDX(index, n, irq));    \
 	irq_connect_dynamic(DT_INST_IRQ_BY_IDX(index, n, irq),                                     \
 			    DT_INST_IRQ_BY_IDX(index, n, priority), (const void *)dma_bee_isr,     \
 			    &dma_bee_##index##_isr_param[n], 0);                                   \
@@ -787,7 +759,7 @@ static const struct dma_driver_api dma_bee_driver_api = {
 		dma_bee_##index##_channels[DT_INST_PROP(index, dma_channels)];                     \
 	ATOMIC_DEFINE(dma_bee_atomic##index, DT_INST_PROP(index, dma_channels));                   \
 	static struct dma_bee_data dma_bee_##index##_data = {                                      \
-		.ctx.magic = 0x47494749,                                                           \
+		.ctx.magic = DMA_MAGIC,                                                           \
 		.channels = dma_bee_##index##_channels,                                            \
 	};                                                                                         \
                                                                                                    \

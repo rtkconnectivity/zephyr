@@ -22,12 +22,14 @@
 #include <rtl_adc.h>
 #include <adc_lib.h>
 
+/* for pm store */
 #define BEE_ADC_SCHED_CTRL ADC_SCHED_CTRL
 #define BEE_ADC_CTRL_INT   ADC_CTRL_INT
 #define BEE_ADC_DIG_CTRL   ADC_DIG_CTRL
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_adc.h>
 
+/* for pm store */
 #define BEE_ADC_SCHED_CTRL SCHCR
 #define BEE_ADC_CTRL_INT   INTCR
 #define BEE_ADC_DIG_CTRL   CR

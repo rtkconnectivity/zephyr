@@ -29,18 +29,6 @@
 #include <vector_table.h>
 #endif
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-#define BEE_ENH_TIM_REG_MAX_CNT ENHTIM_MAX_CNT
-#define BEE_ENH_TIM_REG_CR      ENHTIM_CONFIGURE
-#define BEE_TIM_REG_CONTROLREG  TIMER_CONTROLREG
-#define BEE_TIM_REG_LOADCNT     TIMER_LOADCOUNT
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#define BEE_ENH_TIM_REG_MAX_CNT MAX_CNT
-#define BEE_ENH_TIM_REG_CR      CR
-#define BEE_TIM_REG_CONTROLREG  ControlReg
-#define BEE_TIM_REG_LOADCNT     LoadCount
-#endif
-
 LOG_MODULE_REGISTER(counter_bee_timer, CONFIG_COUNTER_LOG_LEVEL);
 
 #ifdef CONFIG_PM_DEVICE
@@ -89,12 +77,12 @@ static int counter_bee_timer_start(const struct device *dev)
 
 	if (cfg->enhanced) {
 		LOG_DBG("enhed %s, ctrl=%x, current=%x, line%d\n", dev->name,
-			((ENHTIM_TypeDef *)cfg->reg)->BEE_ENH_TIM_REG_MAX_CNT,
+			ENHTIM_GetCurrentMAXCNT(cfg->reg),
 			ENHTIM_GetCurrentCount((ENHTIM_TypeDef *)cfg->reg), __LINE__);
 		ENHTIM_Cmd((ENHTIM_TypeDef *)cfg->reg, ENABLE);
 	} else {
 		LOG_DBG("not enhed %s, ctrl=%x, current=%x, line%d\n", dev->name,
-			((TIM_TypeDef *)cfg->reg)->BEE_TIM_REG_CONTROLREG,
+			TIM_GetCurrentControl(cfg->reg),
 			TIM_GetCurrentValue((TIM_TypeDef *)cfg->reg), __LINE__);
 		TIM_Cmd((TIM_TypeDef *)cfg->reg, ENABLE);
 	}
@@ -135,12 +123,12 @@ static uint32_t counter_bee_timer_get_top_value(const struct device *dev)
 	const struct counter_bee_config *cfg = dev->config;
 	if (cfg->enhanced) {
 		LOG_DBG("enhed, topvalue=%x\n",
-			((ENHTIM_TypeDef *)cfg->reg)->BEE_ENH_TIM_REG_MAX_CNT);
-		return ((ENHTIM_TypeDef *)cfg->reg)->BEE_ENH_TIM_REG_MAX_CNT;
+			ENHTIM_GetCurrentMAXCNT(cfg->reg));
+		return ENHTIM_GetCurrentMAXCNT(cfg->reg);
 	}
 
-	LOG_DBG("not enhed, topvalue=%x\n", ((TIM_TypeDef *)cfg->reg)->BEE_TIM_REG_LOADCNT);
-	return ((TIM_TypeDef *)cfg->reg)->BEE_TIM_REG_LOADCNT;
+	LOG_DBG("not enhed, topvalue=%x\n", TIM_GetCurrentLoadCnt(cfg->reg));
+	return TIM_GetCurrentLoadCnt(cfg->reg);
 }
 
 static int counter_bee_timer_set_alarm(const struct device *dev, uint8_t chan,
@@ -449,7 +437,7 @@ static int counter_bee_timer_init(const struct device *dev)
 		enh_tim_init_struct.ENHTIM_MaxCount = cfg->counter_info.max_top_value;
 		ENHTIM_Init((ENHTIM_TypeDef *)timer_base, &enh_tim_init_struct);
 		LOG_DBG("enhed %s, ctrl=%x, line%d\n", dev->name,
-			((ENHTIM_TypeDef *)timer_base)->BEE_ENH_TIM_REG_CR, __LINE__);
+			ENHTIM_GetCurrentControl(timer_base), __LINE__);
 #ifdef CONFIG_PM_DEVICE
 		ENHTIM_DLPSEnter(timer_base, &data->store_buf);
 #endif
@@ -465,7 +453,7 @@ static int counter_bee_timer_init(const struct device *dev)
 		timer_init_struct.TIM_Period = cfg->counter_info.max_top_value;
 		TIM_TimeBaseInit((TIM_TypeDef *)timer_base, &timer_init_struct);
 		LOG_DBG("not enhed %s, ctrl=%x, line%d\n", dev->name,
-			((TIM_TypeDef *)timer_base)->BEE_TIM_REG_CONTROLREG, __LINE__);
+			TIM_GetCurrentControl(timer_base), __LINE__);
 #ifdef CONFIG_PM_DEVICE
 		TIM_DLPSEnter(timer_base, &data->store_buf);
 #endif

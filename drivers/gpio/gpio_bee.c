@@ -19,6 +19,10 @@
 
 #include <zephyr/dt-bindings/gpio/realtek-bee-gpio.h>
 
+#ifdef GPIO_INT_MASK
+#undef GPIO_INT_MASK
+#endif
+
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #include <rtl_rcc.h>
 #include <rtl_pinmux.h>
@@ -36,6 +40,7 @@
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define BEE_GPIO_WriteBit(port, bit, val)            GPIO_WriteBit(port, bit, val)
+#define BEE_GPIO_ReadOutputData(port)                GPIO_ReadOutputData(port)
 #define BEE_GPIO_ReadOutputDataBit(port, bit)        GPIO_ReadOutputDataBit(port, bit)
 #define BEE_GPIO_INTConfig(port, bit, val)           GPIO_INTConfig(port, bit, val)
 #define BEE_GPIO_Init(port, val)                     GPIO_Init(port, val)
@@ -48,12 +53,10 @@
 #define BEE_Pad_SetControlMode(pad, mode)            Pad_SetControlMode(pad, mode)
 #define BEE_Pad_SetOutputLevel(pad, val)             Pad_SetOutputLevel(pad, val)
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en)
-#define BEE_GPIO_REG_INTSATUS                        GPIO_INT_STS
-#define BEE_GPIO_REG_INT_EN                          GPIO_INT_EN
-#define BEE_GPIO_REG_DR                              GPIO_DR
 extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define BEE_GPIO_WriteBit(port, bit, val)            GPIO_WriteBit(bit, val)
+#define BEE_GPIO_ReadOutputData(port)                GPIO_ReadOutputData()
 #define BEE_GPIO_ReadOutputDataBit(port, bit)        GPIO_ReadOutputDataBit(bit)
 #define BEE_GPIO_INTConfig(port, bit, val)           GPIO_INTConfig(bit, val)
 #define BEE_GPIO_Init(port, val)                     GPIO_Init(val)
@@ -66,9 +69,6 @@ extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 #define BEE_Pad_SetControlMode(pad, mode)            Pad_ControlSelectValue(pad, mode)
 #define BEE_Pad_SetOutputLevel(pad, val)             Pad_OutputControlValue(pad, val)
 #define BEE_System_WakeUpPinEnable(pin, pol, deb_en) System_WakeUpPinEnable(pin, pol, deb_en, 0)
-#define BEE_GPIO_REG_INTSATUS                        INTSTATUS
-#define BEE_GPIO_REG_INT_EN                          INTEN
-#define BEE_GPIO_REG_DR                              DATAOUT
 #endif
 
 LOG_MODULE_REGISTER(gpio_bee, CONFIG_GPIO_LOG_LEVEL);
@@ -357,7 +357,7 @@ static int gpio_bee_port_set_masked_raw(const struct device *port, gpio_port_pin
 	BEE_GPIO_Write(port_base, pins_value);
 
 #ifdef CONFIG_PM_DEVICE
-	data->store_buf.gpio_reg[0] = port_base->BEE_GPIO_REG_DR;
+	data->store_buf.gpio_reg[0] = BEE_GPIO_ReadOutputData(port_base);
 #endif
 
 	return 0;
@@ -375,7 +375,7 @@ static int gpio_bee_port_set_bits_raw(const struct device *port, gpio_port_pins_
 	BEE_GPIO_SetBits(port_base, pins);
 
 #ifdef CONFIG_PM_DEVICE
-	data->store_buf.gpio_reg[0] = port_base->BEE_GPIO_REG_DR;
+	data->store_buf.gpio_reg[0] = BEE_GPIO_ReadOutputData(port_base);
 #endif
 
 	return 0;
@@ -393,7 +393,7 @@ static int gpio_bee_port_clear_bits_raw(const struct device *port, gpio_port_pin
 	BEE_GPIO_ResetBits(port_base, pins);
 
 #ifdef CONFIG_PM_DEVICE
-	data->store_buf.gpio_reg[0] = port_base->BEE_GPIO_REG_DR;
+	data->store_buf.gpio_reg[0] = BEE_GPIO_ReadOutputData(port_base);
 #endif
 
 	return 0;
@@ -416,7 +416,7 @@ static int gpio_bee_port_toggle_bits(const struct device *port, gpio_port_pins_t
 		__LINE__);
 
 #ifdef CONFIG_PM_DEVICE
-	data->store_buf.gpio_reg[0] = port_base->BEE_GPIO_REG_DR;
+	data->store_buf.gpio_reg[0] = BEE_GPIO_ReadOutputData(port_base);
 #endif
 
 	return 0;
@@ -535,7 +535,7 @@ static uint32_t gpio_bee_get_pending_int(const struct device *dev)
 	const struct gpio_bee_config *config = dev->config;
 	GPIO_TypeDef *port_base = config->port_base;
 
-	return port_base->BEE_GPIO_REG_INTSATUS;
+	return GPIO_GetPortIntStatus(port_base);
 }
 
 #ifdef CONFIG_GPIO_GET_DIRECTION
@@ -544,7 +544,7 @@ int gpio_bee_port_get_direction(const struct device *port, gpio_port_pins_t map,
 {
 	const struct gpio_bee_config *config = port->config;
 	GPIO_TypeDef *port_base = config->port_base;
-	gpio_port_pins_t gpio_dir_status = port_base->GPIO_DDR;
+	gpio_port_pins_t gpio_dir_status = GPIO_GetPortDirection(port_base);
 
 	if (inputs != NULL) {
 		*inputs = gpio_dir_status;
@@ -590,32 +590,25 @@ static void wakeup_pad_pm_suspend(const struct device *port, struct pm_pad_node 
 
 	pad_num = pad_node->pad_num;
 	gpio_num = pad_node->gpio_num;
-	if (port_base->BEE_GPIO_REG_INT_EN & BIT(gpio_num)) {
+	if (GPIO_GetINTEnable(port_base, BIT(gpio_num))) {
 #if CONFIG_BEE_GPIO_SUPPORT_BOTH_EDGE
-		if (port_base->INTBOTHEDGE & BIT(gpio_num)) {
-			port_base->DATAIN;
-			bool high_trigger = !(port_base->DATAIN & BIT(gpio_num));
+		if (GPIO_GetTrigger(port_base, BIT(gpio_num)) == GPIO_INT_BOTH_EDGE) {
+			bool high_trigger = !GPIO_ReadInputDataBit(BIT(gpio_num));
 
 			Pad_ControlSelectValue(pad_num, PAD_SW_MODE);
 			BEE_System_WakeUpPinEnable(
 				pad_num, high_trigger ? PAD_WAKEUP_POL_HIGH : PAD_WAKEUP_POL_LOW,
 				DISABLE);
-			if (high_trigger) {
-				port_base->INTPOLARITY |= BIT(gpio_num);
 
-			} else {
-				port_base->INTPOLARITY &= (~BIT(gpio_num));
-			}
+			GPIO_SetPolarity(port_base, BIT(gpio_num),
+					 high_trigger ? GPIO_INT_POLARITY_ACTIVE_HIGH
+						      : GPIO_INT_POLARITY_ACTIVE_LOW)
 		} else {
 #endif
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-			uint32_t GPIO_Pin_Swap = GPIO_SwapDebPinBit(port_base, BIT(gpio_num));
-			bool high_trigger = port_base->GPIO_EXT_DEB_POL_CTL & GPIO_Pin_Swap;
-			bool edge_trigger = port_base->GPIO_INT_LV & BIT(gpio_num);
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-		bool high_trigger = port_base->INTPOLARITY & BIT(gpio_num);
-		bool edge_trigger = port_base->INTTYPE & BIT(gpio_num);
-#endif
+			bool high_trigger = GPIO_GetPolarity(port_base, BIT(gpio_num)) ==
+					    GPIO_INT_POLARITY_ACTIVE_HIGH;
+			bool edge_trigger =
+				GPIO_GetTrigger(port_base, BIT(gpio_num)) == GPIO_INT_Trigger_EDGE;
 
 			if (edge_trigger) {
 				pad_node->read_before_dlps =
@@ -673,14 +666,9 @@ static void wakeup_edge_trigger(const struct device *port, struct pm_pad_node *p
 	pad_num = pad_node->pad_num;
 	gpio_num = pad_node->gpio_num;
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-	uint32_t GPIO_Pin_Swap = GPIO_SwapDebPinBit(port_base, BIT(gpio_num));
-	bool high_trigger = port_base->GPIO_EXT_DEB_POL_CTL & GPIO_Pin_Swap;
-	bool edge_trigger = port_base->GPIO_INT_LV & BIT(gpio_num);
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-	bool high_trigger = port_base->INTPOLARITY & BIT(gpio_num);
-	bool edge_trigger = port_base->INTTYPE & BIT(gpio_num);
-#endif
+	bool high_trigger =
+		GPIO_GetPolarity(port_base, BIT(gpio_num)) == GPIO_INT_POLARITY_ACTIVE_HIGH;
+	bool edge_trigger = GPIO_GetTrigger(port_base, BIT(gpio_num)) == GPIO_INT_Trigger_EDGE;
 	bool trigger_cb = false;
 	bool deb_enable = !!data->pin_debounce_ms[gpio_num];
 	bool read_after_dlps = BEE_GPIO_ReadInputData(port_base) & BIT(gpio_num);
@@ -804,7 +792,7 @@ static void gpio_bee_isr(void *arg)
 	struct gpio_bee_data *data = dev->data;
 	GPIO_TypeDef *port_base = config->port_base;
 	const struct device *port = dev;
-	uint32_t pins = port_base->BEE_GPIO_REG_INTSATUS;
+	uint32_t pins = GPIO_GetPortIntStatus(port_base);
 
 	gpio_fire_callbacks(&data->cb, port, pins);
 
