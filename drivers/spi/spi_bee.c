@@ -698,11 +698,7 @@ static int spi_bee_dma_init(const struct device *dev)
 	/* Configure dma rx config */
 	memset(&data->dma_rx.blk_cfg, 0, sizeof(data->dma_rx.blk_cfg));
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-	data->dma_rx.blk_cfg.source_address = (uint32_t)(&(spi->SPI_DR[0]));
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-	data->dma_rx.blk_cfg.source_address = (uint32_t)(&(spi->DR[0]));
-#endif
+	data->dma_rx.blk_cfg.source_address = SPI_RX_FIFO_ADDR(spi);
 
 	/* dest not ready */
 	data->dma_rx.blk_cfg.dest_address = 0;
@@ -718,11 +714,7 @@ static int spi_bee_dma_init(const struct device *dev)
 	/* Configure dma tx config */
 	memset(&data->dma_tx.blk_cfg, 0, sizeof(data->dma_tx.blk_cfg));
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-	data->dma_tx.blk_cfg.dest_address = (uint32_t)(&(spi->SPI_DR[0]));
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-	data->dma_tx.blk_cfg.dest_address = (uint32_t)(&(spi->DR[0]));
-#endif
+	data->dma_tx.blk_cfg.dest_address = SPI_TX_FIFO_ADDR(spi);
 
 	data->dma_tx.blk_cfg.source_address = 0; /* not ready */
 

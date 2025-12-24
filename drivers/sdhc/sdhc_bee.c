@@ -34,9 +34,8 @@ static const struct device *const devices[] = {
 	DT_FOREACH_STATUS_OKAY(DT_DRV_COMPAT, DEVICE_DT_GET_AND_COMMA)};
 
 #ifdef CONFIG_PM_DEVICE
-typedef struct {
-	uint32_t sdhc_reg[15];
-} SDHCStoreReg_Typedef;
+extern void SDHC_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void SDHC_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
 
 struct sdhc_bee_config {
@@ -822,30 +821,6 @@ static int sdhc_bee_init(const struct device *dev)
 }
 
 #ifdef CONFIG_PM_DEVICE
-static void SDIO_DLPSEnter(void *PeriReg, void *StoreBuf)
-{
-	SDHC_TypeDef *SDHCx = (SDHC_TypeDef *)PeriReg;
-	SDHCStoreReg_Typedef *store_buf = (SDHCStoreReg_Typedef *)StoreBuf;
-
-	store_buf->sdhc_reg[0] = (*(volatile uint32_t *)0x40002378);
-	store_buf->sdhc_reg[1] = (*(volatile uint32_t *)0x40002374);
-	store_buf->sdhc_reg[2] = SDHCx->CTRL;
-	store_buf->sdhc_reg[3] = SDHCx->RINTSTS;
-	store_buf->sdhc_reg[4] = SDHCx->INTMASK;
-}
-
-static void SDIO_DLPSExit(void *PeriReg, void *StoreBuf)
-{
-	SDHC_TypeDef *SDHCx = (SDHC_TypeDef *)PeriReg;
-	SDHCStoreReg_Typedef *store_buf = (SDHCStoreReg_Typedef *)StoreBuf;
-
-	(*(volatile uint32_t *)0x40002378) = store_buf->sdhc_reg[0];
-	(*(volatile uint32_t *)0x40002374) = store_buf->sdhc_reg[1];
-	SDHCx->CTRL = store_buf->sdhc_reg[2];
-	SDHCx->RINTSTS = store_buf->sdhc_reg[3];
-	SDHCx->INTMASK = store_buf->sdhc_reg[4];
-}
-
 static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action action)
 {
 	const struct sdhc_bee_config *config = dev->config;
@@ -853,12 +828,9 @@ static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action ac
 	SDHC_TypeDef *sdhc_base = (SDHC_TypeDef *)config->sdhc_base;
 	int err;
 
-	extern void SDIO_DLPSEnter(void *PeriReg, void *StoreBuf);
-	extern void SDIO_DLPSExit(void *PeriReg, void *StoreBuf);
-
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
-		SDIO_DLPSEnter(sdhc_base, &data->store_buf);
+		SDHC_DLPSEnter(sdhc_base, &data->store_buf);
 
 		/* Move pins to sleep state */
 		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
@@ -881,7 +853,7 @@ static int sdhc_bee_pm_action(const struct device *dev, enum pm_device_action ac
 		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
 				       (clock_control_subsys_t)&config->clkid);
 
-		SDIO_DLPSExit(sdhc_base, &data->store_buf);
+		SDHC_DLPSExit(sdhc_base, &data->store_buf);
 		SDHC_SetClkOutFreq(sdhc_base, data->bus_clock / 1000);
 		SDHC_SetHostDataWidth(sdhc_base,
 				      data->bus_width == 1 ? DATAWIDTH_1BIT : DATAWIDTH_4BIT);

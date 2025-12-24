@@ -38,13 +38,13 @@
 #endif
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
-#define BEE_UART_REG_RB_THR        UART_RBR_THR
+/* for pm store */
 #define BEE_UART_REG_MISCR         UART_MISCR
 #define BEE_UART_REG_DLM_IER       UART_DLM_IER
 #define BEE_UART_REG_RX_TIMEOUT    UART_RX_TIMEOUT
 #define BEE_UART_REG_RX_TIMEOUT_EN UART_RX_TIMEOUT_EN
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#define BEE_UART_REG_RB_THR        RB_THR
+/* for pm store */
 #define BEE_UART_REG_MISCR         MISCR
 #define BEE_UART_REG_DLM_IER       DLH_INTCR
 #define BEE_UART_REG_RX_TIMEOUT    RX_IDLE_TOCR
@@ -212,6 +212,14 @@ static int uart_bee_configure(const struct device *dev, const struct uart_config
 
 #ifdef CONFIG_UART_ASYNC_API
 	uart_init_struct.UART_DmaEn = UART_DMA_ENABLE;
+
+	if (data->dma_tx.dma_dev != NULL) {
+		uart_init_struct.UART_TxWaterLevel = 16 - data->dma_tx.dma_cfg.dest_burst_length;
+	}
+
+	if (data->dma_rx.dma_dev != NULL) {
+		uart_init_struct.UART_RxWaterLevel = data->dma_rx.dma_cfg.source_burst_length;
+	}
 #endif
 
 	UART_Init(uart, &uart_init_struct);
@@ -671,12 +679,12 @@ static inline void uart_bee_dma_tx_enable(const struct device *dev)
 	DBG_DIRECT("[%s]", __func__);
 #endif
 	const struct uart_bee_config *config = dev->config;
-	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
+	struct uart_bee_data *data;
 
-	uart->BEE_UART_REG_MISCR &= ~(0x1f << 3);
-	uart->BEE_UART_REG_MISCR |= ((16 - data->dma_tx.dma_cfg.dest_burst_length) << 3) | BIT(1);
+	data = dev->data;
 
+	UART_TxDmaCmd(uart, true);
 #ifdef CONFIG_PM_DEVICE
 	data->store_buf.uart_reg[10] = uart->BEE_UART_REG_MISCR;
 #endif
@@ -693,8 +701,7 @@ static inline void uart_bee_dma_tx_disable(const struct device *dev)
 
 	data = dev->data;
 
-	uart->BEE_UART_REG_MISCR &= ~BIT(1);
-
+	UART_TxDmaCmd(uart, false);
 #ifdef CONFIG_PM_DEVICE
 	data->store_buf.uart_reg[10] = uart->BEE_UART_REG_MISCR;
 #endif
@@ -709,8 +716,7 @@ static inline void uart_bee_dma_rx_enable(const struct device *dev)
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
 
-	uart->BEE_UART_REG_MISCR &= ~(0x3f << 8);
-	uart->BEE_UART_REG_MISCR |= ((data->dma_rx.dma_cfg.source_burst_length) << 8) | BIT(2);
+	UART_RxDmaCmd(uart, true);
 
 #ifdef CONFIG_PM_DEVICE
 	data->store_buf.uart_reg[10] = uart->BEE_UART_REG_MISCR;
@@ -728,7 +734,7 @@ static inline void uart_bee_dma_rx_disable(const struct device *dev)
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
 
-	uart->BEE_UART_REG_MISCR &= ~BIT(2);
+	UART_RxDmaCmd(uart, false);
 
 #ifdef CONFIG_PM_DEVICE
 	data->store_buf.uart_reg[10] = uart->BEE_UART_REG_MISCR;
@@ -1152,7 +1158,7 @@ static int uart_bee_async_init(const struct device *dev)
 	/* Configure dma rx config */
 	memset(&data->dma_rx.blk_cfg, 0, sizeof(data->dma_rx.blk_cfg));
 
-	data->dma_rx.blk_cfg.source_address = (uint32_t)(&(uart->BEE_UART_REG_RB_THR));
+	data->dma_rx.blk_cfg.source_address = UART_RX_FIFO_ADDR(uart);
 
 	data->dma_rx.blk_cfg.dest_address = 0; /* dest not ready */
 	data->dma_rx.blk_cfg.source_addr_adj = data->dma_rx.src_addr_increment;
@@ -1170,7 +1176,7 @@ static int uart_bee_async_init(const struct device *dev)
 	/* Configure dma tx config */
 	memset(&data->dma_tx.blk_cfg, 0, sizeof(data->dma_tx.blk_cfg));
 
-	data->dma_tx.blk_cfg.dest_address = (uint32_t)(&(uart->BEE_UART_REG_RB_THR));
+	data->dma_tx.blk_cfg.dest_address = UART_TX_FIFO_ADDR(uart);
 
 	data->dma_tx.blk_cfg.source_address = 0; /* not ready */
 
