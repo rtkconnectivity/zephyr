@@ -10,17 +10,21 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <soc.h>
-#include <rtl876x_rcc.h>
-#include <rtl876x_pinmux.h>
-#include <rtl876x_gpio.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/clock_control/rtl8752h_clock_control.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
-
 #include <zephyr/dt-bindings/gpio/realtek-rtl8752h-gpio.h>
+
+#ifdef GPIO_INT_MASK
+#undef GPIO_INT_MASK
+#endif
+
+#include <rtl876x_rcc.h>
+#include <rtl876x_pinmux.h>
+#include <rtl876x_gpio.h>
 #include "gpio_rtl8752h.h"
 #include <zephyr/drivers/gpio/gpio_utils.h>
 #include <zephyr/logging/log.h>

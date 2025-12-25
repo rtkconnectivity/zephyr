@@ -10,17 +10,21 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <soc.h>
-#include <rtl_rcc.h>
-#include <rtl_pinmux.h>
-#include <rtl_gpio.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/clock_control/rtl87x2g_clock_control.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
-
 #include <zephyr/dt-bindings/gpio/realtek-rtl87x2g-gpio.h>
+
+#ifdef GPIO_INT_MASK
+#undef GPIO_INT_MASK
+#endif
+
+#include <rtl_rcc.h>
+#include <rtl_pinmux.h>
+#include <rtl_gpio.h>
 #include "gpio_rtl87x2g.h"
 #include <zephyr/drivers/gpio/gpio_utils.h>
 #include <zephyr/logging/log.h>
