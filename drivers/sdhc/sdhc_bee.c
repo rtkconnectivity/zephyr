@@ -796,12 +796,7 @@ static int sdhc_bee_init(const struct device *dev)
 
 	((SDHC_TypeDef *)sdhc_base)->RINTSTS = 0xffffffff;
 	((SDHC_TypeDef *)sdhc_base)->INTMASK = 0;
-
-	SDHC_CTRL_t ctrl = {.d32 = ((SDHC_TypeDef *)sdhc_base)->CTRL};
-
-	ctrl.b.int_enable = 1;
-	ctrl.b.use_internal_dmac = 1;
-	((SDHC_TypeDef *)sdhc_base)->CTRL = ctrl.d32;
+	((SDHC_TypeDef *)sdhc_base)->CTRL |= BIT(25) | BIT(4);
 
 	SDHC_SetClkOutFreq(sdhc_base, 400);
 
