@@ -32,6 +32,8 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(rtl87x2g_pm, LOG_LEVEL_INF);
 
+#define REALTEK_PM_STATISTICS        0
+
 struct k_work work_timeout_process;
 struct k_work work_device_resume;
 
@@ -200,12 +202,31 @@ static int rtl87x2g_power_init(void)
 
 	z_arm_nmi_set_handler(NMI_Handler);
 
+	LOG_INF("Original EXIT stage time = %d, Original ENTER stage time = %d",
+		platform_pm_system.stage_time[PLATFORM_PM_EXIT],
+		platform_pm_system.stage_time[PLATFORM_PM_ENTER]);
+
+	platform_pm_system.stage_time[PLATFORM_PM_EXIT] = 30;
+	platform_pm_system.stage_time[PLATFORM_PM_ENTER] = 50;
+
+	LOG_INF("Updated EXIT stage time = %d, Updated ENTER stage time = %d",
+		platform_pm_system.stage_time[PLATFORM_PM_EXIT],
+		platform_pm_system.stage_time[PLATFORM_PM_ENTER]);
+
 	platform_pm_register_callback_func_with_priority((void *)pm_suspend_devices_rtk,
-							 PLATFORM_PM_STORE, 1);
+							 PLATFORM_PM_ENTER, 1);
 	platform_pm_register_callback_func_with_priority((void *)pm_resume_devices_rtk,
 							 PLATFORM_PM_PEND, -1);
 	platform_pm_register_callback_func_with_priority(
 		(void *)pm_reusme_systick_and_process_timeout, PLATFORM_PM_PEND, INT8_MAX);
+
+#if REALTEK_PM_STATISTICS
+	platform_pm_feature_cfg.platform_stage_time = 1;
+	platform_pm_feature_cfg.platform_statistics = 1;
+	platform_pm_feature_cfg.platform_check_dbg = 1;
+	platform_pm_feature_cfg.platform_enter_dbg = 1;
+	platform_pm_feature_cfg.platform_exit_dbg = 1;
+#endif
 
 	return ret;
 }
