@@ -9,11 +9,26 @@ jobs:
   Build-ZMK:
     runs-on: ubuntu-latest
 
+    env:
+      ZSDK_VERSION: "0.16.0"
+      HOSTTYPE: "x86_64"
+
     container:
-      image: ghcr.io/zephyrproject-rtos/ci:v0.26.11
+      image: ghcr.io/zephyrproject-rtos/ci-base:latest
       options: '--entrypoint /bin/bash'
 
     steps:
+      - name: check size
+        run: |
+          df -h
+          ls -al /opt/
+          du -h --max-depth=1 /opt
+          sudo rm -rf /opt/fvps
+          echo "-----------------------"
+          df -h
+          echo "-----------------------"
+          du -h --max-depth=1 /opt
+
       - name: set_env
         run: |
           if [ "${{ github.event_name }}" = "pull_request" -o "${{ github.event_name }}" = "pull_request_target" ];then
@@ -24,17 +39,32 @@ jobs:
             echo "This is push"
             echo "EVENT_TRIGER_REF=${{ github.ref }}" >> $GITHUB_ENV
           fi
+
       - name: print_env
         run: |
           echo "sdk-version -> ${ZSDK_VERSION}"
           echo "event_triger_ref: ${EVENT_TRIGER_REF}"
           echo "${{ github.event.pull_request.head.sha || github.ref }}"
+
       - name: setup sdk
         shell: bash
         run: |
-            echo "zephyr sdk -> zephyr-sdk-${ZSDK_VERSION}"
-            ls /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}
-            /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}/setup.sh -c
+          mkdir -p /opt/toolchains
+          cd /opt/toolchains
+          wget -q --show-progress --progress=bar:force:noscroll https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${ZSDK_VERSION}/zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+          tar xf zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+          zephyr-sdk-${ZSDK_VERSION}/setup.sh -t all -h -c
+          rm zephyr-sdk-${ZSDK_VERSION}_linux-${HOSTTYPE}.tar.xz
+          echo "zephyr sdk -> zephyr-sdk-${ZSDK_VERSION}"
+          echo "-----------------------"
+          ls /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}
+          echo "-----------------------"
+          du -sh /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}
+          echo "-----------------------"
+          /opt/toolchains/zephyr-sdk-${ZSDK_VERSION}/setup.sh -c
+          echo "-----------------------"
+          df -h
+
       - name: checkout manifest
         uses: actions/checkout@v4
         with:
@@ -50,6 +80,7 @@ jobs:
             cd zmk
             west init -l app
             west update
+
       - name: check zephyr path and manifest_rev
         shell: bash
         run: |
@@ -80,6 +111,7 @@ jobs:
               git remote add origin ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}
               echo "need to checkout ${GITHUB_REPOSITORY} in zmk/$EVENT_PROJECT_PATH"
               echo "manifest_rev=$( git rev-parse manifest-rev )" >> $GITHUB_ENV
+
       - name: checkout event triggered ref
         uses: actions/checkout@v4
         with:
@@ -97,8 +129,10 @@ jobs:
           cd zmk/$EVENT_PROJECT_PATH
           echo "manifest_rev -> ${manifest_rev}"
           git branch manifest-rev $manifest_rev
+
       - name: do build
         shell: bash
         run: |
           cd zmk/app
           west build -p -b rtl8762gn_evb -- -DSHIELD=rtk_keyboard
+          rm -rf build
