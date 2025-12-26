@@ -602,7 +602,7 @@ static void wakeup_pad_pm_suspend(const struct device *port, struct pm_pad_node 
 
 			GPIO_SetPolarity(port_base, BIT(gpio_num),
 					 high_trigger ? GPIO_INT_POLARITY_ACTIVE_HIGH
-						      : GPIO_INT_POLARITY_ACTIVE_LOW)
+						      : GPIO_INT_POLARITY_ACTIVE_LOW);
 		} else {
 #endif
 			bool high_trigger = GPIO_GetPolarity(port_base, BIT(gpio_num)) ==

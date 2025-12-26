@@ -299,7 +299,6 @@ static int counter_bee_timer_pm_action(const struct device *dev, enum pm_device_
 	const struct counter_bee_config *cfg = dev->config;
 	struct counter_bee_data *data = dev->data;
 	void *timer_base = (void *)cfg->reg;
-	int err;
 
 	switch (action) {
 	case PM_DEVICE_ACTION_SUSPEND:
