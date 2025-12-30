@@ -1,11 +1,11 @@
-# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# Copyright(c) 2026, Realtek Semiconductor Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
 description: |
-        BEE COUNTER RTC.
+  Bee COUNTER RTC.
 
-        From the above, setting 'status' is required while the prescaler is
-        optional. Check below for more information on the prescaler.
+  From the above, setting 'status' is required while the prescaler is
+  optional. Check below for more information on the prescaler.
 
 compatible: "realtek,bee-rtc"
 

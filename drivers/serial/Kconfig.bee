@@ -1,10 +1,8 @@
-# BEE uart configuration
-
-# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config UART_BEE
-	bool "BEE MCU serial driver"
+	bool "UART driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_UART_ENABLED
 	select USE_HAL_REALTEK_UART
@@ -16,7 +14,7 @@ config UART_BEE
 	select DMA if UART_ASYNC_API
 
 	help
-	  Enable the bee uart driver.
+	  This option enables the UART driver for Realtek Bee SoCs.
 
 if UART_BEE
 config UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP

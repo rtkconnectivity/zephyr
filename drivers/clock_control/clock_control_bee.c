@@ -18,8 +18,8 @@
 #include <rtl876x_rcc.h>
 #endif
 
-#include <trace.h>
-#define DBG_DIRECT_SHOW 0
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(ir_bee, CONFIG_CLOCK_CONTROL_LOG_LEVEL);
 
 struct clock_control_bee_config {
 	uint32_t reg;
@@ -117,10 +117,8 @@ static int clock_control_bee_on(const struct device *dev, clock_control_subsys_t
 	uint16_t id = *(uint16_t *)sys;
 
 	RCC_PeriphClockCmd(bee_apb_table[id].apbperiph, bee_apb_table[id].apbperiph_clk, ENABLE);
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] sys=%d, apbperiph=0x%x, apbperiph_clk=0x%x", __func__, id,
+	LOG_DBG("[%s] sys=%d, apbperiph=0x%x, apbperiph_clk=0x%x", __func__, id,
 		   bee_apb_table[id].apbperiph, bee_apb_table[id].apbperiph_clk);
-#endif
 	return 0;
 }
 
@@ -130,10 +128,8 @@ static int clock_control_bee_off(const struct device *dev, clock_control_subsys_
 
 	RCC_PeriphClockCmd(bee_apb_table[id].apbperiph, bee_apb_table[id].apbperiph_clk, DISABLE);
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] sys=%d, apbperiph=%d, apbperiph_clk=%d", __func__, sys,
+	LOG_DBG("[%s] sys=%d, apbperiph=%d, apbperiph_clk=%d", __func__, id,
 		   bee_apb_table[id].apbperiph, bee_apb_table[id].apbperiph_clk);
-#endif
 	return 0;
 }
 
@@ -153,16 +149,12 @@ static enum clock_control_status clock_control_bee_get_status(const struct devic
 		}
 	} else {
 		if (sys_test_bit(config->reg + apbRegOff, clk_func) != 0) {
-#if DBG_DIRECT_SHOW
-			DBG_DIRECT("[%s] sys=%d, status=on", __func__, sys);
-#endif
+			LOG_DBG("[%s] sys=%d, status=on", __func__, id);
 			return CLOCK_CONTROL_STATUS_ON;
 		}
 	}
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] sys=%d, status=off", __func__, sys);
-#endif
+	LOG_DBG("[%s] sys=%d, status=off", __func__, id);
 	return CLOCK_CONTROL_STATUS_OFF;
 }
 #endif

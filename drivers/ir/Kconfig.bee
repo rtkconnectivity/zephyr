@@ -1,13 +1,11 @@
-# BEE ir configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config IR_BEE
-	bool "BEE MCU ir driver"
+	bool "IR driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_IR_ENABLED
 	select USE_HAL_REALTEK_IR
 
 	help
-	  Enable the bee ir driver.
+	  This option enables the IR driver for Realtek Bee SoCs.

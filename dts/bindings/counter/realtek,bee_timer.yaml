@@ -1,8 +1,8 @@
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright(c) 2026, Realtek Semiconductor Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
 description: |
-        BEE COUNTER TIMER.
+        Bee COUNTER TIMER.
         Each Timer is part of a Timer Group and the number of available Timers
         is SoC-dependent.
         RTL87X2G has 12 Timers available, 8 normal timer and 4 advanced timer.

@@ -1,12 +1,10 @@
-# BEE dma configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config DMA_BEE
-	bool "BEE MCU DMA driver"
+	bool "DMA driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_DMA_ENABLED
 	select USE_HAL_REALTEK_DMA
 	help
-	  Enable the bee dma driver.
+	  This option enables the DMA driver for Realtek Bee SoCs.

@@ -28,9 +28,8 @@
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(spi_bee, CONFIG_SPI_LOG_LEVEL);
-#include "spi_context.h"
 
-#include "trace.h"
+#include "spi_context.h"
 
 #ifdef CONFIG_SPI_BEE_DMA
 

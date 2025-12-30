@@ -1,15 +1,13 @@
-# BEE i2c configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config I2C_BEE
-	bool "BEE I2C driver"
+	bool "I2C driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_I2C_ENABLED
 	select USE_HAL_REALTEK_I2C
 	help
-	  Enable the bee i2c driver.
+	  This option enables the I2C driver for Realtek Bee SoCs.
 
 if I2C_BEE
 
@@ -17,6 +15,6 @@ config I2C_BEE_INTERRUPT
 	bool
 	default n
 	help
-	  Do transfer with i2c interrupt.
+	  Do transfer with I2C interrupt.
 
 endif

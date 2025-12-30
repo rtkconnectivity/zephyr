@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2025, Realtek Semiconductor Corporation.
+ * Copyright (c) 2026 Realtek Semiconductor Corp.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -10,6 +10,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <soc.h>
+#include <zephyr/drivers/clock_control.h>
+#include <zephyr/drivers/reset.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/clock_control/bee_clock_control.h>
 #include <zephyr/sys/util.h>
@@ -33,10 +35,12 @@
 #include <rtl876x_gpio.h>
 #endif
 
-#include "gpio_bee.h"
+#ifdef CONFIG_PM_DEVICE
+#include <zephyr/sys/slist.h>
+#endif
+
 #include <zephyr/drivers/gpio/gpio_utils.h>
 #include <zephyr/logging/log.h>
-#include "trace.h"
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define BEE_GPIO_WriteBit(port, bit, val)            GPIO_WriteBit(port, bit, val)
@@ -77,6 +81,55 @@ LOG_MODULE_REGISTER(gpio_bee, CONFIG_GPIO_LOG_LEVEL);
 extern void GPIO_DLPSEnter(void *PeriReg, void *StoreBuf);
 extern void GPIO_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
+
+struct gpio_bee_irq_info {
+	const struct device *irq_dev;
+	uint8_t num_irq;
+	struct gpio_irq_info {
+		uint32_t irq;
+		uint32_t priority;
+	} gpio_irqs[];
+};
+
+struct gpio_bee_config {
+	struct gpio_driver_config common;
+	uint16_t clkid;
+	uint8_t port_num;
+	GPIO_TypeDef *port_base;
+	struct gpio_bee_irq_info *irq_info;
+};
+
+#ifdef CONFIG_PM_DEVICE
+enum pm_pad_mode {
+	PM_PAD_OUTPUT,
+	PM_PAD_INPUT,
+	PM_PAD_WAKEUP,
+};
+
+struct pm_pad_node {
+	sys_snode_t node;
+	uint8_t pad_num;
+	uint8_t gpio_num;
+	bool read_before_dlps;
+	enum pm_pad_mode mode;
+};
+
+struct pm_pad_node_list {
+	sys_slist_t list;
+	struct pm_pad_node *array;
+};
+#endif
+
+struct gpio_bee_data {
+	struct gpio_driver_data common;
+	const struct device *dev;
+	sys_slist_t cb;
+	uint8_t pin_debounce_ms[32];
+#ifdef CONFIG_PM_DEVICE
+	GPIOStoreReg_Typedef store_buf;
+	struct pm_pad_node_list list;
+#endif
+};
 
 static int gpio_bee_gpio2pad(uint8_t port_num, uint32_t pin)
 {

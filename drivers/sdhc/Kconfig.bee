@@ -1,17 +1,15 @@
-# BEE sdhc configuration
-
-# Copyright(c) 2020, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config SDHC_BEE
-	bool "BEE MCU serial driver"
+	bool "SDHC driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_SDHC_ENABLED
 	select USE_HAL_REALTEK_SDHC
 	select SDHC_SUPPORTS_NATIVE_MODE
 
 	help
-	  Enable the BEE sdhc driver.
+	  This option enables the SDHC driver for Realtek Bee SoCs.
 
 if SDHC_BEE
 config SDHC_BUFFER_ALIGNMENT

@@ -22,8 +22,6 @@
 #include <rtl876x_gdma.h>
 #endif
 
-#include <trace.h>
-
 BUILD_ASSERT(CONFIG_HEAP_MEM_POOL_SIZE > 0);
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
@@ -33,8 +31,6 @@ BUILD_ASSERT(CONFIG_HEAP_MEM_POOL_SIZE > 0);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define DMA_HAS_MULTI_BLOCK_MODE(id) ((id) == 0 || (id) == 1)
 #endif
-
-#define DBG_DIRECT_SHOW 0
 
 LOG_MODULE_REGISTER(dma_bee, CONFIG_DMA_LOG_LEVEL);
 
@@ -81,8 +77,7 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 	GDMA_ChannelTypeDef *dma_channel;
 	struct dma_block_config *cur_block;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel=%d, channel_direction=%d, block_size=%d, "
+	LOG_DBG("[%s] channel=%d, channel_direction=%d, block_size=%d, "
 		   "source_addr_adj=%d dest_addr_adj=%d, "
 		   "source_data_size=%d, dest_data_size=%d, source_burst_length=%d, "
 		   "dest_burst_length=%d, dma_cfg->dma_slot=%d, line%d",
@@ -90,10 +85,9 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 		   dma_cfg->head_block->source_addr_adj, dma_cfg->head_block->dest_addr_adj,
 		   dma_cfg->source_data_size, dma_cfg->dest_data_size, dma_cfg->source_burst_length,
 		   dma_cfg->dest_burst_length, dma_cfg->dma_slot, __LINE__);
-	DBG_DIRECT("[%s] channel=%d, source_address=%x, dest_address=%x, line%d", __func__, channel,
+	LOG_DBG("[%s] channel=%d, source_address=%x, dest_address=%x, line%d", __func__, channel,
 		   dma_cfg->head_block->source_address, dma_cfg->head_block->dest_address,
 		   __LINE__);
-#endif
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
@@ -271,10 +265,8 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 		dma_init_struct.GDMA_SourceHandshake = dma_cfg->dma_slot;
 	}
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel=%d, dma_init_struct.GDMA_BufferSize=%d, line%d", __func__, channel,
+	LOG_DBG("[%s] channel=%d, dma_init_struct.GDMA_BufferSize=%d, line%d", __func__, channel,
 		   dma_init_struct.GDMA_BufferSize, __LINE__);
-#endif
 
 	dma_init_struct.GDMA_SourceInc = dma_cfg->head_block->source_addr_adj;
 	dma_init_struct.GDMA_DestinationInc = dma_cfg->head_block->dest_addr_adj;
@@ -354,13 +346,13 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 static int dma_bee_reload(const struct device *dev, uint32_t channel, uint32_t src, uint32_t dst,
 			  size_t size)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel=%d, line%d", __func__, channel, __LINE__);
-#endif
+
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
+
+	LOG_DBG("[%s] channel=%d, line%d", __func__, channel, __LINE__);
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
@@ -408,13 +400,12 @@ static int dma_bee_reload(const struct device *dev, uint32_t channel, uint32_t s
 
 static int dma_bee_start(const struct device *dev, uint32_t channel)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel=%d, line%d", __func__, channel, __LINE__);
-#endif
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
+
+	LOG_DBG("[%s] channel=%d, line%d", __func__, channel, __LINE__);
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
@@ -453,13 +444,12 @@ static int dma_bee_start(const struct device *dev, uint32_t channel)
 
 static int dma_bee_stop(const struct device *dev, uint32_t channel)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel=%d, line%d", __func__, channel, __LINE__);
-#endif
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
 	GDMA_ChannelTypeDef *dma_channel;
+
+	LOG_DBG("[%s] channel=%d, line%d", __func__, channel, __LINE__);
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
 	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
@@ -637,12 +627,10 @@ static void dma_bee_isr(struct dma_bee_isr_param *param)
 	ftfflag = GDMA_GetTransferINTStatus(dma_channel_num);
 	blockflag = GDMA_GetBlockINTStatus(dma_channel_num);
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel %d transferlen%d callback%x ftfflag%d "
+	LOG_DBG("[%s] channel %d transferlen%d callback0x%p ftfflag%d "
 		   "errflag%d blockflag%d complete_callback_en%d",
 		   __func__, i, GDMA_GetTransferLen(dma_channel), data->channels[i].callback,
 		   ftfflag, errflag, blockflag, data->channels[i].cfg.complete_callback_en);
-#endif
 
 	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
 		if (errflag == 0 && ftfflag == 0) {
