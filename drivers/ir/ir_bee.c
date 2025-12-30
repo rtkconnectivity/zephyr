@@ -25,9 +25,6 @@
 #include <rtl876x_ir.h>
 
 #include <zephyr/logging/log.h>
-
-#include <trace.h>
-#define DBG_DIRECT_SHOW 0
 LOG_MODULE_REGISTER(ir_bee, CONFIG_IR_LOG_LEVEL);
 
 #define PINCTRL_STATE_IR_TX (PINCTRL_STATE_PRIV_START + 1)
@@ -101,13 +98,12 @@ struct ir_bee_data {
 static void ir_bee_dma_tx_cb(const struct device *dma_dev, void *user_data, uint32_t channel,
 			     int status)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] line%d", __func__, __LINE__);
-#endif
 	ARG_UNUSED(dma_dev);
 	ARG_UNUSED(user_data);
 	ARG_UNUSED(channel);
 	ARG_UNUSED(status);
+
+	LOG_DBG("[%s] line%d", __func__, __LINE__);
 }
 #endif
 
@@ -115,12 +111,11 @@ static void ir_bee_dma_tx_cb(const struct device *dma_dev, void *user_data, uint
 static void ir_bee_dma_rx_cb(const struct device *dma_dev, void *user_data, uint32_t channel,
 			     int status)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] line%d", __func__, __LINE__);
-#endif
 	struct device *dev = (struct device *)user_data;
 	struct ir_bee_data *data = dev->data;
 	struct ir_event evt;
+
+	LOG_DBG("[%s] line%d", __func__, __LINE__);
 
 	if (data->rx_buf_index == 0) {
 		evt.data.rx.buf = data->rx_buf[0];
@@ -184,10 +179,8 @@ static int ir_bee_set_freq(const struct device *dev, uint32_t freq, uint8_t duty
 	data->frequency = freq;
 	data->duty = duty;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] frequency%d duty%d line%d", __func__, data->frequency, data->duty,
+	LOG_DBG("[%s] frequency%d duty%d line%d", __func__, data->frequency, data->duty,
 		   __LINE__);
-#endif
 
 	return 0;
 }
@@ -258,9 +251,7 @@ static int ir_bee_tx(const struct device *dev, const uint32_t *buf, size_t len)
 	struct ir_bee_data *data = dev->data;
 	int err;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] buf0x%x len%d line%d", __func__, buf, len, __LINE__);
-#endif
+	LOG_DBG("[%s] buf0x%x len%d line%d", __func__, buf, len, __LINE__);
 
 	if (buf == NULL) {
 		return -EINVAL;
@@ -493,12 +484,11 @@ static int ir_bee_rx_disable(const struct device *dev, struct ir_event_rx *rx_da
 
 static void ir_bee_isr(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] line%d", __func__, __LINE__);
-#endif
 	struct ir_bee_data *data = dev->data;
 	uint8_t tx_len = data->tx_len;
 	struct ir_event evt;
+
+	LOG_DBG("[%s] line%d", __func__, __LINE__);
 
 	memset(&evt, 0, sizeof(evt));
 

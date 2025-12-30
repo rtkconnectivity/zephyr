@@ -1,16 +1,14 @@
-# BEE i2s configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 menuconfig I2S_BEE
-	bool "BEE MCU i2s controller driver"
+	bool "I2S driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_I2S_ENABLED
 	select DMA
 	select USE_HAL_REALTEK_I2S
 	help
-	  Enable the bee i2s driver.
+	  This option enables the I2S driver for Realtek Bee SoCs.
 
 if I2S_BEE
 

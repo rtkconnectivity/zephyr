@@ -1,15 +1,13 @@
-# BEE spi configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config SPI_BEE
-	bool "BEE SPI driver"
+	bool "SPI driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_SPI_ENABLED
 	select USE_HAL_REALTEK_SPI
 	help
-	  Enables the bee spi driver.
+	  This option enables the SPI driver for Realtek Bee SoCs.
 
 if SPI_BEE
 

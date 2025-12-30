@@ -1,8 +1,8 @@
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright(c) 2026, Realtek Semiconductor Corporation.
 # SPDX-License-Identifier: Apache-2.0
 
 description: |
-  BEE ADC.
+  Bee ADC controller.
   The RTL87X2G ADC has 9 channels. Pinctrl must be configured as "SW_MODE" while using ADC.
   P2_0 to P2_7 could be configured as ADC sampling pins, corresponding to ADC channel 0 to 7.
   The last adc channel(channel8) is internal vbat channel, which does not need a external pin

@@ -1,15 +1,13 @@
-# BEE CAN configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config CAN_BEE
-	bool "BEE CAN driver"
+	bool "CAN driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_CAN_ENABLED
 	select USE_HAL_REALTEK_CAN
 	help
-	  Enable the BEE CAN driver.
+	  This option enables the CAN driver for Realtek Bee SoCs.
 
 if CAN_BEE
 

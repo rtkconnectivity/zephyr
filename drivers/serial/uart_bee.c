@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2025, Realtek Semiconductor Corporation.
+ * Copyright (c) 2026 Realtek Semiconductor Corp.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,14 +12,13 @@
 #include <soc.h>
 #include <zephyr/init.h>
 #include <zephyr/linker/sections.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/clock_control/bee_clock_control.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/irq.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
-
-#include "uart_bee.h"
 
 #ifdef CONFIG_UART_ASYNC_API
 #include <zephyr/drivers/dma/dma_bee.h>
@@ -35,6 +34,26 @@
 #include <rtl_uart.h>
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_uart.h>
+#endif
+
+#ifdef CONFIG_UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#include <rtl_pinmux.h>
+#include <pm.h>
+#include "power_manager_unit_platform.h"
+#define BEE_PM_CHECK_PASS PM_CHECK_PASS
+#define BEE_PM_CHECK_FAIL PM_CHECK_FAIL
+#define BEE_PM_CHECK_RET  PMCheckResult
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#include <rtl876x_pinmux.h>
+#include <dlps.h>
+#define BEE_PM_CHECK_PASS PM_CHECK_PASS
+#define BEE_PM_CHECK_FAIL PM_CHECK_FAIL
+#define BEE_PM_CHECK_RET  PMCheckResult
+extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
+								PlatformPMStage pf_pm_stage,
+								int8_t priority);
+#endif
 #endif
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
@@ -53,8 +72,6 @@
 
 #include <zephyr/logging/log.h>
 
-#include <trace.h>
-#define DBG_DIRECT_SHOW 0
 LOG_MODULE_REGISTER(uart_bee, CONFIG_UART_LOG_LEVEL);
 
 #ifdef CONFIG_UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
@@ -72,6 +89,61 @@ static const struct device *const devices[] = {
 extern void UART_DLPSEnter(void *PeriReg, void *StoreBuf);
 extern void UART_DLPSExit(void *PeriReg, void *StoreBuf);
 #endif
+
+struct uart_bee_config {
+	UART_TypeDef *uart;
+	uint16_t clkid;
+	bool hw_flow_ctrl;
+	const struct pinctrl_dev_config *pcfg;
+#if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
+	uart_irq_config_func_t irq_config_func;
+#endif
+};
+
+#ifdef CONFIG_UART_ASYNC_API
+struct uart_dma_stream {
+	const struct device *dma_dev;
+	uint32_t dma_channel;
+	struct dma_config dma_cfg;
+	uint8_t priority;
+	uint8_t src_addr_increment;
+	uint8_t dst_addr_increment;
+	int fifo_threshold;
+	struct dma_block_config blk_cfg;
+	uint8_t *buffer;
+	size_t buffer_length;
+	size_t offset;
+	volatile size_t counter;
+	int32_t timeout;
+	struct k_work_delayable timeout_work;
+	bool enabled;
+};
+#endif
+
+struct uart_bee_data {
+	const struct device *dev;
+	struct uart_config uart_config;
+#ifdef CONFIG_UART_INTERRUPT_DRIVEN
+	uart_irq_callback_user_data_t user_cb;
+	void *user_data;
+	bool tx_int_en;
+	bool rx_int_en;
+#endif
+#ifdef CONFIG_UART_ASYNC_API
+	uart_callback_t async_cb;
+	void *async_user_data;
+	struct uart_dma_stream dma_rx;
+	struct uart_dma_stream dma_tx;
+	uint8_t *rx_next_buffer;
+	size_t rx_next_buffer_len;
+#endif
+#ifdef CONFIG_PM_DEVICE
+#ifdef CONFIG_UART_BEE_KEEP_ACTIVE_AFTER_RX_WAKEUP
+	BEE_PM_CHECK_RET uart_pm_check_state_idle;
+#endif
+	UARTStoreReg_Typedef store_buf;
+#endif
+};
 
 static const uint32_t RTL_UART_BAUDRATE_TABLE[][3] = {
 	{271, 10, 0x24A}, /* 9600    */
@@ -192,11 +264,9 @@ static int uart_bee_configure(const struct device *dev, const struct uart_config
 		return -ENOTSUP;
 	}
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] baudrate_idx=%d, wordlen=%d, stopbits=%d, parity=%d, "
+	LOG_DBG("[%s] baudrate_idx=%d, wordlen=%d, stopbits=%d, parity=%d, "
 		   "hw_flow_ctrl=%d",
 		   __func__, baudrate_idx, wordlen, stopbits, parity, config->hw_flow_ctrl);
-#endif
 
 	UART_StructInit(&uart_init_struct);
 	uart_init_struct.UART_Div = RTL_UART_BAUDRATE_TABLE[baudrate_idx][0];
@@ -250,9 +320,7 @@ static int uart_bee_poll_in(const struct device *dev, unsigned char *c)
 	if (!UART_GetFlagStatus(uart, UART_FLAG_RX_DATA_AVA)) {
 		return -1;
 	}
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] c=%c", __func__, *c);
-#endif
+	LOG_DBG("[%s] c=%c", __func__, *c);
 
 	*c = (unsigned char)UART_ReceiveByte(uart);
 
@@ -317,9 +385,8 @@ static int uart_bee_fifo_fill(const struct device *dev, const uint8_t *tx_data, 
 
 	irq_unlock(key);
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] num_tx=%d", __func__, num_tx);
-#endif
+	LOG_DBG("[%s] num_tx=%d", __func__, num_tx);
+
 	return num_tx;
 }
 
@@ -333,9 +400,8 @@ static int uart_bee_fifo_read(const struct device *dev, uint8_t *rx_data, const 
 		rx_data[num_rx++] = UART_ReceiveByte(uart);
 	}
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] num_rx=%d", __func__, num_rx);
-#endif
+	LOG_DBG("[%s] num_rx=%d", __func__, num_rx);
+
 	return num_rx;
 }
 
@@ -345,9 +411,7 @@ static void uart_bee_irq_tx_enable(const struct device *dev)
 	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data = dev->data;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	data->tx_int_en = true;
 	UART_INTConfig(uart, UART_INT_TX_FIFO_EMPTY, ENABLE);
@@ -359,9 +423,7 @@ static void uart_bee_irq_tx_disable(const struct device *dev)
 	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data = dev->data;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	data->tx_int_en = false;
 	UART_INTConfig(uart, UART_INT_TX_FIFO_EMPTY, DISABLE);
@@ -377,9 +439,8 @@ static int uart_bee_irq_tx_ready(const struct device *dev)
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
+
 	return UART_GetFlagStatus(uart, UART_FLAG_TX_EMPTY) && data->tx_int_en;
 }
 
@@ -394,9 +455,7 @@ static void uart_bee_irq_rx_enable(const struct device *dev)
 	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data = dev->data;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	data->rx_int_en = true;
 	UART_INTConfig(uart, UART_INT_RD_AVA, ENABLE);
@@ -415,9 +474,7 @@ static void uart_bee_irq_rx_disable(const struct device *dev)
 	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data = dev->data;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	data->rx_int_en = false;
 	UART_INTConfig(uart, UART_INT_RD_AVA, DISABLE);
@@ -437,9 +494,7 @@ static int uart_bee_irq_rx_ready(const struct device *dev)
 	struct uart_bee_data *data;
 	int status;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	status = UART_GetFlagStatus(uart, UART_FLAG_RX_DATA_AVA);
 
@@ -461,9 +516,7 @@ static void uart_bee_irq_err_enable(const struct device *dev)
 
 	data = dev->data;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	UART_INTConfig(uart, UART_INT_RX_LINE_STS, ENABLE);
 
@@ -480,9 +533,7 @@ static void uart_bee_irq_err_disable(const struct device *dev)
 
 	data = dev->data;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	UART_INTConfig(uart, UART_INT_RX_LINE_STS, DISABLE);
 
@@ -497,9 +548,7 @@ static int uart_bee_irq_is_pending(const struct device *dev)
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	return ((UART_GetFlagStatus(uart, UART_FLAG_TX_EMPTY) && data->tx_int_en) ||
 		(UART_GetFlagStatus(uart, UART_INT_RD_AVA) && data->rx_int_en));
@@ -515,9 +564,7 @@ static void uart_bee_irq_callback_set(const struct device *dev, uart_irq_callbac
 {
 	struct uart_bee_data *data = dev->data;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	data->user_cb = cb;
 	data->user_data = cb_data;
@@ -556,15 +603,13 @@ static inline void async_user_callback(struct uart_bee_data *data, struct uart_e
 
 static inline void async_evt_rx_rdy(struct uart_bee_data *data)
 {
-	LOG_DBG("rx_rdy: (%d %d)", data->dma_rx.offset, data->dma_rx.counter);
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] data->dma_rx.counter=%d, data->dma_rx.offset=%d", __func__,
-		   data->dma_rx.counter, data->dma_rx.offset);
-#endif
 	struct uart_event event = {.type = UART_RX_RDY,
 				   .data.rx.buf = data->dma_rx.buffer,
 				   .data.rx.len = data->dma_rx.counter - data->dma_rx.offset,
 				   .data.rx.offset = data->dma_rx.offset};
+
+	LOG_DBG("[%s] data->dma_rx.counter=%d, data->dma_rx.offset=%d", __func__,
+		   data->dma_rx.counter, data->dma_rx.offset);
 
 	/* update the current pos for new data */
 	data->dma_rx.offset = data->dma_rx.counter;
@@ -651,20 +696,17 @@ static void uart_bee_dma_rx_flush(const struct device *dev)
 	struct dma_status stat;
 	struct uart_bee_data *data = dev->data;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 
 	if (dma_get_status(data->dma_rx.dma_dev, data->dma_rx.dma_channel, &stat) == 0) {
 		size_t rx_rcv_len = data->dma_rx.buffer_length - stat.pending_length;
-#if DBG_DIRECT_SHOW
-		DBG_DIRECT("[%s] data->dma_rx.buffer_length=%d, stat.pending_length=%d, "
+
+		LOG_DBG("[%s] data->dma_rx.buffer_length=%d, stat.pending_length=%d, "
 			   "rx_rcv_len=%d, "
 			   "data->dma_rx.offset=%d, rx fifo=%d",
 			   __func__, data->dma_rx.buffer_length, stat.pending_length, rx_rcv_len,
 			   data->dma_rx.offset,
 			   UART_GetRxFIFOLen(((struct uart_bee_config *)(dev->config))->uart));
-#endif
 		if (rx_rcv_len > data->dma_rx.offset) {
 			data->dma_rx.counter = rx_rcv_len;
 
@@ -675,12 +717,11 @@ static void uart_bee_dma_rx_flush(const struct device *dev)
 
 static inline void uart_bee_dma_tx_enable(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	const struct uart_bee_config *config = dev->config;
 	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data;
+
+	LOG_DBG("[%s]", __func__);
 
 	data = dev->data;
 
@@ -692,12 +733,11 @@ static inline void uart_bee_dma_tx_enable(const struct device *dev)
 
 static inline void uart_bee_dma_tx_disable(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	const struct uart_bee_config *config = dev->config;
 	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data;
+
+	LOG_DBG("[%s]", __func__);
 
 	data = dev->data;
 
@@ -709,12 +749,11 @@ static inline void uart_bee_dma_tx_disable(const struct device *dev)
 
 static inline void uart_bee_dma_rx_enable(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	const struct uart_bee_config *config = dev->config;
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
+
+	LOG_DBG("[%s]", __func__);
 
 	UART_RxDmaCmd(uart, true);
 
@@ -727,12 +766,11 @@ static inline void uart_bee_dma_rx_enable(const struct device *dev)
 
 static inline void uart_bee_dma_rx_disable(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	const struct uart_bee_config *config = dev->config;
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
+
+	LOG_DBG("[%s]", __func__);
 
 	UART_RxDmaCmd(uart, false);
 
@@ -759,10 +797,8 @@ void uart_bee_dma_tx_cb(const struct device *dma_dev, void *user_data, uint32_t 
 		data->dma_tx.counter = data->dma_tx.buffer_length - stat.pending_length;
 	}
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel=%d, status=%d, dma_tx.counter=%d", __func__, channel, status,
+	LOG_DBG("[%s] channel=%d, status=%d, dma_tx.counter=%d", __func__, channel, status,
 		   data->dma_tx.counter);
-#endif
 
 	data->dma_tx.buffer_length = 0;
 
@@ -776,14 +812,11 @@ void uart_bee_dma_tx_cb(const struct device *dma_dev, void *user_data, uint32_t 
 
 static void uart_bee_dma_replace_buffer(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	const struct device *uart_dev = dev;
 	struct uart_bee_data *data = uart_dev->data;
 
 	/* Replace the buffer and reload the DMA */
-	LOG_DBG("Replacing RX buffer: %d", data->rx_next_buffer_len);
+	LOG_DBG("[%s] Replacing RX buffer: %d", __func__, data->rx_next_buffer_len);
 
 	/* reload DMA */
 	data->dma_rx.offset = 0;
@@ -807,11 +840,10 @@ static void uart_bee_dma_replace_buffer(const struct device *dev)
 
 void uart_bee_dma_rx_cb(const struct device *dma_dev, void *user_data, uint32_t channel, int status)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] channel=%d, status=%d", __func__, channel, status);
-#endif
 	const struct device *uart_dev = user_data;
 	struct uart_bee_data *data = uart_dev->data;
+
+	LOG_DBG("[%s] channel=%d, status=%d", __func__, channel, status);
 
 	if (status < 0) {
 		async_evt_rx_err(data, status);
@@ -826,36 +858,28 @@ void uart_bee_dma_rx_cb(const struct device *dma_dev, void *user_data, uint32_t 
 	async_evt_rx_rdy(data);
 
 	if (data->rx_next_buffer != NULL) {
-#if DBG_DIRECT_SHOW
-		DBG_DIRECT("[%s] channel=%d, status=%d, data->rx_next_buffer "
-			   "= 0x%x",
+		LOG_DBG("[%s] channel=%d, status=%d, data->rx_next_buffer "
+			   "= 0x%p",
 			   __func__, channel, status, data->rx_next_buffer);
-#endif
 		async_evt_rx_buf_release(data);
 
 		/* replace the buffer when the current is full and not the same as the next one. */
 		uart_bee_dma_replace_buffer(uart_dev);
 	} else {
-#if DBG_DIRECT_SHOW
-		DBG_DIRECT("[%s] channel=%d, status=%d, data->rx_next_buffer "
+		LOG_DBG("[%s] channel=%d, status=%d, data->rx_next_buffer "
 			   "== NULL",
 			   __func__, channel, status);
-#endif
 
 		k_work_reschedule(&data->dma_rx.timeout_work, K_TICKS(1));
 	}
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] exit", __func__);
-#endif
 }
 
 static int uart_bee_async_callback_set(const struct device *dev, uart_callback_t callback,
 				       void *user_data)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	struct uart_bee_data *data = dev->data;
+
+	LOG_DBG("[%s]", __func__);
 
 	data->async_cb = callback;
 	data->async_user_data = user_data;
@@ -866,11 +890,10 @@ static int uart_bee_async_callback_set(const struct device *dev, uart_callback_t
 static int uart_bee_async_tx(const struct device *dev, const uint8_t *tx_data, size_t buf_size,
 			     int32_t timeout)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] bufsize=%d, timeout=%d", __func__, buf_size, timeout);
-#endif
 	struct uart_bee_data *data = dev->data;
 	int ret;
+
+	LOG_DBG("[%s] bufsize=%d, timeout=%d", __func__, buf_size, timeout);
 
 	if (data->dma_tx.dma_dev == NULL) {
 		return -ENODEV;
@@ -913,12 +936,11 @@ static int uart_bee_async_tx(const struct device *dev, const uint8_t *tx_data, s
 
 static int uart_bee_async_tx_abort(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	struct uart_bee_data *data = dev->data;
 	size_t tx_buffer_length = data->dma_tx.buffer_length;
 	struct dma_status stat;
+
+	LOG_DBG("[%s]", __func__);
 
 	if (tx_buffer_length == 0) {
 		return -EFAULT;
@@ -941,13 +963,12 @@ static int uart_bee_async_tx_abort(const struct device *dev)
 static int uart_bee_async_rx_enable(const struct device *dev, uint8_t *rx_buf, size_t buf_size,
 				    int32_t timeout)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] buf_size=%d, timeout=%d", __func__, buf_size, timeout);
-#endif
 	const struct uart_bee_config *config = dev->config;
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
 	int ret;
+
+	LOG_DBG("[%s] buf_size=%d, timeout=%d", __func__, buf_size, timeout);
 
 	uint32_t cnt = UART_GetRxFIFOLen(uart);
 
@@ -1013,12 +1034,10 @@ static int uart_bee_async_rx_enable(const struct device *dev, uint8_t *rx_buf, s
 
 static int uart_bee_async_rx_buf_rsp(const struct device *dev, uint8_t *buf, size_t len)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] buf=0x%x len=%d", __func__, buf, len);
-#endif
 	struct uart_bee_data *data = dev->data;
 
-	LOG_DBG("replace buffer (%d)", len);
+	LOG_DBG("[%s] buf=0x%p len=%d", __func__, buf, len);
+
 	data->rx_next_buffer = buf;
 	data->rx_next_buffer_len = len;
 
@@ -1027,13 +1046,12 @@ static int uart_bee_async_rx_buf_rsp(const struct device *dev, uint8_t *buf, siz
 
 static int uart_bee_async_rx_disable(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	const struct uart_bee_config *config = dev->config;
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
 	struct uart_event disabled_event = {.type = UART_RX_DISABLED};
+
+	LOG_DBG("[%s]", __func__);
 
 	if (!data->dma_rx.enabled) {
 		async_user_callback(data, &disabled_event);
@@ -1077,14 +1095,13 @@ static int uart_bee_async_rx_disable(const struct device *dev)
 
 static void uart_bee_async_tx_timeout(struct k_work *work)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
 	struct uart_dma_stream *tx_stream =
 		CONTAINER_OF(dwork, struct uart_dma_stream, timeout_work);
 	struct uart_bee_data *data = CONTAINER_OF(tx_stream, struct uart_bee_data, dma_tx);
 	const struct device *dev = data->dev;
+
+	LOG_DBG("[%s]", __func__);
 
 	uart_bee_async_tx_abort(dev);
 
@@ -1099,13 +1116,9 @@ static void uart_bee_async_rx_timeout(struct k_work *work)
 	struct uart_bee_data *data = CONTAINER_OF(rx_stream, struct uart_bee_data, dma_rx);
 	const struct device *dev = data->dev;
 
-	LOG_DBG("rx timeout");
-
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] data->dma_rx.counter=%d, "
+	LOG_DBG("[%s] data->dma_rx.counter=%d, "
 		   "data->dma_rx.buffer_length=%d",
 		   __func__, data->dma_rx.counter, data->dma_rx.buffer_length);
-#endif
 	if (data->dma_rx.counter == data->dma_rx.buffer_length) {
 		uart_bee_async_rx_disable(dev);
 	} else {
@@ -1118,12 +1131,11 @@ static void uart_bee_async_rx_timeout(struct k_work *work)
 
 static int uart_bee_async_init(const struct device *dev)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
 	const struct uart_bee_config *config = dev->config;
 	struct uart_bee_data *data = dev->data;
 	UART_TypeDef *uart = config->uart;
+
+	LOG_DBG("[%s]", __func__);
 
 	data->dev = dev;
 
@@ -1209,21 +1221,17 @@ static void uart_bee_isr(const struct device *dev)
 #ifdef CONFIG_UART_ASYNC_API
 		if (data->dma_rx.dma_dev) {
 			if (data->dma_rx.timeout == 0) {
-#if DBG_DIRECT_SHOW
-				DBG_DIRECT("[%s] UART_FLAG_RX_IDLE timeout == 0", __func__);
-#endif
+				LOG_DBG("[%s] UART_FLAG_RX_IDLE timeout == 0", __func__);
 				uart_bee_dma_rx_flush(dev);
 			} else {
-#if DBG_DIRECT_SHOW
 				extern GDMA_ChannelTypeDef *GDMA_GetGDMAChannelx(
 					uint8_t GDMA_ChannelNum);
 
 				dma_suspend(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
-				DBG_DIRECT("[%s] dma len=%d", __func__,
+				LOG_DBG("[%s] dma len=%d", __func__,
 					   GDMA_GetTransferLen(
 						   GDMA_GetGDMAChannelx(data->dma_rx.dma_channel)));
 				dma_resume(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
-#endif
 
 				/* Start the RX timer not null */
 				UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
@@ -1245,10 +1253,6 @@ static void uart_bee_isr(const struct device *dev)
 	/* Clear errors */
 	uart_bee_err_check(dev);
 #endif /* CONFIG_UART_ASYNC_API */
-
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] exit", __func__);
-#endif
 }
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN || CONFIG_UART_ASYNC_API */
 
@@ -1390,9 +1394,7 @@ static int uart_bee_init(const struct device *dev)
 	struct uart_bee_data *data = dev->data;
 	int err;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s]", __func__);
-#endif
+	LOG_DBG("[%s]", __func__);
 	data->dev = dev;
 
 	/* Configure pinmux  */

@@ -12,9 +12,6 @@
 #include <rtl876x_pinmux.h>
 #endif
 
-#include <trace.h>
-#define DBG_DIRECT_SHOW 0
-
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define bee_pad_set_pull(pin, stre)       Pad_SetPullStrength(pin, stre)
 #define bee_pad_wakeup(pin, pol, en, deb) System_WakeUpPinEnable(pin, pol, en)
@@ -43,15 +40,10 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 	uint32_t cfg_wakeup_low = pin[0].wakeup_low;
 	uint32_t current_level = pin[0].current_level;
 
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] cfg_fun=%d, cfg_pin=%d, cfg_dir=%d,"
-		   " cfg_drv=%d , cfg_pull=%d, cfg_pull_strength=%d, cfg_wakeup_high=%d, "
-		   "cfg_wakeup_low=%d, current_level=%d",
-		   __func__, cfg_fun, cfg_pin, cfg_dir, cfg_drv, cfg_pull, cfg_pull_strength,
-		   cfg_wakeup_high, cfg_wakeup_low, current_level);
-#endif
-
+	/* set pull strength */
 	bee_pad_set_pull(cfg_pin, cfg_pull_strength);
+
+	/* set current level */
 	switch (current_level) {
 	case 0:
 		Pad_SetDrivingCurrent(cfg_pin, BEE_DRIVING_LEVEL0);
@@ -73,6 +65,7 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 		break;
 	}
 
+	/* set pad and pinmux */
 	if (cfg_fun == BEE_PWR_OFF) {
 		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_NOT_PWRON, cfg_pull, cfg_dir, cfg_drv);
 	} else if (cfg_fun == BEE_SW_MODE) {
@@ -95,8 +88,10 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 #endif
 	}
 
+	/* set wakeup */
 	System_WakeUpPinDisable(cfg_pin);
 
+	/* set wakeup level */
 	if (cfg_wakeup_high) {
 		bee_pad_wakeup(cfg_pin, PAD_WAKEUP_POL_HIGH, DISABLE, 0);
 	} else if (cfg_wakeup_low) {
@@ -106,9 +101,8 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 
 int pinctrl_configure_pins(const pinctrl_soc_pin_t *pins, uint8_t pin_cnt, uintptr_t reg)
 {
-#if DBG_DIRECT_SHOW
-	DBG_DIRECT("[%s] pin_cnt=%d", __func__, pin_cnt);
-#endif
+	ARG_UNUSED(reg);
+
 	for (uint8_t i = 0U; i < pin_cnt; i++) {
 		pinctrl_configure_pin(&pins[i]);
 	}

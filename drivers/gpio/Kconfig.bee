@@ -1,19 +1,17 @@
-# BEE gpio configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 menuconfig GPIO_BEE
-	bool "BEE MCU GPIO driver"
+	bool "GPIO driver for Realtek Bee series SoC"
 	default y
 	select USE_HAL_REALTEK_GPIO
 	depends on DT_HAS_REALTEK_BEE_GPIO_ENABLED
 	help
-	  Enable the BEE gpio driver.
+	  This option enables the GPIO driver for Realtek Bee SoCs.
 
 if GPIO_BEE
 config BEE_GPIO_SUPPORT_BOTH_EDGE
-	bool "BEE GPIO support both edge"
+	bool "Bee GPIO support both edge"
 	default y if SOC_SERIES_RTL8752H
 endif # GPIO_BEE
 

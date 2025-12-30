@@ -1,12 +1,10 @@
-# BEE adc configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config ADC_BEE
-	bool "BEE MCU adc driver"
+	bool "ADC controller driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_ADC_ENABLED
 	select USE_HAL_REALTEK_ADC
 	help
-	  Enable the bee adc driver.
+	  This option enables the ADC driver for Realtek Bee SoCs.

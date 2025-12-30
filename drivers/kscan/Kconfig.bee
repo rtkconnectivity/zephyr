@@ -1,16 +1,14 @@
-# BEE kscan configuration
-
-# Copyright(c) 2025, Realtek Semiconductor Corporation.
+# Copyright (c) 2026 Realtek Semiconductor Corp.
 # SPDX-License-Identifier: Apache-2.0
 
 config KSCAN_BEE
-	bool "BEE MCU kscan driver"
+	bool "kscan driver for Realtek Bee series SoC"
 	default y
 	depends on DT_HAS_REALTEK_BEE_KSCAN_ENABLED
 	depends on !INPUT_BEE_KSCAN
 	select USE_HAL_REALTEK_KEYSCAN
 	help
-	  Enable the bee kscan driver.
+	  This option enables the KSCAN driver for Realtek Bee SoCs.
 
 if KSCAN_BEE
 config BEE_KSCAN_MAX_ROW_SIZE
