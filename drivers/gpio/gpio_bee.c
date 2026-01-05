@@ -777,7 +777,9 @@ static int gpio_bee_pm_action(const struct device *port, enum pm_device_action a
 				break;
 			}
 		}
-
+#if CONFIG_BEE_GPIO_SUPPORT_BOTH_EDGE
+		data->store_buf.gpio_reg[6] = port_base->INTPOLARITY;
+#endif
 		break;
 	case PM_DEVICE_ACTION_RESUME:
 		SYS_SLIST_FOR_EACH_CONTAINER(&data->list.list, pad_node, node) {
