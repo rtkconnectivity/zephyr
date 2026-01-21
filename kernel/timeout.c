@@ -336,6 +336,7 @@ void z_vrfy_sys_clock_tick_set(uint64_t tick)
 #ifdef CONFIG_SOC_FAMILY_REALTEK_BEE
 /* To support RTK PM */
 extern void sys_clock_only_add_cycle_count(int32_t ticks);
+extern void CPU_DLPS_Exit(void);
 struct _timeout *get_first_timeout(void)
 {
 	return first();
@@ -366,6 +367,7 @@ void sys_clock_restore_tick_and_cycle(void)
 
 void sys_clock_announce_process_timeout(void)
 {
+	/* Update the timeout list: only handle pended ticks. */
 	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
 
 	struct _timeout *t;
@@ -383,10 +385,23 @@ void sys_clock_announce_process_timeout(void)
 
 	pended_ticks = 0;
 
-	/* Separate the handling of pending tick counts and timeout
-	 * callback functions to avoid errors when a timer is started
+	k_spin_unlock(&timeout_lock, key);
+
+	/* Resume NVIC to trigger interrupts that occurred during DLPS.
+	 * ISR might update the timout list, so ensure this is done after updating
+	 * the timeout list.
+	 */
+	__disable_irq();
+	CPU_DLPS_Exit();
+	__enable_irq();
+
+	/* Manually trigger processing of the timeout callback.
+	 * Separating updating pended ticks and timeout
+	 * callback processing to avoid errors if timer behaivor happens
 	 * during the timer callback.
 	 */
+
+ 	key = k_spin_lock(&timeout_lock);
 
 	for (t = first(); (t != NULL) && (t->dticks == 0); t = first()) {
 		remove_timeout(t);

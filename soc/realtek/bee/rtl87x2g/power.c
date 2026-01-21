@@ -161,8 +161,6 @@ void pm_resume_devices_rtk(void)
 				     PM_DEVICE_ACTION_RESUME);
 	}
 
-	CPU_DLPS_Exit();
-
 	num_susp_rtk = 0;
 }
 
@@ -183,7 +181,8 @@ void pm_reusme_systick_and_process_timeout(void)
 	sys_clock_restore_tick_and_cycle();
 	__enable_irq();
 
-	/* Subtract the pended tick from the timeout list and manually trigger a timeout process. */
+	/* Subtract the pended tick from the timeout list, resume NVIC and manually trigger the
+	 * timeout callback process. */
 	sys_clock_announce_process_timeout();
 }
 
