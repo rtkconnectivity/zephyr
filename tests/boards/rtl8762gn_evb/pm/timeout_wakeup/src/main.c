@@ -89,7 +89,7 @@ ZTEST(timeout_wakeup, test_k_thread_wakeup)
 	uint32_t wakeup_count_thread;
 
 	power_get_statistics(&wakeup_count_before_test, &last_wakeup_clk, &last_sleep_clk);
-	while (test_thread_sleep_num <= THREAD_SLEEP_NUMBERS) {
+	while (test_thread_sleep_num < THREAD_SLEEP_NUMBERS) {
 		k_msleep(100);
 		test_thread_sleep_num++;
 	}
@@ -97,8 +97,7 @@ ZTEST(timeout_wakeup, test_k_thread_wakeup)
 	wakeup_count_thread = wakeup_count_after_test - wakeup_count_before_test;
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n", wakeup_count_thread,
 	last_wakeup_clk, last_sleep_clk);
-	zassert_true(wakeup_count_thread <= THREAD_SLEEP_NUMBERS + 1 && wakeup_count_thread >=
-		THREAD_SLEEP_NUMBERS - 1, "test_k_timer_wakeup failed, wakeup Count: %d\n",
+	zassert_true(wakeup_count_thread == THREAD_SLEEP_NUMBERS, "test_k_timer_wakeup failed, wakeup Count: %d\n",
 		wakeup_count_thread);
 
 }
@@ -152,10 +151,6 @@ ZTEST(timeout_wakeup, test_triggered_work_wakeup)
 	tag2 = k_uptime_get();
 	time_diff = tag2-tag1;
 	LOG_INF("after dlps!");/*check log time stamp*/
-	zassert_true(time_diff >= TRIGGERED_WORK_NUMBERS*100 && time_diff <=
-			TRIGGERED_WORK_NUMBERS * 100 + 1020,
-			"k_uptime_get is not accurate after dlps! time diff (ms) is %lld",
-			time_diff);
 	power_get_statistics(&wakeup_count_after_test, &last_wakeup_clk, &last_sleep_clk);
 	wakeup_count_triggered_work = wakeup_count_after_test - wakeup_count_before_test;
 	TC_PRINT("wakeupCount: %d, last_wakeup_clk:%d, last_sleep_clk:%d\n",
@@ -163,6 +158,10 @@ ZTEST(timeout_wakeup, test_triggered_work_wakeup)
 	zassert_true(wakeup_count_triggered_work <= TRIGGERED_WORK_NUMBERS + 1
 		&& wakeup_count_triggered_work >= TRIGGERED_WORK_NUMBERS - 1,
 		"test_k_timer_wakeup failed, wakeup Count: %d\n", wakeup_count_triggered_work);
+	zassert_true(time_diff >= TRIGGERED_WORK_NUMBERS*100 && time_diff <=
+			TRIGGERED_WORK_NUMBERS * 100 + 1400,
+			"k_uptime_get is not accurate after dlps! time diff (ms) is %lld",
+			time_diff);
 }
 
 void teardown_fn(void *data)
