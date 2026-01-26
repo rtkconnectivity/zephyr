@@ -43,8 +43,14 @@
 		tcm1: memory@119c00 {
 			/* TCM1, used as zephyr-itcm */
 			compatible = "zephyr,memory-region", "arm,itcm";
-			reg = <0x119c00 DT_SIZE_K(140)>;
+			reg = <0x119c00 DT_SIZE_K(104)>;
 			zephyr,memory-region = "ITCM";
+		};
+
+		tcm_heap: memory@133c00 {
+			/* Reserved memory for realtek osif heap manangement,
+			 * which is used in internal module(like clock,phy,pm,bt controller) */
+			reg = <0x133C00 DT_SIZE_K(36)>;
 		};
 
 		tcm_reserved1: memory@13cc00 {

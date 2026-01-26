@@ -14,6 +14,7 @@
 #include "system_init_ns.h"
 #include "utils.h"
 #include "sys_reset.h"
+#include "osif_zephyr.h"
 
 extern char __extram_data_start[];
 extern char __extram_data_end[];
@@ -32,6 +33,10 @@ static void rtl87x2g_extra_ram_init(void)
 void soc_early_init_hook(void)
 {
 	rtl87x2g_extra_ram_init();
+
+
+	/* Init osif module with Zephyr.*/
+	os_zephyr_patch_init();
 
 	/* TZ enabled: for "Non-secure function call".
 	 * Init non-secure function pointer that will be called by secure side using
