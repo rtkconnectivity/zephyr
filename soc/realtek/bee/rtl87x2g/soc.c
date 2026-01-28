@@ -9,18 +9,22 @@
 #include <zephyr/kernel.h>
 #include <zephyr/arch/common/init.h>
 #include <zephyr/sys/reboot.h>
+#include <zephyr/linker/linker-defs.h>
 #include <soc.h>
 
 #include "system_init_ns.h"
 #include "utils.h"
 #include "sys_reset.h"
 #include "osif_zephyr.h"
+#include "clock_manager.h"
 
 extern char __extram_data_start[];
 extern char __extram_data_end[];
 extern char __extram_data_load_start[];
 extern char __extram_bss_start[];
 extern char __extram_bss_end[];
+
+#define S_RAM_VECTOR_ADDR               (0x14ec00)
 
 static void rtl87x2g_extra_ram_init(void)
 {
@@ -34,6 +38,10 @@ void soc_early_init_hook(void)
 {
 	rtl87x2g_extra_ram_init();
 
+	/* Workaround for RamVectorTableUpdate called within phy_init() to direct update vector table. */
+	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
+	SCB->VTOR = (uint32_t)S_RAM_VECTOR_ADDR;
+	(void)memcpy((void *)S_RAM_VECTOR_ADDR, _vector_start, vector_size);
 
 	/* Init osif module with Zephyr.*/
 	os_zephyr_patch_init();
@@ -54,11 +62,36 @@ void soc_early_init_hook(void)
 	/* Configure Memory Attritube through MPU. */
 	mpu_setup();
 
+	/* RTK-PMU related initialization */
+	si_flow_data_init();
+
+	/* FT parameters apply */
+	ft_paras_apply();
+
 	/* RXI300 init */
 	hal_setup_hardware();
 
 	/* DWT init & FPU init */
 	hal_setup_cpu();
+
+	/* Setup 32k clk src */
+	set_up_32k_clk_src(); /* use osif mem api */
+	set_lp_module_clk_info();
+
+	/* Init OSC32 SDM fw-k sw timer. */
+	init_osc_sdm_timer(); /* use osif timer api */
+
+	/* Dynamic Voltage Frequency Scaling initialization */
+	dvfs_init();
+
+	/* PHY initialization */
+	phy_hw_control_init(false);
+	/* Relay on RamVectorTableUpdate(TMETER_VECTORn, imp_patch_thermal_meter_handler)
+	 * Vector Table must be on RAM if we want RamVectorTableUpdate works, otherwise will trigger hardfault. */
+	phy_init(false); /* use osif timer api */
+
+	/* Temperature compensation-related initialization */
+	thermal_tracking_timer_init();
 
 #ifdef CONFIG_TRUSTED_EXECUTION_NONSECURE
 	/* Set certain interrupts to be generated in NS mode. */
