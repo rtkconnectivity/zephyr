@@ -227,6 +227,11 @@
 			interrupts = <39 0>;
 			status = "disabled";
 		};
+
+		bee_bt_hci: bee_bt_hci {
+			compatible = "realtek,bee-bt-hci";
+			status = "disabled";
+		};
 	};
 };
 

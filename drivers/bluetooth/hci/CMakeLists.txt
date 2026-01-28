@@ -52,6 +52,7 @@ zephyr_library_sources_ifdef(CONFIG_BT_SPI_ZEPHYR spi.c)
 zephyr_library_sources_ifdef(CONFIG_BT_STM32WB0 hci_stm32wb0.c)
 zephyr_library_sources_ifdef(CONFIG_BT_STM32WBA hci_stm32wba.c)
 zephyr_library_sources_ifdef(CONFIG_BT_STM32_IPM ipm_stm32wb.c)
+zephyr_library_sources_ifdef(CONFIG_BT_BEE hci_bee.c)
 zephyr_library_sources_ifdef(CONFIG_SOC_NRF5340_CPUAPP nrf53_support.c)
 # zephyr-keep-sorted-stop
 
