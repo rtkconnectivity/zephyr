@@ -75,3 +75,50 @@ config HAL_REALTEK_BEE_AON_WDT
 
 config HAL_REALTEK_BEE_CORE_WDT
 	bool
+
+config USE_REALTEK_BEE_OS_INTERFACE
+	bool "OS interface layer abstracted by Realtek for Bee family SoCs"
+	help
+	  Enable Realtek Bee OS Abstraction layer with Zephyr support
+
+if USE_REALTEK_BEE_OS_INTERFACE
+
+configdefault POLL
+	default y
+
+config OSIF_TIMER_MAX_COUNT
+	int "Maximum timer count in OSIF"
+	default 64
+	range 0 255
+	help
+	   The maximum number of timers in OSIF.
+
+config OSIF_TASK_MAX_COUNT
+	int "Maximum task count in OSIF"
+	default 3
+	range 0 255
+	help
+	  The maximum number of tasks in OSIF.
+
+config OSIF_MSGQ_MAX_COUNT
+	int "Maximum message queue count in OSIF"
+	default 3
+	range 0 255
+	help
+	  The maximum number of message queues in OSIF.
+
+config OSIF_SEM_MAX_COUNT
+	int "Maximum semaphore count in OSIF"
+	default 3
+	range 0 255
+	help
+	  The maximum number of semaphores in OSIF.
+
+config OSIF_MUTEX_MAX_COUNT
+	int "Maximum mutex count in OSIF"
+	default 3
+	range 0 255
+	help
+	  The maximum number of mutexs in OSIF.
+
+endif

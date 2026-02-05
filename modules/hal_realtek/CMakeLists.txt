@@ -4,3 +4,7 @@
 if(ZEPHYR_HAL_REALTEK_MODULE_DIR)
   add_subdirectory(${ZEPHYR_HAL_REALTEK_MODULE_DIR} hal_realtek)
 endif()
+
+if(CONFIG_SOC_FAMILY_REALTEK_BEE)
+  add_subdirectory(bee)
+endif()
