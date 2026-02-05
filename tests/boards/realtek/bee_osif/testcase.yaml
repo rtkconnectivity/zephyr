@@ -1,0 +1,5 @@
+tests:
+  boards.realtek.bee_osif:
+    tags: realtek_osif
+    platform_allow:
+      - rtl87x2g_evb_a
