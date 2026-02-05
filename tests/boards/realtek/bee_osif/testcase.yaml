@@ -1,0 +1,3 @@
+tests:
+  boards.realtek.bee_osif:
+    tags: osif
