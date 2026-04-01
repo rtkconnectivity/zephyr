@@ -1,27 +1,28 @@
 /*
- * Copyright(c) 2025, Realtek Semiconductor Corporation.
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+
 #define DT_DRV_COMPAT realtek_bee_can
+#include <soc.h>
+#include <errno.h>
+#include <stdbool.h>
+#include <string.h>
+
 #include <zephyr/drivers/can/transceiver.h>
 #include <zephyr/drivers/clock_control/bee_clock_control.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/sys/util.h>
-#include <string.h>
 #include <zephyr/kernel.h>
-#include <soc.h>
-#include <errno.h>
-#include <stdbool.h>
 #include <zephyr/drivers/can.h>
-#include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
 
-#ifdef CONFIG_PM_DEVICE
+#include <zephyr/logging/log.h>
+
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
-#endif
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #include <rtl_can.h>
@@ -62,22 +63,30 @@ struct can_bee_data {
 
 struct can_bee_config {
 	const struct can_driver_config common;
-	CAN_TypeDef *can; /*!< CAN Registers*/
-	uint8_t sjw;
-	uint8_t prop_ts1;
-	uint8_t ts2;
-	uint16_t clkid;
-	void (*config_irq)();
+	CAN_TypeDef *can;
 	const struct pinctrl_dev_config *pcfg;
+	uint16_t clkid;
+	void (*irq_config_func)();
 };
-
-static struct k_mutex filter_mutex;
 
 #ifdef CONFIG_PM_DEVICE
 const struct device *devs[DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)];
 #endif
 
-#define CAN_BUS_ON_TIMEOUT (10 * (sys_clock_hw_cycles_per_sec() / MSEC_PER_SEC))
+static int can_bee_wait_ram_state(k_timeout_t timeout)
+{
+	int64_t start_time;
+
+	start_time = k_uptime_ticks();
+	while (CAN_GetRamState() != CAN_RAM_STATE_IDLE) {
+		if (!K_TIMEOUT_EQ(timeout, K_FOREVER) &&
+		    k_uptime_ticks() - start_time >= timeout.ticks) {
+			return -EAGAIN;
+		}
+	}
+
+	return 0;
+}
 
 static int can_bee_check_bus_on(k_timeout_t timeout)
 {
@@ -97,8 +106,6 @@ static void can_bee_tx_complete(const struct device *dev, int mb_list_idx)
 {
 	struct can_bee_data *data = dev->data;
 	can_tx_callback_t callback = data->tx_mb_list[mb_list_idx].tx_callback;
-
-	LOG_DBG("[%s]", __func__);
 
 	if (data->tx_mb_list[mb_list_idx].is_busy) {
 		data->tx_mb_list[mb_list_idx].is_busy = false;
@@ -120,20 +127,10 @@ static void can_bee_rx_complete(const struct device *dev, int mb_list_idx)
 	CANDataFrameSel_TypeDef frame_type;
 	struct can_frame frame;
 
-	LOG_DBG("[%s]", __func__);
-
 	CAN_GetMsgBufInfo(data->rx_mb_list[mb_list_idx].idx, &mb_info);
 	memset(frame.data, 0, 8);
 	CAN_GetRamData(mb_info.data_length, frame.data);
 	frame_type = CAN_CheckFrameType(mb_info.rtr_bit, mb_info.ide_bit);
-
-	LOG_DBG("[CAN HANDLER] rx_mb_list[mb_list_idx].idx%d frame_type %d, frame_id = 0x%03x, "
-		   "ext_frame_id = 0x%05x",
-		   data->rx_mb_list[mb_list_idx].idx, frame_type, mb_info.standard_frame_id,
-		   mb_info.extend_frame_id);
-	for (uint8_t index = 0; index < mb_info.data_length; index++) {
-		LOG_DBG("[CAN HANDLER] frame.data [%d] 0x%02x", index, frame.data[index]);
-	}
 
 	frame.dlc = mb_info.data_length;
 	frame.flags = (mb_info.rtr_bit ? CAN_FRAME_RTR : 0) | (mb_info.ide_bit ? CAN_FRAME_IDE : 0);
@@ -149,11 +146,13 @@ static void can_bee_rx_complete(const struct device *dev, int mb_list_idx)
 static int can_bee_get_capabilities(const struct device *dev, can_mode_t *cap)
 {
 	ARG_UNUSED(dev);
-	ARG_UNUSED(cap);
 
-	LOG_DBG("[%s]", __func__);
+	*cap = CAN_MODE_NORMAL | CAN_MODE_LOOPBACK | CAN_MODE_LISTENONLY | CAN_MODE_ONE_SHOT;
 
-	*cap = CAN_MODE_NORMAL | CAN_MODE_LISTENONLY | CAN_MODE_MANUAL_RECOVERY;
+	if (IS_ENABLED(CONFIG_CAN_MANUAL_RECOVERY_MODE)) {
+		*cap |= CAN_MODE_MANUAL_RECOVERY;
+	}
+
 	return 0;
 }
 
@@ -162,9 +161,6 @@ static int can_bee_start(const struct device *dev)
 	const struct can_bee_config *cfg = dev->config;
 	struct can_bee_data *data = dev->data;
 	int ret = 0;
-	CAN_InitTypeDef *init_struct = &(data->init_struct);
-
-	LOG_DBG("[%s] dev %s", dev->name, __func__);
 
 	k_mutex_lock(&data->inst_mutex, K_FOREVER);
 
@@ -181,12 +177,9 @@ static int can_bee_start(const struct device *dev)
 		}
 	}
 
-	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
-
-	CAN_Init(init_struct);
 	CAN_Cmd(ENABLE);
-	ret = can_bee_check_bus_on(K_MSEC(10));
 
+	ret = can_bee_check_bus_on(K_MSEC(10));
 	if (ret < 0) {
 		LOG_ERR("CAN bus off");
 		CAN_Cmd(DISABLE);
@@ -200,8 +193,10 @@ static int can_bee_start(const struct device *dev)
 
 	CAN_INTConfig((CAN_BUS_OFF_INT | CAN_ERROR_INT | CAN_RX_INT | CAN_TX_INT), ENABLE);
 	data->common.started = true;
+
 unlock:
 	k_mutex_unlock(&data->inst_mutex);
+
 	return ret;
 }
 
@@ -211,8 +206,6 @@ static int can_bee_stop(const struct device *dev)
 	struct can_bee_data *data = dev->data;
 	int ret = 0;
 
-	LOG_DBG("[%s] dev %s", dev->name, __func__);
-
 	k_mutex_lock(&data->inst_mutex, K_FOREVER);
 
 	if (!data->common.started) {
@@ -220,7 +213,6 @@ static int can_bee_stop(const struct device *dev)
 		goto unlock;
 	}
 
-	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 	for (uint8_t i = 0; i < CONFIG_CAN_BEE_RX_MSG_BUF_NUM; i++) {
 		data->rx_mb_list[i].is_busy = false;
 	}
@@ -237,27 +229,39 @@ static int can_bee_stop(const struct device *dev)
 	}
 
 	data->common.started = false;
+
 unlock:
 	k_mutex_unlock(&data->inst_mutex);
+
 	return ret;
 }
 
 static int can_bee_set_mode(const struct device *dev, can_mode_t mode)
 {
 	struct can_bee_data *data = dev->data;
+	can_mode_t supported = CAN_MODE_LOOPBACK | CAN_MODE_LISTENONLY | CAN_MODE_ONE_SHOT;
 	CAN_InitTypeDef *init_struct = &(data->init_struct);
 
 	LOG_DBG("[%s] dev %s mode 0x%x", __func__, dev->name, mode);
 
-	if ((mode & ~(CAN_MODE_LOOPBACK | CAN_MODE_LISTENONLY | CAN_MODE_ONE_SHOT)) != 0) {
+	if (IS_ENABLED(CONFIG_CAN_MANUAL_RECOVERY_MODE)) {
+		supported |= CAN_MODE_MANUAL_RECOVERY;
+	}
+
+	if ((mode & ~(supported)) != 0) {
 		LOG_ERR("unsupported mode: 0x%08x", mode);
 		return -ENOTSUP;
 	}
+
 	if (data->common.started) {
 		return -EBUSY;
 	}
 
 	k_mutex_lock(&data->inst_mutex, K_FOREVER);
+
+	if ((mode & CAN_MODE_MANUAL_RECOVERY) != 0) {
+		data->common.mode |= CAN_MODE_MANUAL_RECOVERY;
+	}
 
 	if ((mode & CAN_MODE_LOOPBACK) != 0) {
 		init_struct->CAN_TestModeSel = CAN_TEST_MODE_INT_LOOPBACK;
@@ -270,14 +274,17 @@ static int can_bee_set_mode(const struct device *dev, can_mode_t mode)
 	CAN_SetTestMode(init_struct->CAN_TestModeSel);
 
 	if ((mode & CAN_MODE_ONE_SHOT) != 0) {
-		/* No automatic retransmission */
 		init_struct->CAN_AutoReTxEn = false;
 	} else {
 		init_struct->CAN_AutoReTxEn = true;
 	}
 
 	CAN_AutoReTxCmd(init_struct->CAN_AutoReTxEn);
+
+	data->common.mode = mode;
+
 	k_mutex_unlock(&data->inst_mutex);
+
 	return 0;
 }
 
@@ -286,19 +293,21 @@ static int can_bee_set_timing(const struct device *dev, const struct can_timing 
 	struct can_bee_data *data = dev->data;
 	CAN_InitTypeDef *init_struct = &(data->init_struct);
 
-	LOG_DBG("[%s] dev %s", __func__, dev->name);
-
 	if (data->common.started) {
 		return -EBUSY;
 	}
 
 	k_mutex_lock(&data->inst_mutex, K_FOREVER);
+
 	init_struct->CAN_BitTiming.b.can_brp = timing->prescaler - 1;
 	init_struct->CAN_BitTiming.b.can_sjw = timing->sjw;
 	init_struct->CAN_BitTiming.b.can_tseg1 = timing->phase_seg1 - 1;
 	init_struct->CAN_BitTiming.b.can_tseg2 = timing->phase_seg2 - 1;
+
 	CAN_SetTiming(&(init_struct->CAN_BitTiming));
+
 	k_mutex_unlock(&data->inst_mutex);
+
 	return 0;
 }
 
@@ -316,6 +325,7 @@ static int can_bee_request_message_buffer(const struct device *dev, bool is_tx)
 			return i;
 		}
 	}
+
 	return -EAGAIN;
 }
 
@@ -331,23 +341,22 @@ static int can_bee_send(const struct device *dev, const struct can_frame *frame,
 	int mb_idx;
 	int ret;
 
-	LOG_DBG("Sending %d bytes on %s. "
-		"Id: 0x%x, "
-		"ID type: %s, "
-		"Remote Frame: %s",
-		frame->dlc, dev->name, frame->id,
-		(frame->flags & CAN_FRAME_IDE) != 0 ? "extended" : "standard",
-		(frame->flags & CAN_FRAME_RTR) != 0 ? "yes" : "no");
-	__ASSERT_NO_MSG(callback != NULL);
-	__ASSERT(frame->dlc == 0U || frame->data != NULL, "Dataptr is null");
+	LOG_DBG("Sending %d bytes %s frame on %s: %s id: 0x%x", frame->dlc,
+		(frame->flags & CAN_FRAME_RTR) != 0 ? "remote" : "data", dev->name,
+		(frame->flags & CAN_FRAME_IDE) != 0 ? "extended" : "standard", frame->id);
+
+	if (!callback) {
+		LOG_ERR("No valid callback");
+		return -EINVAL;
+	}
 
 	if (frame->dlc > CAN_MAX_DLC) {
-		LOG_ERR("DLC of %d exceeds maximum (%d)", frame->dlc, CAN_MAX_DLC);
+		LOG_ERR("DLC (%d) exceeds maximum (%d)", frame->dlc, CAN_MAX_DLC);
 		return -EINVAL;
 	}
 
 	if ((frame->flags & ~(CAN_FRAME_IDE | CAN_FRAME_RTR)) != 0) {
-		LOG_ERR("Unsupported CAN frame flags 0x%02x", frame->flags);
+		LOG_ERR("Unsupported CAN frame flags (0x%x)", frame->flags);
 		return -ENOTSUP;
 	}
 
@@ -401,12 +410,16 @@ static int can_bee_send(const struct device *dev, const struct can_frame *frame,
 	tx_frame_type.msg_buf_id = mb_idx;
 	tx_frame_type.auto_reply_bit = DISABLE;
 	tx_error = CAN_SetMsgBufTxMode(&tx_frame_type, frame->data, frame->dlc);
-	while (CAN_GetRamState(can) != CAN_RAM_STATE_IDLE) {
-		;
+
+	ret = can_bee_wait_ram_state(K_MSEC(10));
+	if (ret < 0) {
+		LOG_ERR("Wait CAN RAM state timeout");
+		ret = -EIO;
+		goto fail;
 	}
 
 	if (tx_error != CAN_NO_ERR) {
-		ret = -EINVAL;
+		ret = -EIO;
 		goto fail;
 	}
 
@@ -421,34 +434,28 @@ fail:
 	}
 
 	k_mutex_unlock(&data->inst_mutex);
+
 	return ret;
 }
 
 static int can_bee_add_rx_filter(const struct device *dev, can_rx_callback_t callback,
 				 void *user_data, const struct can_filter *filter)
 {
-	const struct can_bee_config *cfg = dev->config;
 	struct can_bee_data *data = dev->data;
-	CAN_TypeDef *can = cfg->can;
 	CANRxFrame_TypeDef rx_frame_type;
 	CANError_TypeDef rx_error;
 	int mb_list_idx;
+	int ret;
 
-	LOG_DBG("[%s] filter->id=0x%x, filter->flags=0x%x, filter->mask=0x%x", __func__,
-		   filter->id, filter->flags, filter->mask);
+	LOG_DBG("[%s] filter->id=0x%x, filter->flags=0x%x, filter->mask=0x%x", __func__, filter->id,
+		filter->flags, filter->mask);
 
 	if ((filter->flags & ~(CAN_FILTER_IDE)) != 0) {
 		LOG_ERR("Unsupported CAN filter flags 0x%02x", filter->flags);
 		return -ENOTSUP;
 	}
 
-	k_mutex_lock(&filter_mutex, K_FOREVER);
 	k_mutex_lock(&data->inst_mutex, K_FOREVER);
-
-	if (!data->common.started) {
-		LOG_ERR("CAN not start");
-		return -ENETDOWN;
-	}
 
 	mb_list_idx = can_bee_request_message_buffer(dev, false);
 	if (mb_list_idx < 0) {
@@ -483,8 +490,12 @@ static int can_bee_add_rx_filter(const struct device *dev, can_rx_callback_t cal
 #endif
 
 	rx_error = CAN_SetMsgBufRxMode(&rx_frame_type);
-	while (CAN_GetRamState(can) != CAN_RAM_STATE_IDLE) {
-		;
+
+	ret = can_bee_wait_ram_state(K_MSEC(10));
+	if (ret < 0) {
+		LOG_ERR("Wait CAN RAM state timeout");
+		mb_list_idx = -EIO;
+		goto unlock;
 	}
 
 	if (rx_error != CAN_NO_ERR) {
@@ -496,36 +507,38 @@ static int can_bee_add_rx_filter(const struct device *dev, can_rx_callback_t cal
 	data->rx_mb_list[mb_list_idx].user_data = user_data;
 	data->rx_mb_list[mb_list_idx].is_busy = true;
 	CAN_MBRxINTConfig(rx_frame_type.msg_buf_id, ENABLE);
+
 unlock:
 	k_mutex_unlock(&data->inst_mutex);
-	k_mutex_unlock(&filter_mutex);
 	return mb_list_idx;
 }
 
 static void can_bee_remove_rx_filter(const struct device *dev, int mb_list_idx)
 {
-	const struct can_bee_config *cfg = dev->config;
 	struct can_bee_data *data = dev->data;
-	CAN_TypeDef *can = cfg->can;
 	CANRxFrame_TypeDef rx_frame_type;
+	int ret;
 
 	LOG_DBG("[%s]", __func__);
 
-	k_mutex_lock(&filter_mutex, K_FOREVER);
 	k_mutex_lock(&data->inst_mutex, K_FOREVER);
 	rx_frame_type.msg_buf_id = data->rx_mb_list[mb_list_idx].idx;
 	rx_frame_type.rx_msg_buf_enable = false;
 	CAN_SetMsgBufRxMode(&rx_frame_type);
 	CAN_MBRxINTConfig(data->rx_mb_list[mb_list_idx].idx, DISABLE);
-	while (CAN_GetRamState(can) != CAN_RAM_STATE_IDLE) {
-		;
+
+	ret = can_bee_wait_ram_state(K_MSEC(10));
+	if (ret < 0) {
+		LOG_ERR("Wait CAN RAM state timeout");
+		goto unlock;
 	}
 
 	data->rx_mb_list[mb_list_idx].rx_callback = NULL;
 	data->rx_mb_list[mb_list_idx].user_data = NULL;
 	data->rx_mb_list[mb_list_idx].is_busy = false;
+
+unlock:
 	k_mutex_unlock(&data->inst_mutex);
-	k_mutex_unlock(&filter_mutex);
 }
 
 static int can_bee_get_state(const struct device *dev, enum can_state *state,
@@ -534,8 +547,6 @@ static int can_bee_get_state(const struct device *dev, enum can_state *state,
 	const struct can_bee_config *cfg = dev->config;
 	struct can_bee_data *data = dev->data;
 	CAN_TypeDef *can = cfg->can;
-
-	LOG_DBG("[%s]", __func__);
 
 	if (state != NULL) {
 		if (!data->common.started) {
@@ -555,6 +566,7 @@ static int can_bee_get_state(const struct device *dev, enum can_state *state,
 		err_cnt->tx_err_cnt = CAN_GetTxErrorCnt(can);
 		err_cnt->rx_err_cnt = CAN_GetRxErrorCnt(can);
 	}
+
 	return 0;
 }
 
@@ -564,12 +576,14 @@ static int can_bee_recover(const struct device *dev, k_timeout_t timeout)
 	const struct can_bee_config *cfg = dev->config;
 	struct can_bee_data *data = dev->data;
 	CAN_TypeDef *can = cfg->can;
-	int ret = -EAGAIN;
-
-	LOG_DBG("[%s]", __func__);
+	int ret = 0;
 
 	if (!data->common.started) {
 		return -ENETDOWN;
+	}
+
+	if ((data->common.mode & CAN_MODE_MANUAL_RECOVERY) == 0U) {
+		return -ENOTSUP;
 	}
 
 	if (CAN_GetBusState(can) == CAN_BUS_STATE_ON) {
@@ -581,8 +595,15 @@ static int can_bee_recover(const struct device *dev, k_timeout_t timeout)
 	}
 
 	CAN_Cmd(ENABLE);
+
 	ret = can_bee_check_bus_on(timeout);
+	if (ret < 0) {
+		LOG_ERR("CAN bus off");
+		ret = -EIO;
+	}
+
 	k_mutex_unlock(&data->inst_mutex);
+
 	return ret;
 }
 #endif /* CONFIG_CAN_MANUAL_RECOVERY_MODE */
@@ -591,8 +612,6 @@ static void can_bee_set_state_change_callback(const struct device *dev,
 					      can_state_change_callback_t cb, void *user_data)
 {
 	struct can_bee_data *data = dev->data;
-
-	LOG_DBG("[%s]", __func__);
 
 	data->common.state_change_cb = cb;
 	data->common.state_change_cb_user_data = user_data;
@@ -608,9 +627,8 @@ static int can_bee_get_core_clock(const struct device *dev, uint32_t *rate)
 {
 	ARG_UNUSED(dev);
 
-	LOG_DBG("[%s]", __func__);
-
 	*rate = 40000000;
+
 	return 0;
 }
 
@@ -619,13 +637,7 @@ static int can_bee_get_max_filters(const struct device *dev, bool ide)
 	ARG_UNUSED(dev);
 	ARG_UNUSED(ide);
 
-	LOG_DBG("[%s]", __func__);
-
-	if (ide) {
-		return CONFIG_CAN_BEE_MAX_EXT_ID_FILTER;
-	} else {
-		return CONFIG_CAN_BEE_MAX_STD_ID_FILTER;
-	}
+	return CONFIG_CAN_BEE_RX_MSG_BUF_NUM;
 }
 
 static inline void can_bee_isr(const struct device *dev)
@@ -635,8 +647,6 @@ static inline void can_bee_isr(const struct device *dev)
 	enum can_state state = 0;
 	const can_state_change_callback_t cb = data->common.state_change_cb;
 	void *state_change_cb_data = data->common.state_change_cb_user_data;
-
-	LOG_DBG("[%s]", __func__);
 
 	if (SET == CAN_GetINTStatus(CAN_BUS_OFF_INT_FLAG)) {
 		CAN_ClearINTPendingBit(CAN_BUS_OFF_INT_FLAG);
@@ -757,7 +767,6 @@ static void pm_restore_work(struct k_work *work)
 	CAN_TypeDef *can = cfg->can;
 	int ret;
 
-	k_mutex_lock(&filter_mutex, K_FOREVER);
 	k_mutex_lock(&data->inst_mutex, K_FOREVER);
 
 	ret = can_bee_check_bus_on(K_MSEC(10));
@@ -779,7 +788,6 @@ static void pm_restore_work(struct k_work *work)
 		}
 	}
 	k_mutex_unlock(&data->inst_mutex);
-	k_mutex_unlock(&filter_mutex);
 }
 
 static int can_bee_pm_action(const struct device *dev, enum pm_device_action action)
@@ -856,9 +864,6 @@ static int can_bee_init(const struct device *dev)
 	CAN_InitTypeDef *init_struct = &(data->init_struct);
 	int ret;
 
-	LOG_DBG("[%s]", __func__);
-
-	k_mutex_init(&filter_mutex);
 	k_mutex_init(&data->inst_mutex);
 	k_sem_init(&data->tx_int_sem, CONFIG_CAN_BEE_TX_MSG_BUF_NUM, CONFIG_CAN_BEE_TX_MSG_BUF_NUM);
 
@@ -899,7 +904,6 @@ static int can_bee_init(const struct device *dev)
 		}
 	}
 
-	/* Configure pinmux  */
 	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 	if (ret < 0) {
 		return ret;
@@ -907,7 +911,6 @@ static int can_bee_init(const struct device *dev)
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
-	/* Configure peripheral  */
 	ret = can_calc_timing(dev, &timing, cfg->common.bitrate, cfg->common.sample_point);
 	if (ret == -EINVAL) {
 		LOG_ERR("Can't find timing for given param");
@@ -915,9 +918,7 @@ static int can_bee_init(const struct device *dev)
 	}
 	LOG_DBG("Presc: %d, SJW: %d, TS1: %d, TS2: %d", timing.prescaler, timing.sjw,
 		timing.phase_seg1, timing.phase_seg2);
-	LOG_DBG("Sample-point err : %d", ret);
 
-	/* Initialize CAN. */
 	CAN_StructInit(init_struct);
 	init_struct->CAN_AutoReTxEn = ENABLE;
 	init_struct->CAN_ErrorWarnThd = 128;
@@ -939,9 +940,10 @@ static int can_bee_init(const struct device *dev)
 		return ret;
 	}
 
-	cfg->config_irq();
+	cfg->irq_config_func();
 	return 0;
 }
+
 #define CAN_BEE_IRQ_INST(index)                                                                    \
 	static void config_can_##index##_irq(void)                                                 \
 	{                                                                                          \
@@ -955,13 +957,9 @@ static int can_bee_init(const struct device *dev)
 		.common = CAN_DT_DRIVER_CONFIG_INST_GET(                                           \
 			index, 0, DT_INST_CAN_TRANSCEIVER_MAX_BITRATE(index, 1000000)),            \
 		.can = (CAN_TypeDef *)DT_INST_REG_ADDR(index),                                     \
-		.sjw = DT_INST_PROP_OR(index, sjw, 1),                                             \
-		.prop_ts1 = DT_INST_PROP_OR(index, prop_seg, 0) +                                  \
-			    DT_INST_PROP_OR(index, phase_seg1, 0),                                 \
-		.ts2 = DT_INST_PROP_OR(index, phase_seg2, 0),                                      \
 		.clkid = DT_INST_CLOCKS_CELL(index, id),                                           \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
-		.config_irq = config_can_##index##_irq,                                            \
+		.irq_config_func = config_can_##index##_irq,                                       \
 	};
 #define CAN_BEE_DATA_INST(index) static struct can_bee_data can_bee_dev_data_##index;
 #define CAN_BEE_DEFINE_INST(index)                                                                 \
