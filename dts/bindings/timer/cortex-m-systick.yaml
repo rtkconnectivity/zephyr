@@ -15,3 +15,15 @@ properties:
       SysTick Control and Status Register (CSR) selects the clock source.
       If this property is present, the external reference clock is selected.
       If absent, the processor/core clock is selected.
+
+  min-delay:
+    type: int
+    default: 1024
+    description: |
+      Minimum delay in cycles for the SysTick timer. This controls the
+      minimum timeout value that can be set. For low-frequency clock
+      sources (e.g., 32kHz), the default 1024 cycles may be too large,
+      causing minimum timeout of 32ms or more. Set this to a lower value
+      (e.g., equal to CYC_PER_TICK) to allow shorter timeouts.
+      The effective minimum delay is the maximum of this value and
+      (CYC_PER_TICK / 16).
