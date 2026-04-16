@@ -1,0 +1,6 @@
+board:
+  name: rtl87x2j_evb
+  full_name: RTL87x2J Evaluation Board
+  vendor: realtek
+  socs:
+    - name: rtl8762jth

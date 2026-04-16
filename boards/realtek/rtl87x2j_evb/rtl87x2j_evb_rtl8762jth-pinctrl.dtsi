@@ -1,0 +1,41 @@
+/*
+ * Copyright(c) 2026, Realtek Semiconductor Corporation
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <dt-bindings/pinctrl/rtl87x2j-pinctrl.h>
+
+&pinctrl {
+	uart2_default: uart2_default {
+		group1 {
+			psels = <BEE_PSEL(UART2_TX, P3_0)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(UART2_RX, P3_1)>;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+
+	uart2_sleep: uart2_sleep {
+		group1 {
+			psels = <BEE_PSEL(IDLE_MODE, P3_0)>;
+			sleep-hardware-state;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(IDLE_MODE, P3_1)>;
+			sleep-hardware-state;
+			output-disable;
+			bias-pull-up;
+			wakeup-low;
+		};
+	};
+};
