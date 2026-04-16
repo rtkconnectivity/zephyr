@@ -1,0 +1,16 @@
+# Copyright (c) 2026, Realtek Semiconductor Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SERIES_RTL87X2J
+	select ARM
+	select CPU_CORTEX_M33
+	select CPU_HAS_FPU
+	select CPU_HAS_ARM_MPU
+	select GEN_ISR_TABLES
+	select DYNAMIC_INTERRUPTS
+	select ARMV8_M_DSP
+	select XIP
+	select THREAD_STACK_INFO
+	select SOC_EARLY_INIT_HOOK
+	select SOC_LATE_INIT_HOOK
+	select USE_REALTEK_BEE_OS_INTERFACE
