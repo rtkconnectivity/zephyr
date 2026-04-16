@@ -1,0 +1,50 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/dts-v1/;
+#include <realtek/bee/rtl87x2j.dtsi>
+
+/ {
+	model = "Realtek rtl87x2j evaluation board";
+	compatible = "realtek,rtl87x2j_evb";
+
+	chosen {
+		zephyr,sram = &sram;
+		zephyr,flash = &eflash;
+		zephyr,code-partition = &app_partition;
+	};
+};
+
+&eflash {
+	partitions {
+		/* 0x2017c00-0x3000000: Free space for Zephyr
+		 * bt_controller is Realtek's internal Bluetooth controller firmware image.
+		 * Different versions may be used based on features (default: 217K).
+		 * Flash layout may need adjustment when bt_controller size changes.
+		 */
+		bt_controller: partition@17c00 {
+			label = "bt-controller";
+			reg = <0x17c00 DT_SIZE_K(217)>;
+		};
+
+		app_partition: partition@4e000 {
+			label = "application";
+			reg = <0x4e000 DT_SIZE_K(408)>;
+		};
+	};
+};
+
+&eflash_nvr {
+	partitions {
+		/* 0x2201000-0x2208800: Free space for Zephyr */
+		storage_partition: partition@1000 {
+			label = "storage";
+			reg = <0x1000 DT_SIZE_K(30)>;
+		};
+	};
+};
+
+&cpu {
+	clock-frequency = <40000000>;
+};
