@@ -1,0 +1,159 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <mem.h>
+#include <arm/armv8-m.dtsi>
+
+/ {
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu: cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-m33f";
+			reg = <0>;
+		};
+	};
+
+	sram {
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* 0x20000000 ~ 0x2001a000 */
+		sram_internal: memory@20000000 {
+			device_type = "internal sram region";
+			reg = <0x20000000 DT_SIZE_K(21)>;
+		};
+
+		sram: memory@20005400 {
+			device_type = "sram region";
+			reg = <0x20005400 DT_SIZE_K(48)>;
+		};
+
+		heap_sram: memory@20011400 {
+			device_type = "sram heap region";
+			reg = <0x20011400 DT_SIZE_K(27)>;
+		};
+
+		sram_non_retention: memory@20018000 {
+			device_type = "sram (non-retention) region";
+			reg = <0x20018000 0x1600>;/* 5.5k */
+		};
+
+		rom_global: memory@20019600 {
+			device_type = "rom globalregion";
+			reg = <0x20019600 0x440>;/* 1K+64b */
+		};
+
+		main_stack: memory@20019a40 {
+			device_type = "main stack region";
+			reg = <0x20019a40 0x5c0>;/* 1.5k -64 b */
+		};
+	};
+
+	buffer_ram {
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* 0x20100000 ~ 0x20106000 */
+		lowstack_global: memory@20100000 {
+			device_type = "lowstack global region";
+			reg = <0x20100000 DT_SIZE_K(2)>;
+		};
+
+		heap_buffer_ram: memory@20100800 {
+			device_type = "heap buffer_ram region";
+			reg = <0x20100800 DT_SIZE_K(22)>;
+		};
+	};
+
+	bee_bt_hci: bee_bt_hci {
+		compatible = "realtek,bee-bt-hci";
+		status = "disabled";
+	};
+
+	soc {
+		eflash_ctrl: flash-controller@40022000 {
+			compatible = "realtek,rtl8762j-eflash-controller";
+			reg = <0x40022000 0x400>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			status = "okay";
+
+			eflash: flash@2000000 {
+				compatible = "soc-nv-flash";
+				#address-cells = <1>;
+				#size-cells = <1>;
+				write-block-size = <1>;
+				erase-block-size = <1024>;
+				reg = <0x2000000 DT_SIZE_K(720)>;
+				ranges = <0x0 0x2000000 DT_SIZE_K(720)>;
+
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					/* 0x2000000-0x2017c00 is reserved for Realtek firmwares.
+					 * Do not use.
+					 */
+					boot_patch: partition@0 {
+						label = "boot-patch";
+						reg = <0x0 DT_SIZE_K(70)>;
+					};
+
+					ota_header: partition@11800 {
+						label = "ota-header";
+						reg = <0x11800 DT_SIZE_K(1)>;
+					};
+
+					sys_patch: partition@11c00 {
+						label = "system-patch";
+						reg = <0x11c00 DT_SIZE_K(24)>;
+					};
+				};
+			};
+
+			eflash_nvr: flash@2200000 {
+				compatible = "soc-nv-flash";
+				#address-cells = <1>;
+				#size-cells = <1>;
+				write-block-size = <1>;
+				erase-block-size = <4096>;
+				reg = <0x2200000 DT_SIZE_K(34)>;
+				ranges = <0x0 0x2200000 DT_SIZE_K(34)>;
+
+				partitions {
+					compatible = "fixed-partitions";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					/* 0x2200000-0x2201000 is reserved for Realtek firmwares.
+					 * Do not use.
+					 */
+					otp: partition@0 {
+						label = "OTP";
+						reg = <0x0 DT_SIZE_K(1)>;
+					};
+
+					oem_header: partition@400 {
+						label = "oem-header";
+						reg = <0x400 DT_SIZE_K(3)>;
+					};
+				};
+			};
+		};
+	};
+};
+
+&nvic {
+	arm,num-irq-priority-bits = <3>;
+};
+
+&systick {
+	external-clock-source;
+};
