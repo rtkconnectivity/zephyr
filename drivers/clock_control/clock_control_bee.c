@@ -17,6 +17,8 @@
 #include <rtl_rcc.h>
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_rcc.h>
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#include <rtl_rcc.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
@@ -29,10 +31,16 @@ struct clock_control_bee_config {
 	uint32_t reg;
 };
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+struct apb_cfg {
+	uint32_t apbperiph_clk;
+};
+#else
 struct apb_cfg {
 	uint32_t apbperiph;
 	uint32_t apbperiph_clk;
 };
+#endif
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 static const struct apb_cfg bee_apb_table[] = {
@@ -114,19 +122,33 @@ static const struct apb_cfg bee_apb_table[] = {
 	{APBPeriph_I2C1, APBPeriph_I2C1_CLOCK},
 	{APBPeriph_I2C0, APBPeriph_I2C0_CLOCK},
 };
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+static const struct apb_cfg bee_apb_table[] = {
+	{WDT_CLOCK},   {MODEMRFCPI_CLOCK}, {DMA_CLOCK},    {SPI0_CLOCK},   {SPI1_CLOCK},
+	{SPI2_CLOCK},  {I2S_CLOCK},        {TIMER0_CLOCK}, {TIMER1_CLOCK}, {TIMER2_CLOCK},
+	{USB_CLOCK},   {ADC_CLOCK},        {I2C0_CLOCK},   {I2C1_CLOCK},   {KEYSCAN_CLOCK},
+	{SPI3W_CLOCK}, {CAN_CLOCK},        {UART0_CLOCK},  {UART1_CLOCK},  {UART2_CLOCK},
+	{CODEC_CLOCK}, {TMETER_CLOCK},     {UART3_CLOCK},  {GPIOA_CLOCK},  {GPIOB_CLOCK},
+	{IR_CLOCK},    {LPPWM_CLOCK},      {LPQDEC_CLOCK}, {GRTC_CLOCK},   {BLUEWIZ_CLOCK},
+	{RTC_CLOCK},   {LPWDT_CLOCK},      {LPC_CLOCK},
+};
 #endif
 
+#if !defined(CONFIG_SOC_SERIES_RTL87X2J)
 BUILD_ASSERT(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC == 32000,
-			"System clock frequency is fixed at 32000 Hz");
+	     "System clock frequency is fixed at 32000 Hz");
+#endif
 
 static int clock_control_bee_on(const struct device *dev, clock_control_subsys_t sys)
 {
 	uint16_t id = *(uint16_t *)sys;
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	RCC_ClockCmd(bee_apb_table[id].apbperiph_clk, ENABLE);
+#else
 	RCC_PeriphClockCmd(bee_apb_table[id].apbperiph, bee_apb_table[id].apbperiph_clk, ENABLE);
-	LOG_DBG("Sys: %d, APB: %d, Clk: %d", id,
-			bee_apb_table[id].apbperiph,
-			bee_apb_table[id].apbperiph_clk);
+#endif
+	LOG_DBG("Sys: %d, Clk: 0x%x", id, bee_apb_table[id].apbperiph_clk);
 	return 0;
 }
 
@@ -134,11 +156,13 @@ static int clock_control_bee_off(const struct device *dev, clock_control_subsys_
 {
 	uint16_t id = *(uint16_t *)sys;
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	RCC_ClockCmd(bee_apb_table[id].apbperiph_clk, DISABLE);
+#else
 	RCC_PeriphClockCmd(bee_apb_table[id].apbperiph, bee_apb_table[id].apbperiph_clk, DISABLE);
+#endif
 
-	LOG_DBG("Sys: %d, APB: %d, Clk: %d", id,
-			bee_apb_table[id].apbperiph,
-			bee_apb_table[id].apbperiph_clk);
+	LOG_DBG("Sys: %d, Clk: 0x%x", id, bee_apb_table[id].apbperiph_clk);
 	return 0;
 }
 
