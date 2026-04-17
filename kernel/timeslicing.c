@@ -81,7 +81,7 @@ void z_reset_time_slice(struct k_thread *thread)
 	slice_expired[cpu] = false;
 	if (slice_size != 0) {
 		z_add_timeout(&slice_timeouts[cpu], slice_timeout,
-			      K_TICKS(slice_size - 1));
+			      K_TICKS(slice_size));
 	}
 }
 
