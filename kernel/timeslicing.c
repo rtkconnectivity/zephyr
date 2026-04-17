@@ -79,15 +79,8 @@ void z_reset_time_slice(struct k_thread *thread)
 
 	z_abort_timeout(&slice_timeouts[cpu]);
 	if (slice_size != 0) {
-		/* When invoked because the slicer just fired (this CPU or
-		 * via IPI from another), we're at a tick edge but past the
-		 * announce window, so subtract 1 to cancel z_add_timeout()'s
-		 * "+1" round-up and land at exactly slice_size ticks.
-		 */
-		int delay = slice_expired[cpu] ? slice_size - 1 : slice_size;
-
 		z_add_timeout(&slice_timeouts[cpu], slice_timeout,
-			      K_TICKS(delay));
+			      K_TICKS(slice_size));
 	}
 	slice_expired[cpu] = false;
 }
