@@ -35,3 +35,8 @@ properties:
     type: boolean
     description: |
       Enable CTS and RTS or not.
+
+  always-clock-force-on:
+    type: boolean
+    description: |
+      Always clock force on and will not sleep.
