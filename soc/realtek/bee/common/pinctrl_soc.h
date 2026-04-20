@@ -20,6 +20,8 @@
 #include <zephyr/dt-bindings/pinctrl/rtl87x2g-pinctrl.h>
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <zephyr/dt-bindings/pinctrl/rtl8752h-pinctrl.h>
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#include <zephyr/dt-bindings/pinctrl/rtl87x2j-pinctrl.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
@@ -47,9 +49,12 @@ struct pinctrl_soc_pin {
 	uint32_t fun: 16;          /**< Pinmux function index (bit[16:31]) */
 
 	/* Word 1 (Partial) */
-	uint32_t reserved_32: 1;   /**< Reserved (bit[32]) */
-	uint32_t reserved_33: 1;   /**< Reserved (bit[33]) */
-	uint32_t current_level: 2; /**< Drive current level (bit[34:36]) */
+	uint32_t current_level: 2; /**< Drive current level (bit[32:33]) */
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	uint32_t sleep_hardware_state: 1; /**< Sleep hardware state (bit[34]) */
+	uint32_t wakeup_high: 1;          /**< High level wakeup (bit[35]) */
+	uint32_t wakeup_low: 1;           /**< Low level wakeup (bit[36]) */
+#endif
 };
 
 /**
@@ -64,17 +69,25 @@ typedef struct pinctrl_soc_pin pinctrl_soc_pin_t;
  * @param prop The property name (usually 'pinctrl-N').
  * @param idx The index in the property array.
  */
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define PINCTRL_SLEEP_MODE_CONFIG(node_id)                                                         \
+	.sleep_hardware_state = DT_PROP_OR(node_id, sleep_hardware_state, 0),                      \
+	.wakeup_high = DT_PROP_OR(node_id, wakeup_high, 0),                                        \
+	.wakeup_low = DT_PROP_OR(node_id, wakeup_low, 0),
+#else
+#define PINCTRL_SLEEP_MODE_CONFIG(node_id)
+#endif
+
 #define Z_PINCTRL_STATE_PIN_INIT(node_id, prop, idx)                                               \
-	{                                                                                          \
-		.pin = BEE_GET_PIN(DT_PROP_BY_IDX(node_id, prop, idx)),                            \
-		.fun = BEE_GET_FUN(DT_PROP_BY_IDX(node_id, prop, idx)),                            \
-		.pull_dis = DT_PROP_OR(node_id, bias_disable, 0),                                  \
-		.pull_dir = DT_PROP_OR(node_id, bias_pull_up, 0),                                  \
-		.drive = DT_PROP_OR(node_id, output_high, 0),                                      \
-		.dir = DT_PROP_OR(node_id, output_enable, 0),                                      \
-		.pull_strength = DT_PROP_OR(node_id, bias_pull_strong, 0),                         \
-		.current_level = DT_PROP_OR(node_id, current_level, 0),                            \
-	},
+	{.pin = BEE_GET_PIN(DT_PROP_BY_IDX(node_id, prop, idx)),                                   \
+	 .fun = BEE_GET_FUN(DT_PROP_BY_IDX(node_id, prop, idx)),                                   \
+	 .pull_dis = DT_PROP_OR(node_id, bias_disable, 0),                                         \
+	 .pull_dir = DT_PROP_OR(node_id, bias_pull_up, 0),                                         \
+	 .drive = DT_PROP_OR(node_id, output_high, 0),                                             \
+	 .dir = DT_PROP_OR(node_id, output_enable, 0),                                             \
+	 .pull_strength = DT_PROP_OR(node_id, bias_pull_strong, 0),                                \
+	 .current_level = DT_PROP_OR(node_id, current_level, 0),                                   \
+	 PINCTRL_SLEEP_MODE_CONFIG(node_id)},
 
 /**
  * @brief Utility macro to initialize a list of pinctrl_soc_pin objects.
@@ -95,6 +108,31 @@ typedef struct pinctrl_soc_pin pinctrl_soc_pin_t;
  * @brief Extract the Pin ID from the pinctrl specifier.
  */
 #define BEE_GET_PIN(pincfg) (((pincfg) >> BEE_PIN_POS) & BEE_PIN_MSK)
+
+/**
+ * @name Realtek Bee Wakeup Configuration
+ * @{
+ */
+
+/** @brief Wakeup type */
+enum pinctrl_bee_wakeup_type {
+	PINCTRL_BEE_WAKEUP_SYS = 0, /**< System wakeup */
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	PINCTRL_BEE_WAKEUP_PPU, /**< PPU wakeup */
+#endif
+};
+
+/**
+ * @brief Configure or disable wakeup on a pin.
+ *
+ * @param pin Pin number.
+ * @param polarity Wakeup polarity: 0 for low level, 1 for high level.
+ * @param type Wakeup type: PINCTRL_BEE_WAKEUP_SYS or PINCTRL_BEE_WAKEUP_PPU.
+ * @param enable True to enable wakeup, false to disable.
+ */
+void pinctrl_bee_wakeup_config(uint8_t pin, uint8_t polarity, uint8_t type, bool enable);
+
+/** @} */
 
 #ifdef __cplusplus
 }

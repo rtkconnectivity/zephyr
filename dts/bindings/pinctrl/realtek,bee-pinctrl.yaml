@@ -83,6 +83,7 @@ child-binding:
           - output-enable
           - output-low
           - output-high
+          - sleep-hardware-state
 
     description: |
       Realtek Bee pin controller pin configuration group.
@@ -117,3 +118,11 @@ child-binding:
           - 1
           - 2
           - 3
+
+      wakeup-high:
+        type: boolean
+        description: Enable wakeup high function
+
+      wakeup-low:
+        type: boolean
+        description: Enable wakeup low function
