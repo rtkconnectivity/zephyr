@@ -18,6 +18,10 @@ tests:
       - mps2/an500
       - neorv32/neorv32/minimalboot
       - neorv32/neorv32/up5kdemo
+      - rtl87x2g_evb_a/rtl8762gkh
+      - rtl87x2g_evb_a/rtl8762gku
+      - rtl87x2g_evb_a/rtl8762grh
+      - rtl87x2g_evb_a/rtl8762gru
   drivers.gpio.1pin.aw9523b:
     tags:
       - drivers
