@@ -7,6 +7,7 @@
 #include <mem.h>
 #include <arm/armv8-m.dtsi>
 #include <dt-bindings/clock/rtl87x2j-clocks.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
 
 / {
 	cpus {
@@ -159,6 +160,26 @@
 		pinctrl: pin-controller@400001c4 {
 			compatible = "realtek,bee-pinctrl";
 			reg = <0x400001c4 0x864>;
+		};
+
+		gpioa: gpio@4001a000 {
+			compatible = "realtek,bee-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+			reg = <0x4001a000 0x64>;
+			clocks = <&cctl APB_CLK(GPIOA)>;
+			interrupts = <38 0>, <39 0>, <40 0>, <41 0>;
+			status = "disabled";
+		};
+
+		gpiob: gpio@4001a800 {
+			compatible = "realtek,bee-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+			reg = <0x4001a800 0x64>;
+			clocks = <&cctl APB_CLK(GPIOB)>;
+			interrupts = <75 0>, <76 0>, <77 0>;
+			status = "disabled";
 		};
 
 		uart0: serial@40011000 {
