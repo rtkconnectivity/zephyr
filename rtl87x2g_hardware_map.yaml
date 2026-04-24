@@ -1,0 +1,10 @@
+- connected: true
+  id: G Series
+  platform: rtl87x2g_evb_a/rtl8762gru
+  product: FT232R USB UART
+  runner: rtkprog
+  runner_params:
+    - --port
+    - /dev/ttyUSB0
+  flash_before: true
+  serial_pty: rtkprog,--port,/dev/ttyUSB0,terminal
