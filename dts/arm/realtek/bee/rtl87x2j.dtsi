@@ -214,6 +214,14 @@
 			interrupts = <27 0>;
 			status = "disabled";
 		};
+
+		grtc_timer_channel0: grtc0@40000d04 {
+			compatible = "realtek,grtc-timer";
+			channel = <0>;
+			reg = <0x40000d04 0x84>;
+			interrupts = <83 0>;
+			status = "okay";
+		};
 	};
 };
 
