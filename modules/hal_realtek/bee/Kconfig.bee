@@ -22,6 +22,9 @@ config HAL_REALTEK_BEE_DMA
 config HAL_REALTEK_BEE_GPIO
 	bool
 
+config HAL_REALTEK_BEE_GRTC
+	bool
+
 config HAL_REALTEK_BEE_I2C
 	bool
 

@@ -9,13 +9,21 @@ config NUM_IRQS
 config USE_DT_CODE_PARTITION
 	default y
 
-config SYS_CLOCK_HW_CYCLES_PER_SEC
-	default 40000000
-
 config SYS_CLOCK_TICKS_PER_SEC
 	default 1000
 
 config ARCH_HAS_CUSTOM_BUSY_WAIT
+	default y
+
+config CORTEX_M_SYSTICK
+	default n if REALTEK_GRTC_TIMER
+
+config SYS_CLOCK_HW_CYCLES_PER_SEC
+	int
+	default 40000000 if CORTEX_M_SYSTICK
+	default 32000 if REALTEK_GRTC_TIMER
+
+config TICKLESS_KERNEL
 	default y
 
 config TIMESLICE_SIZE
