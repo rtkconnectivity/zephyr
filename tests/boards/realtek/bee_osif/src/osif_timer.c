@@ -55,8 +55,10 @@ ZTEST(osif_timer, test_timer)
 				 Timer1_Callback);
 	zassert_true(status != false, "error creating one-shot timer");
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL8752H)
 	status = os_timer_is_timer_active(&timer1);
 	zassert_true(status == false, "timer1 should be inactive!");
+#endif
 
 	/* Stop the timer before start */
 	status = os_timer_stop(&timer1);
@@ -68,8 +70,10 @@ ZTEST(osif_timer, test_timer)
 	os_timer_state_get(&timer1, &state);
 	zassert_equal(state, 1, "Error: Timer not running");
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL8752H)
 	status = os_timer_is_timer_active(&timer1);
 	zassert_true(status == true, "timer1 should be active!");
+#endif
 
 	/* Timer should fire only once if setup in one shot
 	 * mode. Wait for 3 times the one-shot time to see

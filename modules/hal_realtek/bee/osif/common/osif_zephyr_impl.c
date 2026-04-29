@@ -150,6 +150,11 @@ uint64_t os_sys_time_get_zephyr(void)
 	return (uint64_t)k_uptime_get();
 }
 
+uint32_t os_sys_time_get_32_zephyr(void)
+{
+	return k_uptime_get_32();
+}
+
 uint64_t os_sys_tick_get_zephyr(void)
 {
 	return (uint64_t)k_uptime_ticks();
@@ -516,18 +521,76 @@ bool os_alloc_secure_ctx_zephyr(uint32_t stack_size)
 
 bool os_task_signal_send_zephyr(void *handle, uint32_t signal)
 {
-	ARG_UNUSED(handle);
-	ARG_UNUSED(signal);
-	__ASSERT(false, "os_task_signal_send() is invalid in Zephyr");
-	return false;
+	struct osif_task *task = (struct osif_task *)handle;
+	int key;
+
+	if (task == NULL) {
+		LOG_ERR("%s: Target task handle is a NULL pointer!", __func__);
+		return false;
+	}
+
+	key = irq_lock();
+	task->signal_results |= signal;
+	irq_unlock(key);
+
+	k_poll_signal_raise(&task->poll_signal, signal);
+
+	return true;
 }
 
 bool os_task_signal_recv_zephyr(uint32_t *p_signal, uint32_t wait_ms)
 {
-	ARG_UNUSED(p_signal);
-	ARG_UNUSED(wait_ms);
-	__ASSERT(false, "os_task_signal_recv() is invalid in Zephyr");
-	return false;
+	int retval, key;
+
+	if (p_signal == NULL) {
+		LOG_ERR("input signal pointer cannot be NULL!");
+		return false;
+	}
+
+	if (k_is_in_isr()) {
+		LOG_ERR("task signal recv cannot be called in ISR!");
+		return false;
+	}
+
+	k_tid_t thread = k_current_get();
+	struct osif_task *tid = CONTAINER_OF(thread, struct osif_task, zthread);
+
+	switch (wait_ms) {
+	case 0:
+		retval = k_poll(&tid->poll_event, 1, K_NO_WAIT);
+		break;
+	case 0xFFFFFFFFU:
+		retval = k_poll(&tid->poll_event, 1, K_FOREVER);
+		break;
+	default:
+		retval = k_poll(&tid->poll_event, 1, K_MSEC(wait_ms));
+		break;
+	}
+
+	switch (retval) {
+	case 0:
+		break;
+	case -EAGAIN:
+		LOG_ERR("timeout!");
+		return false;
+	default:
+		LOG_ERR("error ret value, %d!", retval);
+		return false;
+	}
+
+	__ASSERT(tid->poll_event.state == K_POLL_STATE_SIGNALED, "event state not signalled!");
+	__ASSERT(tid->poll_event.signal->signaled == 1, "event signaled is not 1");
+
+	key = irq_lock();
+	/* Reset the states to facilitate the next trigger */
+	tid->poll_event.signal->signaled = 0;
+	tid->poll_event.state = K_POLL_STATE_NOT_READY;
+	*p_signal = tid->signal_results;
+	/* Clear signal flags as the thread is ready now */
+	tid->signal_results = 0;
+	irq_unlock(key);
+
+	return true;
 }
 
 bool os_task_signal_clear_zephyr(void *handle)
@@ -750,6 +813,32 @@ bool os_msg_recv_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const 
 	return k_msgq_get((struct k_msgq *)handle, msg, OSIF_WAIT_TO_TICKS(wait_ms)) == 0;
 }
 
+bool os_msg_peek_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
+			       uint32_t line)
+{
+	ARG_UNUSED(func);
+	ARG_UNUSED(line);
+
+	if (!handle) {
+		return false;
+	}
+
+	if (wait_ms == 0) {
+		/* Peek without waiting */
+		return k_msgq_peek((struct k_msgq *)handle, msg) == 0;
+	}
+
+	/* For non-zero wait, wait for message availability, then peek without removing */
+	int ret = k_msgq_get((struct k_msgq *)handle, msg, OSIF_WAIT_TO_TICKS(wait_ms));
+
+	if (ret != 0) {
+		return false;
+	}
+	/* Put the message back since we only wanted to peek */
+	ret = k_msgq_put((struct k_msgq *)handle, msg, K_NO_WAIT);
+	return ret == 0;
+}
+
 /************************************************************
  * SOFTWARE TIMER
  ************************************************************/
@@ -891,6 +980,19 @@ bool os_timer_id_get_zephyr(void **handle_ptr, uint32_t *timer_id)
 
 	timer = (struct osif_timer *)*handle_ptr;
 	*timer_id = timer->timer_id;
+	return true;
+}
+
+/* Function to retrieve a timer handle by index */
+bool os_timer_handle_get_zephyr(uint8_t timer_index, void **handle_ptr)
+{
+	if (timer_index >= CONFIG_REALTEK_BEE_OSIF_TIMER_MAX_COUNT) {
+		LOG_ERR("input timer_index %d is out of bound! Max timer number:%d", timer_index,
+			CONFIG_REALTEK_BEE_OSIF_TIMER_MAX_COUNT);
+		*handle_ptr = NULL;
+		return false;
+	}
+	*handle_ptr = &osif_timer_pool[timer_index];
 	return true;
 }
 
