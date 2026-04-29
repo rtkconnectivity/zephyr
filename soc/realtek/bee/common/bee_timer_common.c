@@ -10,7 +10,7 @@
 #if defined(CONFIG_HAL_REALTEK_BEE_TIM)
 
 /* Basic Timer Implementations */
-
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL8752H)
 static void basic_tim_init(uint32_t reg, uint8_t prescaler_idx, uint32_t top_val,
 			   enum bee_timer_mode mode)
 {
@@ -113,6 +113,110 @@ static void basic_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc, uint32_t p
 	}
 	TIM_PWMChangeFreqAndDuty((TIM_TypeDef *)reg, high, low);
 }
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define TIMER_MAX_CNT(reg) ((TIMER_TypeDef *)reg)->TIMER_MAX_CNT
+
+static void basic_tim_init(uint32_t reg, uint8_t prescaler_idx, uint32_t top_val,
+			   enum bee_timer_mode mode)
+{
+	TIMER_TimeBaseInitTypeDef timer_init_struct;
+
+	TIMER_StructInit(&timer_init_struct);
+
+	timer_init_struct.TIMER_ClockSrc = TIMER_CLOCK_SRC_40M;
+	timer_init_struct.TIMER_ClockDiv = prescaler_idx;
+	timer_init_struct.TIMER_Mode = TIMER_MODE_USERDEFINE;
+	timer_init_struct.TIMER_OneShotEn = DISABLE;
+
+	if (mode == BEE_TIMER_MODE_PWM) {
+		timer_init_struct.PWM_En = ENABLE;
+		timer_init_struct.TIMER_Period = UINT32_MAX;
+		timer_init_struct.PWM_HighCount = 0;
+	} else {
+		timer_init_struct.TIMER_Period = top_val;
+	}
+
+	TIMER_TimeBaseInit((TIMER_TypeDef *)reg, &timer_init_struct);
+}
+
+static void basic_tim_start(uint32_t reg)
+{
+	TIMER_Cmd((TIMER_TypeDef *)reg, ENABLE);
+}
+
+static void basic_tim_stop(uint32_t reg)
+{
+	TIMER_Cmd((TIMER_TypeDef *)reg, DISABLE);
+}
+
+static uint32_t basic_tim_get_count(uint32_t reg)
+{
+	return TIMER_GetCurrentValue((TIMER_TypeDef *)reg);
+}
+
+static uint32_t basic_tim_get_top(uint32_t reg)
+{
+	return TIMER_MAX_CNT(reg);
+}
+
+static void basic_tim_set_top(uint32_t reg, uint32_t top_val)
+{
+	TIMER_ChangePeriod((TIMER_TypeDef *)reg, top_val);
+}
+
+static void basic_tim_int_enable(uint32_t reg)
+{
+	TIMER_INTConfig((TIMER_TypeDef *)reg, TIMER_INT_TIMEOUT, ENABLE);
+}
+
+static void basic_tim_int_disable(uint32_t reg)
+{
+	TIMER_INTConfig((TIMER_TypeDef *)reg, TIMER_INT_TIMEOUT, DISABLE);
+}
+
+static void basic_tim_int_clear(uint32_t reg)
+{
+	TIMER_ClearINT((TIMER_TypeDef *)reg, TIMER_INT_TIMEOUT);
+}
+
+static bool basic_tim_int_status(uint32_t reg)
+{
+	return TIMER_GetINTStatus((TIMER_TypeDef *)reg, TIMER_INT_TIMEOUT) ? true : false;
+}
+
+static void basic_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc, uint32_t pulse_cyc,
+				   bool inverted)
+{
+	uint32_t high, low;
+
+	/* Basic Timer uses High Count vs Low Count logic */
+	if (inverted) {
+		if (period_cyc == 0U || pulse_cyc == 0U) {
+			high = UINT32_MAX;
+			low = 0; /* duty = 0% */
+		} else if (period_cyc == pulse_cyc) {
+			high = 0;
+			low = UINT32_MAX; /* duty = 100% */
+		} else {
+			high = period_cyc - pulse_cyc;
+			low = pulse_cyc;
+		}
+	} else {
+		if (period_cyc == 0U || pulse_cyc == 0U) {
+			high = 0;
+			low = UINT32_MAX;
+		} else if (period_cyc == pulse_cyc) {
+			high = UINT32_MAX;
+			low = 0;
+		} else {
+			high = pulse_cyc;
+			low = period_cyc - pulse_cyc;
+		}
+	}
+
+	TIMER_PWMChangeFreqAndDuty((TIMER_TypeDef *)reg, high + low, high);
+}
+#endif
 
 static const struct bee_timer_ops bee_basic_ops = {
 	.init = basic_tim_init,

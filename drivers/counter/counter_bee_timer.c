@@ -233,7 +233,7 @@ static int counter_bee_timer_init(const struct device *dev)
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 	cfg->irq_config(dev);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 	if (dev == GET_COUNTER_DEV_FROM_TIMER(timer4) ||
@@ -315,7 +315,7 @@ static DEVICE_API(counter, counter_bee_timer_driver_api) = {
 
 #define PARENT_NODE(n) DT_INST_PARENT(n)
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 #define TIMER_IRQ_HANDLER(index)                                                                   \
 	static void irq_config_##index(const struct device *dev)                                   \
 	{                                                                                          \
@@ -358,6 +358,10 @@ static DEVICE_API(counter, counter_bee_timer_driver_api) = {
 	.clock_div = CONCAT(TIM_CLOCK_DIVIDER_, DT_PROP_OR(PARENT_NODE(index), prescaler, 1))
 #define TIMER_IRQ_CONFIG(index)                                                                    \
 	.irq_config = irq_config_##index, .shared_irq_config = shared_irq_config##index
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define TIMER_DIV_CONFIG(index)                                                                    \
+	.clock_div = CONCAT(TIMER_CLOCK_DIV_, DT_PROP_OR(PARENT_NODE(index), prescaler, 1))
+#define TIMER_IRQ_CONFIG(index) .irq_config = irq_config_##index
 #endif
 
 #define BEE_COUNTER_TIMER_INIT(index)                                                              \
