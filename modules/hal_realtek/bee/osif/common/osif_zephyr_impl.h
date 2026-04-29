@@ -105,6 +105,7 @@ void os_mem_peek_printf_zephyr(void);
  ************************************************************/
 void os_delay_zephyr(uint32_t ms);
 uint64_t os_sys_time_get_zephyr(void);
+uint32_t os_sys_time_get_32_zephyr(void);
 uint64_t os_sys_tick_get_zephyr(void);
 bool os_sched_start_zephyr(void);
 bool os_sched_stop_zephyr(void);
@@ -163,6 +164,8 @@ bool os_msg_send_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const 
 			       uint32_t line);
 bool os_msg_recv_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
 			       uint32_t line);
+bool os_msg_peek_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
+			       uint32_t line);
 
 /************************************************************
  * TIMER - Internal APIs
@@ -174,6 +177,7 @@ bool os_timer_restart_zephyr(void **handle_ptr, uint32_t interval_ms);
 bool os_timer_stop_zephyr(void **handle_ptr);
 bool os_timer_delete_zephyr(void **handle_ptr);
 bool os_timer_id_get_zephyr(void **handle_ptr, uint32_t *timer_id);
+bool os_timer_handle_get_zephyr(uint8_t timer_index, void **handle_ptr);
 bool os_timer_is_timer_active_zephyr(void **handle_ptr);
 bool os_timer_state_get_zephyr(void **handle_ptr, uint32_t *timer_state);
 bool os_timer_get_auto_reload_zephyr(void **handle_ptr, long *autoreload);

@@ -14,7 +14,6 @@
 #include <time.h>
 #include <stdint.h>
 #include <os_mem.h>
-#include <trace.h>
 #include <mem_types.h>
 
 #define TOO_BIG PTRDIFF_MAX

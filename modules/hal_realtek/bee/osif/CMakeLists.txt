@@ -14,4 +14,8 @@ elseif(CONFIG_SOC_SERIES_RTL8752H)
   zephyr_include_directories(${OSIF_INC_ROOT}/rtl8752h)
   zephyr_library_sources(rtl8752h/osif_zephyr_patch.c)
 
+elseif(CONFIG_SOC_SERIES_RTL87X2J)
+  zephyr_include_directories(${OSIF_INC_ROOT}/rtl87x2j)
+  zephyr_library_sources(rtl87x2j/osif_zephyr_patch.c)
+
 endif()

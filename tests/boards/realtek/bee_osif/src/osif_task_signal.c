@@ -19,11 +19,16 @@
 #define EXPECTED_NOTIFY_VAL 0x1
 #define TIMEOUT_TICKS       (10)
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL8752H)
+#define USE_LEGACY_NOTIFY_API
+#endif
+
 static void thread1(void *arg)
 {
 	bool status;
 	uint32_t p_notify;
 
+#if defined(USE_LEGACY_NOTIFY_API)
 	/* Wait for notification */
 	status = os_task_notify_take(true, TIMEOUT_TICKS * 2, &p_notify);
 	zassert_equal(status, true, "notify wait failed unexpectedly");
@@ -33,6 +38,17 @@ static void thread1(void *arg)
 	/* validate by passing invalid parameters to GIVE */
 	zassert_equal(os_task_notify_give(NULL), false,
 		      "os_task_notify_give: Invalid Task Handle is unexpectedly working!");
+#else
+	/* Wait for notification using new signal API */
+	status = os_task_signal_recv(&p_notify, TIMEOUT_TICKS * 2);
+	zassert_equal(status, true, "signal recv failed unexpectedly");
+	zassert_equal((p_notify & EXPECTED_NOTIFY_VAL), EXPECTED_NOTIFY_VAL,
+		      "os_task_signal_recv value check failed");
+
+	/* validate by passing invalid parameters to SEND */
+	zassert_equal(os_task_signal_send(NULL, EXPECTED_NOTIFY_VAL), false,
+		      "os_task_signal_send: Invalid Task Handle is unexpectedly working!");
+#endif
 }
 
 ZTEST(osif_task_signal, test_task_notified)
@@ -44,9 +60,15 @@ ZTEST(osif_task_signal, test_task_notified)
 	status = os_task_create(&id2, "task_ntf", thread1, &task_param, STACKSZ, 6);
 	zassert_true(status != false, "Failed creating thread1");
 
+#if defined(USE_LEGACY_NOTIFY_API)
 	/* Give notification */
 	status = os_task_notify_give(id2);
 	zassert_true(status == true, "os_task_notify_give fail");
+#else
+	/* Send signal */
+	status = os_task_signal_send(id2, EXPECTED_NOTIFY_VAL);
+	zassert_true(status == true, "os_task_signal_send fail");
+#endif
 
 	os_delay(TIMEOUT_TICKS);
 
@@ -58,11 +80,16 @@ ZTEST(osif_task_signal, test_task_notified)
 static void offload_function(const void *param)
 {
 	k_tid_t tid = (k_tid_t)param;
+	bool status;
 
 	/* Make sure we're in IRQ context */
 	zassert_true(k_is_in_isr(), "Not in IRQ context!");
 
-	bool status = os_task_notify_give(tid);
+#if defined(USE_LEGACY_NOTIFY_API)
+	status = os_task_notify_give(tid);
+#else
+	status = os_task_signal_send(tid, EXPECTED_NOTIFY_VAL);
+#endif
 
 	zassert_not_equal(status, false, "notify give failed in ISR");
 }
@@ -80,8 +107,13 @@ void test_signal_from_isr(void *param)
 	/**TESTPOINT: Offload to IRQ context*/
 	irq_offload(offload_function, (const void *)id);
 
+#if defined(USE_LEGACY_NOTIFY_API)
 	/* Wait for notify from ISR */
 	status = os_task_notify_take(true, TIMEOUT_TICKS * 5, &p_notify);
+#else
+	/* Wait for signal from ISR */
+	status = os_task_signal_recv(&p_notify, TIMEOUT_TICKS * 5);
+#endif
 	zassert_equal(status, true, "notify wait from ISR failed unexpectedly");
 	zassert_equal((p_notify & EXPECTED_NOTIFY_VAL), EXPECTED_NOTIFY_VAL,
 		      "unexpected notify value from ISR");
