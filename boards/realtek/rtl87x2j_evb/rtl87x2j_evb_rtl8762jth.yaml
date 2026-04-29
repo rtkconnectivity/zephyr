@@ -7,4 +7,9 @@ flash: 408
 toolchain:
   - zephyr
   - gnuarmemb
+supported:
+  - pinctrl
+  - gpio
+  - uart
+  - counter
 vendor: realtek

@@ -27,6 +27,8 @@
 #include <rtl876x_rcc.h>
 #include <rtl876x_nvic.h>
 #include <vector_table.h>
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#include <rtl_timer.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
