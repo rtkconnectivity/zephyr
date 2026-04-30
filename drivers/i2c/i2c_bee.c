@@ -29,8 +29,34 @@ LOG_MODULE_REGISTER(i2c_bee, CONFIG_I2C_LOG_LEVEL);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_i2c.h>
 #include <rtl876x_rcc.h>
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#include <rtl_i2c.h>
+#include <rtl_rcc.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
+#endif
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define BEE_I2C_SUCCESS            I2C_Success
+#define BEE_I2C_DeviceMode         I2C_DeviveMode
+#define BEE_I2C_DEVICE_MODE_MASTER I2C_DeviveMode_Master
+#define BEE_I2C_DEVICE_MODE_SLAVE  I2C_DeviveMode_Slave
+#define BEE_I2C_ADDRESS_MODE_7BIT  I2C_AddressMode_7BIT
+#define BEE_I2C_ADDRESS_MODE_10BIT I2C_AddressMode_10BIT
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#define BEE_I2C_SUCCESS            I2C_Success
+#define BEE_I2C_DeviceMode         I2C_DeviveMode
+#define BEE_I2C_DEVICE_MODE_MASTER I2C_DeviveMode_Master
+#define BEE_I2C_DEVICE_MODE_SLAVE  I2C_DeviveMode_Slave
+#define BEE_I2C_ADDRESS_MODE_7BIT  I2C_AddressMode_7BIT
+#define BEE_I2C_ADDRESS_MODE_10BIT I2C_AddressMode_10BIT
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define BEE_I2C_SUCCESS            I2C_SUCCESS
+#define BEE_I2C_DeviceMode         I2C_DeviceMode
+#define BEE_I2C_DEVICE_MODE_MASTER I2C_DEVICE_MODE_MASTER
+#define BEE_I2C_DEVICE_MODE_SLAVE  I2C_DEVICE_MODE_SLAVE
+#define BEE_I2C_ADDRESS_MODE_7BIT  I2C_ADDRESS_MODE_7BIT
+#define BEE_I2C_ADDRESS_MODE_10BIT I2C_ADDRESS_MODE_10BIT
 #endif
 
 #if defined(CONFIG_SOC_SERIES_RTL8752H)
@@ -213,7 +239,7 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 	data->ctx.msg_idx = 0U;
 	data->ctx.tx_idx = 0U;
 	data->ctx.rx_idx = 0U;
-	data->errs = I2C_Success;
+	data->errs = BEE_I2C_SUCCESS;
 	k_sem_reset(&data->sync_sem);
 
 	I2C_Cmd(i2c, ENABLE);
@@ -225,7 +251,7 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 
 	k_sem_take(&data->sync_sem, K_FOREVER);
 
-	ret = (data->errs == I2C_Success) ? 0 : -EIO;
+	ret = (data->errs == BEE_I2C_SUCCESS) ? 0 : -EIO;
 
 	I2C_Cmd(i2c, DISABLE);
 
@@ -257,12 +283,12 @@ static int i2c_bee_configure(const struct device *dev, uint32_t dev_config)
 
 	I2C_StructInit(&i2c_init_struct);
 
-	i2c_init_struct.I2C_DeviveMode = I2C_DeviveMode_Master;
+	i2c_init_struct.BEE_I2C_DeviceMode = BEE_I2C_DEVICE_MODE_MASTER;
 
 	if (dev_config & I2C_ADDR_10_BITS) {
-		i2c_init_struct.I2C_AddressMode = I2C_AddressMode_10BIT;
+		i2c_init_struct.I2C_AddressMode = BEE_I2C_ADDRESS_MODE_10BIT;
 	} else {
-		i2c_init_struct.I2C_AddressMode = I2C_AddressMode_7BIT;
+		i2c_init_struct.I2C_AddressMode = BEE_I2C_ADDRESS_MODE_7BIT;
 	}
 
 	switch (I2C_SPEED_GET(dev_config)) {
