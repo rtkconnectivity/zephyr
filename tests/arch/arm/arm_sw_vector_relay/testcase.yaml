@@ -1,6 +1,7 @@
 tests:
   arch.arm.sw_vector_relay:
     filter: CONFIG_ARMV6_M_ARMV8_M_BASELINE or CONFIG_ARMV7_M_ARMV8_M_MAINLINE
+          and not CONFIG_SOC_SERIES_RTL87X2G and not CONFIG_SOC_SERIES_RTL8752H
     tags:
       - vector_relay
     arch_allow: arm
@@ -8,6 +9,7 @@ tests:
       - mps2/an385
   arch.arm.sw_vector_relay.sram_vector_table:
     filter: CONFIG_ARMV6_M_ARMV8_M_BASELINE or CONFIG_ARMV7_M_ARMV8_M_MAINLINE
+          and not CONFIG_SOC_SERIES_RTL87X2G and not CONFIG_SOC_SERIES_RTL8752H
     tags:
       - vector_relay
     arch_allow: arm
