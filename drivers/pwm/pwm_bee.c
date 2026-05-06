@@ -41,17 +41,35 @@ static int pwm_bee_set_cycles(const struct device *dev, uint32_t channel, uint32
 	ARG_UNUSED(channel);
 	const struct pwm_bee_config *config = dev->config;
 	struct pwm_bee_data *data = dev->data;
+	enum bee_pwm_output_mode output_mode;
+	const struct pinctrl_state *state;
+	int err;
 
 	LOG_DBG("channel=%d, period_cycles=%x, pulse_cycles=%x, flags=%x", channel, period_cycles,
 		pulse_cycles, flags);
+
+	err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
+	if (err < 0) {
+		return err;
+	}
 
 	if (!data->ops) {
 		return -ENOTSUP;
 	}
 
-	data->ops->set_pwm_duty(config->reg, period_cycles, pulse_cycles,
-				(flags & PWM_POLARITY_INVERTED));
+	output_mode = data->ops->set_pwm_duty(config->reg, period_cycles, pulse_cycles,
+					      (flags & PWM_POLARITY_INVERTED));
 
+	if (output_mode != BEE_PWM_OUTPUT_MODE_TIMER) {
+		Pad_Config(state->pins[0].pin, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_NONE,
+			   PAD_OUT_ENABLE,
+			   output_mode == BEE_PWM_OUTPUT_MODE_HIGH ? PAD_OUT_HIGH : PAD_OUT_LOW);
+		data->ops->stop(config->reg);
+		return 0;
+	}
+
+	Pad_Config(state->pins[0].pin, PAD_PINMUX_MODE, PAD_IS_PWRON, PAD_PULL_NONE,
+		   PAD_OUT_DISABLE, PAD_OUT_LOW);
 	data->ops->stop(config->reg);
 	data->ops->start(config->reg);
 
@@ -106,6 +124,9 @@ static DEVICE_API(pwm, pwm_bee_driver_api) = {
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define TIMER_DIV_CONFIG(index)                                                                    \
 	.clock_div = CONCAT(TIM_CLOCK_DIVIDER_, DT_PROP(PWM_BEE_PARENT_NODE(index), prescaler))
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define TIMER_DIV_CONFIG(index)                                                                    \
+	.clock_div = CONCAT(TIMER_CLOCK_DIV_, DT_PROP(PWM_BEE_PARENT_NODE(index), prescaler))
 #endif
 
 #define PWM_BEE_INIT(index)                                                                        \

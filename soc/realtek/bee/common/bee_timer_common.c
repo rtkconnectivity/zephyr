@@ -82,36 +82,46 @@ static bool basic_tim_int_status(uint32_t reg)
 	return TIM_GetINTStatus((TIM_TypeDef *)reg) ? true : false;
 }
 
-static void basic_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc, uint32_t pulse_cyc,
-				   bool inverted)
+static enum bee_pwm_output_mode basic_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc,
+						       uint32_t pulse_cyc, bool inverted)
 {
 	uint32_t high, low;
+	enum bee_pwm_output_mode output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 
 	/* Basic Timer uses High Count vs Low Count logic */
 	if (inverted) {
 		if (period_cyc == 0U || pulse_cyc == 0U) {
+			output_mode = BEE_PWM_OUTPUT_MODE_HIGH;
 			high = UINT32_MAX;
 			low = 0; /* duty = 0% */
 		} else if (period_cyc == pulse_cyc) {
+			output_mode = BEE_PWM_OUTPUT_MODE_LOW;
 			high = 0;
 			low = UINT32_MAX; /* duty = 100% */
 		} else {
+			output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 			high = period_cyc - pulse_cyc;
 			low = pulse_cyc;
 		}
 	} else {
 		if (period_cyc == 0U || pulse_cyc == 0U) {
+			output_mode = BEE_PWM_OUTPUT_MODE_LOW;
 			high = 0;
 			low = UINT32_MAX;
 		} else if (period_cyc == pulse_cyc) {
+			output_mode = BEE_PWM_OUTPUT_MODE_HIGH;
 			high = UINT32_MAX;
 			low = 0;
 		} else {
+			output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 			high = pulse_cyc;
 			low = period_cyc - pulse_cyc;
 		}
 	}
+
 	TIM_PWMChangeFreqAndDuty((TIM_TypeDef *)reg, high, low);
+
+	return output_mode;
 }
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
 #define TIMER_MAX_CNT(reg) ((TIMER_TypeDef *)reg)->TIMER_MAX_CNT
@@ -184,37 +194,46 @@ static bool basic_tim_int_status(uint32_t reg)
 	return TIMER_GetINTStatus((TIMER_TypeDef *)reg, TIMER_INT_TIMEOUT) ? true : false;
 }
 
-static void basic_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc, uint32_t pulse_cyc,
-				   bool inverted)
+static enum bee_pwm_output_mode basic_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc,
+						       uint32_t pulse_cyc, bool inverted)
 {
 	uint32_t high, low;
+	enum bee_pwm_output_mode output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 
 	/* Basic Timer uses High Count vs Low Count logic */
 	if (inverted) {
 		if (period_cyc == 0U || pulse_cyc == 0U) {
+			output_mode = BEE_PWM_OUTPUT_MODE_HIGH;
 			high = UINT32_MAX;
 			low = 0; /* duty = 0% */
 		} else if (period_cyc == pulse_cyc) {
+			output_mode = BEE_PWM_OUTPUT_MODE_LOW;
 			high = 0;
 			low = UINT32_MAX; /* duty = 100% */
 		} else {
+			output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 			high = period_cyc - pulse_cyc;
 			low = pulse_cyc;
 		}
 	} else {
 		if (period_cyc == 0U || pulse_cyc == 0U) {
+			output_mode = BEE_PWM_OUTPUT_MODE_LOW;
 			high = 0;
 			low = UINT32_MAX;
 		} else if (period_cyc == pulse_cyc) {
+			output_mode = BEE_PWM_OUTPUT_MODE_HIGH;
 			high = UINT32_MAX;
 			low = 0;
 		} else {
+			output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 			high = pulse_cyc;
 			low = period_cyc - pulse_cyc;
 		}
 	}
 
 	TIMER_PWMChangeFreqAndDuty((TIMER_TypeDef *)reg, high + low, high);
+
+	return output_mode;
 }
 #endif
 
@@ -314,30 +333,37 @@ static bool enh_tim_int_status(uint32_t reg)
 	return ENHTIM_GetINTStatus((ENHTIM_TypeDef *)reg, ENHTIM_INT_TIM) ? true : false;
 }
 
-static void enh_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc, uint32_t pulse_cyc,
-				 bool inverted)
+static enum bee_pwm_output_mode enh_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc,
+						     uint32_t pulse_cyc, bool inverted)
 {
 	uint32_t cc_val, max_val;
+	enum bee_pwm_output_mode output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 
 	if (inverted) {
 		if (period_cyc == 0U || pulse_cyc == 0U) {
+			output_mode = BEE_PWM_OUTPUT_MODE_HIGH;
 			max_val = UINT32_MAX - 1;
 			cc_val = 0;
 		} else if (period_cyc == pulse_cyc) {
+			output_mode = BEE_PWM_OUTPUT_MODE_LOW;
 			max_val = UINT32_MAX - 1;
 			cc_val = UINT32_MAX;
 		} else {
+			output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 			max_val = period_cyc;
 			cc_val = period_cyc - pulse_cyc;
 		}
 	} else {
 		if (period_cyc == 0U || pulse_cyc == 0U) {
+			output_mode = BEE_PWM_OUTPUT_MODE_LOW;
 			max_val = UINT32_MAX - 1;
 			cc_val = UINT32_MAX;
 		} else if (period_cyc == pulse_cyc) {
+			output_mode = BEE_PWM_OUTPUT_MODE_HIGH;
 			max_val = UINT32_MAX - 1;
 			cc_val = 0;
 		} else {
+			output_mode = BEE_PWM_OUTPUT_MODE_TIMER;
 			max_val = period_cyc;
 			cc_val = pulse_cyc;
 		}
@@ -345,6 +371,8 @@ static void enh_tim_set_pwm_duty(uint32_t reg, uint32_t period_cyc, uint32_t pul
 
 	ENHTIM_SetMaxCount((ENHTIM_TypeDef *)reg, max_val);
 	ENHTIM_SetCCValue((ENHTIM_TypeDef *)reg, cc_val);
+
+	return output_mode;
 }
 
 static const struct bee_timer_ops bee_enh_ops = {
