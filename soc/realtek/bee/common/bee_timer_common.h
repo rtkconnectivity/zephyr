@@ -21,14 +21,17 @@
 #include <rtl_tim.h>
 #include <rtl_enh_tim.h>
 #include <rtl_rcc.h>
+#include <rtl_pinmux.h>
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_tim.h>
 #include <rtl876x_enh_tim.h>
 #include <rtl876x_rcc.h>
 #include <rtl876x_nvic.h>
 #include <vector_table.h>
+#include <rtl876x_pinmux.h>
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
 #include <rtl_timer.h>
+#include <rtl_pinmux.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
@@ -47,6 +50,18 @@ enum bee_timer_mode {
 	BEE_TIMER_MODE_COUNTER,
 	/** Mode for Zephyr PWM driver (Pulse Width Modulation). */
 	BEE_TIMER_MODE_PWM,
+};
+
+/**
+ * @brief Bee PWM Output Modes.
+ */
+enum bee_pwm_output_mode {
+	/** PWM output controlled by timer (normal PWM mode). */
+	BEE_PWM_OUTPUT_MODE_TIMER,
+	/** PWM output forced to low level. */
+	BEE_PWM_OUTPUT_MODE_LOW,
+	/** PWM output forced to high level. */
+	BEE_PWM_OUTPUT_MODE_HIGH,
 };
 
 /**
@@ -105,8 +120,11 @@ struct bee_timer_ops {
 	 * @param period_cyc Total cycle count for the period.
 	 * @param pulse_cyc Active pulse width in cycles.
 	 * @param inverted If true, the polarity is inverted.
+	 * @return The actual PWM output mode used (may differ from timer mode if duty cycle
+	 *         is 0% or 100%).
 	 */
-	void (*set_pwm_duty)(uint32_t reg, uint32_t period_cyc, uint32_t pulse_cyc, bool inverted);
+	enum bee_pwm_output_mode (*set_pwm_duty)(uint32_t reg, uint32_t period_cyc,
+						 uint32_t pulse_cyc, bool inverted);
 
 	/**
 	 * @brief Enable the timer interrupt.
