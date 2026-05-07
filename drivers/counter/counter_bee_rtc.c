@@ -22,6 +22,9 @@
 #include <rtl876x_rcc.h>
 #include <rtl876x_nvic.h>
 #include <vector_table.h>
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#include <rtl_rtc.h>
+#include <rtl_rcc.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
@@ -29,6 +32,14 @@
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(counter_bee_rtc, CONFIG_COUNTER_LOG_LEVEL);
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define BEE_RTC_NVIC_CMD(cmd) RTC_NvCmd(cmd)
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#define BEE_RTC_NVIC_CMD(cmd) RTC_NvCmd(cmd)
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define BEE_RTC_NVIC_CMD(cmd) RTC_NVICCmd(cmd)
+#endif
 
 struct counter_bee_rtc_ch_data {
 	counter_alarm_callback_t callback;
@@ -47,6 +58,9 @@ struct counter_bee_rtc_data {
 struct counter_bee_rtc_config {
 	struct counter_config_info counter_info;
 	uint32_t reg;
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	uint16_t clkid;
+#endif
 	uint32_t src_clk_freq;
 	uint16_t prescaler;
 	void (*irq_config)(void);
@@ -265,10 +279,14 @@ static int counter_bee_rtc_init(const struct device *dev)
 
 	__ASSERT(cfg->prescaler <= 0xfff, "rtc prescaler should be less than 0xfff");
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+#endif
+
 	RTC_DeInit();
 	RTC_SetPrescaler(cfg->prescaler - 1);
 	RTC_ResetCounter();
-	RTC_NvCmd(ENABLE);
+	BEE_RTC_NVIC_CMD(ENABLE);
 
 	return 0;
 }
@@ -289,7 +307,7 @@ static DEVICE_API(counter, counter_bee_rtc_driver_api) = {
 	.get_freq = counter_bee_rtc_get_freq,
 };
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 #define RTC_IRQ_CONFIG_FUNC(index)                                                                 \
 	static void irq_config_##index(void)                                                       \
 	{                                                                                          \
@@ -326,6 +344,12 @@ static DEVICE_API(counter, counter_bee_rtc_driver_api) = {
 		return NVIC_GetPendingIRQ(DT_INST_IRQN(index));                                    \
 	}
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define RTC_CLOCK_ID(index, id) .clkid = DT_INST_CLOCKS_CELL(index, id)
+#else
+#define RTC_CLOCK_ID(index, id)
+#endif
+
 #define BEE_RTC_INIT(index)                                                                        \
 	RTC_IRQ_CONFIG(index);                                                                     \
 	static struct rtc_data_##index {                                                           \
@@ -341,6 +365,7 @@ static DEVICE_API(counter, counter_bee_rtc_driver_api) = {
 				.channels = DT_INST_PROP(index, channels),                         \
 			},                                                                         \
 		.reg = DT_INST_REG_ADDR(index),                                                    \
+		RTC_CLOCK_ID(index, id),                                                           \
 		.src_clk_freq = DT_INST_PROP_OR(index, src_clk_freq, 32000),                       \
 		.prescaler = DT_INST_PROP(index, prescaler),                                       \
 		.irq_config = irq_config_##index,                                                  \
