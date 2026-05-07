@@ -443,6 +443,15 @@
 			clocks = <&cctl APB_CLK(KEYSCAN)>;
 			status = "disabled";
 		};
+
+		rtc_counter: rtc@40000768 {
+			compatible = "realtek,bee-counter-rtc";
+			reg = <0x40000768 0x40>;
+			interrupts = <8 0>;
+			channels = <4>;
+			clocks = <&cctl APB_CLK(RTC)>;
+			status = "disabled";
+		};
 	};
 };
 
