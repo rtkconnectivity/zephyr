@@ -435,6 +435,14 @@
 			clocks = <&cctl APB_CLK(I2C1)>;
 			status = "disabled";
 		};
+
+		keyscan: keyscan@40004800 {
+			compatible = "realtek,bee-keyscan";
+			reg = <0x40004800 0x34>;
+			interrupts = <43 0>;
+			clocks = <&cctl APB_CLK(KEYSCAN)>;
+			status = "disabled";
+		};
 	};
 };
 
