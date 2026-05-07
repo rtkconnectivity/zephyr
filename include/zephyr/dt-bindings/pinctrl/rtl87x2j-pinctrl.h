@@ -152,7 +152,7 @@
 #define BEE_KEY_ROW_15         163                  /**< KEY_ROW_15 pinmux function */
 #define BEE_KEY_ROW_16         164                  /**< KEY_ROW_16 pinmux function */
 #define BEE_KEY_ROW_17         165                  /**< KEY_ROW_17 pinmux function */
-#define BEE_PINMUX_MAX         (BEE_DIG_DEBUG + 1)  /**< PINMUX_MAX pinmux function */
+#define BEE_PINMUX_MAX         (BEE_KEY_ROW_17 + 1) /**< PINMUX_MAX pinmux function */
 #define BEE_SW_MODE            (BEE_PINMUX_MAX + 1) /**< SW_MODE pinmux function */
 #define BEE_PWR_OFF            (BEE_PINMUX_MAX + 2) /**< PWR_OFF pinmux function */
 #define BEE_LPPWM_CH0          (BEE_PWR_OFF + 1)
@@ -295,11 +295,11 @@
 #define BEE_PSEL_GPIOB_11_P7_1 BEE_PSEL(DWGPIO, P7_1) /**< GPIOB_11 for P7_1 */
 
 /* SPI Flash */
-#define BEE_PSEL_GPIOB_12_SPIC_CSN    BEE_PSEL(DWGPIO, SPIC_CSN)    /**< GPIOB_12 for SPIC_CSN */
-#define BEE_PSEL_GPIOB_13_SPIC_SCK    BEE_PSEL(DWGPIO, SPIC_SCK)    /**< GPIOB_13 for SPIC_SCK */
-#define BEE_PSEL_GPIOB_14_SPIC_SI     BEE_PSEL(DWGPIO, SPIC_SI)     /**< GPIOB_14 for SPIC_SI */
-#define BEE_PSEL_GPIOB_15_SPIC_SO     BEE_PSEL(DWGPIO, SPIC_SO)     /**< GPIOB_15 for SPIC_SO */
-#define BEE_PSEL_GPIOB_16_SPIC_WEN    BEE_PSEL(DWGPIO, SPIC_WEN)    /**< GPIOB_16 for SPIC_WEN */
+#define BEE_PSEL_GPIOB_12_SPIC_CSN    BEE_PSEL(DWGPIO, SPIC_CSN) /**< GPIOB_12 for SPIC_CSN */
+#define BEE_PSEL_GPIOB_13_SPIC_SCK    BEE_PSEL(DWGPIO, SPIC_SCK) /**< GPIOB_13 for SPIC_SCK */
+#define BEE_PSEL_GPIOB_14_SPIC_SI     BEE_PSEL(DWGPIO, SPIC_SI)  /**< GPIOB_14 for SPIC_SI */
+#define BEE_PSEL_GPIOB_15_SPIC_SO     BEE_PSEL(DWGPIO, SPIC_SO)  /**< GPIOB_15 for SPIC_SO */
+#define BEE_PSEL_GPIOB_16_SPIC_WEN    BEE_PSEL(DWGPIO, SPIC_WEN) /**< GPIOB_16 for SPIC_WEN */
 /**< GPIOB_17 for SPIC_HOLDEN */
 #define BEE_PSEL_GPIOB_17_SPIC_HOLDEN BEE_PSEL(DWGPIO, SPIC_HOLDEN)
 
