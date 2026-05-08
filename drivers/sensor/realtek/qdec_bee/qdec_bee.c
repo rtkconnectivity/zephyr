@@ -25,6 +25,10 @@ LOG_MODULE_REGISTER(qdec_bee, CONFIG_SENSOR_LOG_LEVEL);
 #elif DT_HAS_COMPAT_STATUS_OKAY(realtek_bee_aon_qdec)
 #define DT_DRV_COMPAT   realtek_bee_aon_qdec
 #define QDEC_AXIS_COUNT 1
+#elif DT_HAS_COMPAT_STATUS_OKAY(realtek_bee_lpqdec)
+#define DT_DRV_COMPAT   realtek_bee_lpqdec
+#define QDEC_AXIS_COUNT 1
+#define USE_LPQDEC      1
 #else
 #error "No enabled QDEC node found in Device Tree"
 #endif
@@ -46,7 +50,7 @@ struct qdec_bee_config {
 	const struct pinctrl_dev_config *pcfg;
 	void (*irq_connect)(void);
 	struct bee_qdec_axis_config axis_cfgs[BEE_QDEC_AXIS_MAX];
-#ifdef USE_BASIC_QDEC
+#if defined(USE_BASIC_QDEC) || defined(USE_LPQDEC)
 	uint16_t clkid;
 #endif
 };
@@ -88,8 +92,9 @@ static int qdec_bee_sample_fetch(const struct device *dev, enum sensor_channel c
 	if (chan == SENSOR_CHAN_ALL) {
 		for (i = 0; i < QDEC_AXIS_COUNT; i++) {
 			if (config->axis_cfgs[i].enable) {
-				data->axes[i].acc = (data->axes[i].round << 16) +
-						    ops->get_count(config->reg, i);
+
+				data->axes[i].acc = (int32_t)data->axes[i].round * 65536 +
+						    (int32_t)ops->get_count(config->reg, i);
 			}
 		}
 	} else {
@@ -98,7 +103,9 @@ static int qdec_bee_sample_fetch(const struct device *dev, enum sensor_channel c
 			irq_unlock(key);
 			return i;
 		}
-		data->axes[i].acc = (data->axes[i].round << 16) + ops->get_count(config->reg, i);
+
+		data->axes[i].acc = (int32_t)data->axes[i].round * 65536 +
+				    (int32_t)ops->get_count(config->reg, i);
 	}
 
 	irq_unlock(key);
@@ -226,7 +233,7 @@ static int qdec_bee_init(const struct device *dev)
 		return ret;
 	}
 
-#ifdef USE_BASIC_QDEC
+#if defined(USE_BASIC_QDEC) || defined(USE_LPQDEC)
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 #endif
 
@@ -259,8 +266,13 @@ static DEVICE_API(sensor, qdec_bee_driver_api) = {
 	 .debounce_time_ms = DT_INST_PROP_OR(inst, axis_name##_debounce_time_ms, 0),               \
 	 .counts_per_revolution = DT_INST_PROP_OR(inst, axis_name##_counts_per_revolution, 4)}
 
-#ifdef USE_BASIC_QDEC
+#if defined(USE_BASIC_QDEC) || defined(USE_LPQDEC)
 #define QDEC_BEE_CLK_INIT(inst) .clkid = DT_INST_CLOCKS_CELL(inst, id),
+#else
+#define QDEC_BEE_CLK_INIT(inst)
+#endif
+
+#if defined(USE_BASIC_QDEC)
 #define QDEC_BEE_IRQ_CONNECT_FUNC(inst)                                                            \
 	static void qdec_bee_isr_wrapper_##inst(void)                                              \
 	{                                                                                          \
@@ -277,7 +289,6 @@ static DEVICE_API(sensor, qdec_bee_driver_api) = {
 		NVIC_Init(&NVIC_InitStruct);                                                       \
 	}
 #else
-#define QDEC_BEE_CLK_INIT(inst)
 #define QDEC_BEE_IRQ_CONNECT_FUNC(inst)                                                            \
 	static void qdec_bee_irq_connect_##inst(void)                                              \
 	{                                                                                          \

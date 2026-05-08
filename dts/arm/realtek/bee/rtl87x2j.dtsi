@@ -452,6 +452,14 @@
 			clocks = <&cctl APB_CLK(RTC)>;
 			status = "disabled";
 		};
+
+		qdec: qdec@400007e4 {
+			compatible = "realtek,bee-lpqdec";
+			reg = <0x400007e4 0x3>;
+			interrupts = <44 0>;
+			clocks = <&cctl APB_CLK(LPQDEC)>;
+			status = "disabled";
+		};
 	};
 };
 

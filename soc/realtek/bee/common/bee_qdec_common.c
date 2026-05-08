@@ -451,12 +451,177 @@ static const struct bee_qdec_ops bee_aon_qdec_ops = {
 
 #endif /* CONFIG_HAL_REALTEK_BEE_AON_QDEC */
 
+/* LPQDEC Implementations */
+
+#if defined(CONFIG_HAL_REALTEK_BEE_LPQDEC)
+
+static int lpqdec_init(uint32_t reg, const struct bee_qdec_axis_config *axis_cfgs)
+{
+	LPQDEC_InitTypeDef qdec_init_struct;
+	LPQDEC_TypeDef *qdec = (LPQDEC_TypeDef *)reg;
+
+	if (axis_cfgs[BEE_QDEC_AXIS_Y].enable || axis_cfgs[BEE_QDEC_AXIS_Z].enable) {
+		return -ENOTSUP;
+	}
+
+	if (!axis_cfgs[BEE_QDEC_AXIS_X].enable) {
+		return 0;
+	}
+
+	LPQDEC_StructInit(&qdec_init_struct);
+	qdec_init_struct.LPQDEC_AxisConfigX = ENABLE;
+	qdec_init_struct.LPQDEC_DebounceEnableX = ENABLE;
+	qdec_init_struct.LPQDEC_DebounceCountX = 32 * axis_cfgs[BEE_QDEC_AXIS_X].debounce_time_ms;
+	qdec_init_struct.LPQDEC_InitPhaseX = LPQDEC_PHASE_MODE0;
+
+	if (axis_cfgs[BEE_QDEC_AXIS_X].counts_per_revolution == 2) {
+		qdec_init_struct.LPQDEC_CounterScaleX = LPQDEC_COUNTER_SCALE_2_PHASE;
+	} else if (axis_cfgs[BEE_QDEC_AXIS_X].counts_per_revolution == 4) {
+		qdec_init_struct.LPQDEC_CounterScaleX = LPQDEC_COUNTER_SCALE_1_PHASE;
+	} else {
+		return -ENOTSUP;
+	}
+
+	qdec_init_struct.LPQDEC_ManualLoadInitPhase = ENABLE;
+
+	LPQDEC_Init(qdec, &qdec_init_struct);
+
+	LPQDEC_NVICCmd(qdec, ENABLE);
+
+	return 0;
+}
+
+static void lpqdec_enable(uint32_t reg, enum bee_qdec_axis axis)
+{
+	if (axis == BEE_QDEC_AXIS_X) {
+		LPQDEC_Cmd((LPQDEC_TypeDef *)reg, LPQDEC_AXIS_X, ENABLE);
+	}
+}
+
+static void lpqdec_disable(uint32_t reg, enum bee_qdec_axis axis)
+{
+	if (axis == BEE_QDEC_AXIS_X) {
+		LPQDEC_Cmd((LPQDEC_TypeDef *)reg, LPQDEC_AXIS_X, DISABLE);
+	}
+}
+
+static uint16_t lpqdec_get_count(uint32_t reg, enum bee_qdec_axis axis)
+{
+	if (axis == BEE_QDEC_AXIS_X) {
+		return LPQDEC_GetAxisCount((LPQDEC_TypeDef *)reg, LPQDEC_AXIS_X);
+	}
+	return 0;
+}
+
+static void lpqdec_int_enable(uint32_t reg, enum bee_qdec_axis axis, enum bee_qdec_event_type type)
+{
+	LPQDEC_TypeDef *qdec = (LPQDEC_TypeDef *)reg;
+
+	if (axis != BEE_QDEC_AXIS_X) {
+		return;
+	}
+
+	if (type == BEE_QDEC_EVENT_NEW_DATA) {
+		LPQDEC_MaskINTConfig(qdec, LPQDEC_X_INT_MASK_NEW_DATA, DISABLE);
+		LPQDEC_INTConfig(qdec, LPQDEC_X_INT_NEW_DATA, ENABLE);
+	} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
+		LPQDEC_MaskINTConfig(qdec, LPQDEC_X_INT_MASK_ILLEGAL, DISABLE);
+		LPQDEC_INTConfig(qdec, LPQDEC_X_INT_ILLEGAL, ENABLE);
+	} else {
+		/* Do nothing */
+	}
+}
+
+static void lpqdec_int_disable(uint32_t reg, enum bee_qdec_axis axis, enum bee_qdec_event_type type)
+{
+	LPQDEC_TypeDef *qdec = (LPQDEC_TypeDef *)reg;
+
+	if (axis != BEE_QDEC_AXIS_X) {
+		return;
+	}
+
+	if (type == BEE_QDEC_EVENT_NEW_DATA) {
+		LPQDEC_MaskINTConfig(qdec, LPQDEC_X_INT_MASK_NEW_DATA, ENABLE);
+		LPQDEC_INTConfig(qdec, LPQDEC_X_INT_NEW_DATA, DISABLE);
+	} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
+		LPQDEC_MaskINTConfig(qdec, LPQDEC_X_INT_MASK_ILLEGAL, ENABLE);
+		LPQDEC_INTConfig(qdec, LPQDEC_X_INT_ILLEGAL, DISABLE);
+	} else {
+		/* Do nothing */
+	}
+}
+
+static void lpqdec_int_clear(uint32_t reg, enum bee_qdec_axis axis, enum bee_qdec_event_type type)
+{
+	if (axis != BEE_QDEC_AXIS_X) {
+		return;
+	}
+
+	LPQDEC_TypeDef *qdec = (LPQDEC_TypeDef *)reg;
+	uint32_t val = 0;
+
+	if (type == BEE_QDEC_EVENT_NEW_DATA) {
+		val = LPQDEC_X_INT_CLEAR_NEW_DATA;
+	} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
+		val = LPQDEC_X_INT_CLEAR_ILLEGAL;
+	} else if (type == BEE_QDEC_EVENT_OVERFLOW) {
+		val = LPQDEC_X_INT_CLEAR_OVERFLOW;
+	} else if (type == BEE_QDEC_EVENT_UNDERFLOW) {
+		val = LPQDEC_X_INT_CLEAR_UNDERFLOW;
+	} else {
+		/* Do nothing */
+	}
+
+	if (val) {
+		LPQDEC_ClearINTPendingBit(qdec, val);
+	}
+}
+
+static bool lpqdec_get_status(uint32_t reg, enum bee_qdec_axis axis, enum bee_qdec_event_type type)
+{
+	if (axis != BEE_QDEC_AXIS_X) {
+		return false;
+	}
+
+	LPQDEC_TypeDef *qdec = (LPQDEC_TypeDef *)reg;
+	uint32_t flag = 0;
+
+	if (type == BEE_QDEC_EVENT_NEW_DATA) {
+		flag = LPQDEC_X_INT_FLAG_NEW_DATA;
+	} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
+		flag = LPQDEC_X_INT_FLAG_ILLEGAL;
+	} else if (type == BEE_QDEC_EVENT_OVERFLOW) {
+		flag = LPQDEC_X_INT_FLAG_OVERFLOW;
+	} else if (type == BEE_QDEC_EVENT_UNDERFLOW) {
+		flag = LPQDEC_X_INT_FLAG_UNDERFLOW;
+	} else {
+		/* Do nothing */
+	}
+
+	return LPQDEC_GetFlagState(qdec, flag) ? true : false;
+}
+
+static const struct bee_qdec_ops bee_lpqdec_ops = {
+	.init = lpqdec_init,
+	.enable = lpqdec_enable,
+	.disable = lpqdec_disable,
+	.get_count = lpqdec_get_count,
+	.int_enable = lpqdec_int_enable,
+	.int_disable = lpqdec_int_disable,
+	.int_clear = lpqdec_int_clear,
+	.get_status = lpqdec_get_status,
+};
+
+#endif /* CONFIG_HAL_REALTEK_BEE_LPQDEC */
+
 const struct bee_qdec_ops *bee_qdec_get_ops(void)
 {
 #if defined(CONFIG_HAL_REALTEK_BEE_AON_QDEC)
 	return &bee_aon_qdec_ops;
 #elif defined(CONFIG_HAL_REALTEK_BEE_QDEC)
 	return &bee_basic_qdec_ops;
+#elif defined(CONFIG_HAL_REALTEK_BEE_LPQDEC)
+	return &bee_lpqdec_ops;
 #else
 	return NULL;
 #endif

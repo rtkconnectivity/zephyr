@@ -49,6 +49,9 @@ config HAL_REALTEK_BEE_AON_QDEC
 config HAL_REALTEK_BEE_QDEC
 	bool
 
+config HAL_REALTEK_BEE_LPQDEC
+	bool
+
 config HAL_REALTEK_BEE_RCC
 	bool
 
