@@ -38,6 +38,9 @@ config FPU
 config IDLE_STACK_SIZE
 	default 1024
 
+config RUNTIME_NMI
+	default y
+
 if BT
 
 config NUM_METAIRQ_PRIORITIES

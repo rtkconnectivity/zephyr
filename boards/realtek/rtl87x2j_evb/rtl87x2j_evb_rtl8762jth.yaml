@@ -1,4 +1,4 @@
-identifier: rtl87x2j_evb_rtl8762jth
+identifier: rtl87x2j_evb/rtl8762jth
 name: Realtek rtl87x2j evaluation board
 type: mcu
 arch: arm
