@@ -6,3 +6,4 @@ tests:
       - rtl87x2g_evb_a/rtl8762gku
       - rtl87x2g_evb_a/rtl8762grh
       - rtl87x2g_evb_a/rtl8762gru
+      - rtl87x2j_evb/rtl8762jth

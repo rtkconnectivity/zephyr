@@ -29,12 +29,12 @@
 		/* 0x20000000 ~ 0x2001a000 */
 		sram_internal: memory@20000000 {
 			device_type = "internal sram region";
-			reg = <0x20000000 DT_SIZE_K(21)>;
+			reg = <0x20000000 DT_SIZE_K(28)>;
 		};
 
-		sram: memory@20005400 {
+		sram: memory@20007000 {
 			device_type = "sram region";
-			reg = <0x20005400 DT_SIZE_K(48)>;
+			reg = <0x20007000 DT_SIZE_K(41)>;
 		};
 
 		heap_sram: memory@20011400 {
@@ -106,17 +106,17 @@
 					 */
 					boot_patch: partition@0 {
 						label = "boot-patch";
-						reg = <0x0 DT_SIZE_K(70)>;
+						reg = <0x0 DT_SIZE_K(75)>;
 					};
 
-					ota_header: partition@11800 {
+					ota_header: partition@12c00 {
 						label = "ota-header";
-						reg = <0x11800 DT_SIZE_K(1)>;
+						reg = <0x12c00 DT_SIZE_K(1)>;
 					};
 
-					sys_patch: partition@11c00 {
+					sys_patch: partition@13000 {
 						label = "system-patch";
-						reg = <0x11c00 DT_SIZE_K(24)>;
+						reg = <0x13000 DT_SIZE_K(24)>;
 					};
 				};
 			};

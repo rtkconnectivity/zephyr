@@ -16,11 +16,27 @@
 #include "system_init.h"
 #include "mem_config.h"
 #include "utils.h"
+#ifdef CONFIG_BT
+#include "image_info.h"
+#endif
+#include "soc_log.h"
 
 LOG_MODULE_REGISTER(soc, CONFIG_SOC_LOG_LEVEL);
 
 static bool zephyr_ram_vector_table_update(int irqn, IRQ_Fun isr_handler, bool *ret)
 {
+	if (irqn > IRQn_MAX) {
+		LOG_INF("Update Secondary Level ISRs, IRQ %d!", irqn);
+		/* return false to use ram_vector_table_update_rom() */
+		return false;
+	}
+
+	if (irqn == NMI_IRQn) {
+		z_arm_nmi_set_handler(isr_handler);
+		LOG_INF("NMI handler updated via ram_vector_table_update()!");
+		return true;
+	}
+
 	if (NVIC_GetEnableIRQ(irqn) == 1) {
 		NVIC_DisableIRQ(irqn);
 		z_isr_install(irqn, (void *)isr_handler, NULL);
@@ -62,6 +78,15 @@ static void migrate_ram_vector_table_to_zephyr(void)
 	}
 }
 
+#ifdef CONFIG_BT
+static void bt_controller_init(void)
+{
+	IMG_ID image_id =
+		(ota_dual_bank_enable() == true) ? PRE_IMG_BT_CONTROLLER : IMG_BT_CONTROLLER_PATCH;
+	image_entry_validation(image_id);
+}
+#endif
+
 void soc_early_init_hook(void)
 {
 	migrate_ram_vector_table_to_zephyr();
@@ -90,6 +115,13 @@ void soc_late_init_hook(void)
 	amu_script_init();
 
 	amu_init();
+
+	extern void srand_bl(void);
+	srand_bl();
+
+#ifdef CONFIG_BT
+	bt_controller_init();
+#endif
 }
 
 #ifdef CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT
