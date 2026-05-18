@@ -23,6 +23,9 @@
 #include <rtl876x_gdma.h>
 #include <flash_nor_device.h>
 #include <fmc_platform.h>
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#include <rtl_rcc.h>
+#include <rtl_dma.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
@@ -32,25 +35,65 @@
 LOG_MODULE_REGISTER(dma_bee, CONFIG_DMA_LOG_LEVEL);
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
+/* DMA channel multi-block mode support */
 #define DMA_HAS_MULTI_BLOCK_MODE(id)                                                               \
 	((id) == 0 || (id) == 1 || (id) == 2 || (id) == 3 || (id) == 4 || (id) == 5 ||             \
 	 (id) == 6 || (id) == 7 || (id) == 8)
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#define DMA_HAS_MULTI_BLOCK_MODE(id) ((id) == 0 || (id) == 1)
-#endif
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-#define DMA_BEE_ADDR(addr) ((uint32_t)addr)
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#define DMA_BEE_ADDR(addr)                                                                         \
-	(FMC_IS_SPIC0_CACHEABLE_ADDR(addr) ? (FMC_MAIN0_NON_CACHE_ADDR((uint32_t)(addr)))          \
-					   : (uint32_t)(addr))
-#endif
+/* Type definitions */
+typedef GDMA_ChannelTypeDef bee_dma_channel_t;
+typedef GDMA_InitTypeDef bee_dma_init_t;
+typedef GDMA_TypeDef bee_dma_type_t;
+typedef GDMA_LLIDef bee_dma_lli_t;
+typedef GDMADataSize_TypeDef bee_dma_data_size_t;
+typedef GDMAMSize_TypeDef bee_dma_msize_t;
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+/* Init structure members */
+#define BEE_DMA_CHANNEL_NUM GDMA_ChannelNum
+#define BEE_DMA_STRUCT_INIT GDMA_StructInit
+
+/* DMA configuration */
+#define BEE_DMA_DIRECTION           GDMA_DIR
+#define BEE_DMA_BUFFER_SIZE         GDMA_BufferSize
+#define BEE_DMA_SOURCE_HANDSHAKE    GDMA_SourceHandshake
+#define BEE_DMA_DEST_HANDSHAKE      GDMA_DestHandshake
+#define BEE_DMA_SOURCE_DATA_SIZE    GDMA_SourceDataSize
+#define BEE_DMA_DEST_DATA_SIZE      GDMA_DestinationDataSize
+#define BEE_DMA_SOURCE_INC          GDMA_SourceInc
+#define BEE_DMA_DEST_INC            GDMA_DestinationInc
+#define BEE_DMA_SOURCE_MSIZE        GDMA_SourceMsize
+#define BEE_DMA_DEST_MSIZE          GDMA_DestinationMsize
+#define BEE_DMA_SOURCE_ADDR         GDMA_SourceAddr
+#define BEE_DMA_DEST_ADDR           GDMA_DestinationAddr
+#define BEE_DMA_CHANNEL_PRIORITY    GDMA_ChannelPriority
+#define BEE_DMA_MULTI_BLOCK_EN      GDMA_Multi_Block_En
+#define BEE_DMA_MULTI_BLOCK_STRUCT  GDMA_Multi_Block_Struct
+#define BEE_DMA_MULTI_BLOCK_MODE    GDMA_Multi_Block_Mode
+#define BEE_DMA_MSIZE(n)            GDMA_Msize_##n
+#define BEE_DMA_DATA_SIZE_BYTE      GDMA_DataSize_Byte
+#define BEE_DMA_DATA_SIZE_HALF_WORD GDMA_DataSize_HalfWord
+#define BEE_DMA_DATA_SIZE_WORD      GDMA_DataSize_Word
+#define BEE_DMA_SRC_ADDR_ADJ        GDMA_SourceAddr_Inc
+#define BEE_DMA_DEST_ADDR_ADJ       GDMA_DestAddr_Inc
+
+/* Interrupt and status */
+#define BEE_DMA_INT_ERROR    GDMA_INT_Error
+#define BEE_DMA_INT_TRANSFER GDMA_INT_Transfer
+#define BEE_DMA_INT_BLOCK    GDMA_INT_Block
+
+/* Register access */
+#define BEE_DMA_REG_STATUS_ERR   GDMA_STATUSERR_L
+#define BEE_DMA_REG_STATUS_TFR   GDMA_STATUSTFR_L
+#define BEE_DMA_REG_STATUS_BLOCK GDMA_STATUSBLOCK_L
+#define BEE_GDMA_REG_CTLx_L      GDMA_CTLx_L
+#define BEE_GDMA_REG_CFGx_L      GDMA_CFGx_L
+
+/* External function declarations */
 extern GDMA_TypeDef *GDMA_GetGDMAxByCh(uint8_t GDMA_ChannelNum);
 extern uint8_t GDMA_GetGDMAChannelNum(uint8_t GDMA_ChannelNum);
+extern FlagStatus GDMA_GetSuspendChannelStatus(bee_dma_channel_t *GDMA_Channelx);
 
+/* Interrupt status macros */
 #define DMA_GET_ERROR_INT_STATUS(channel_num)                                                      \
 	(!!(GDMA_GetGDMAxByCh(channel_num)->GDMA_STATUSERR_L &                                     \
 	    BIT(GDMA_GetGDMAChannelNum(channel_num))))
@@ -59,22 +102,189 @@ extern uint8_t GDMA_GetGDMAChannelNum(uint8_t GDMA_ChannelNum);
 	(!!(GDMA_GetGDMAxByCh(channel_num)->GDMA_STATUSBLOCK_L &                                   \
 	    BIT(GDMA_GetGDMAChannelNum(channel_num))))
 
-#define BEE_GDMA_REG_CTLx_L GDMA_CTLx_L
-#define BEE_GDMA_REG_CFGx_L GDMA_CFGx_L
+/* DMA API macros */
+#define BEE_DMA_INIT(channel, struct)                   GDMA_Init(channel, struct)
+#define BEE_DMA_CMD(channel_num, cmd)                   GDMA_Cmd(channel_num, cmd)
+#define BEE_DMA_SUSPEND_CMD(channel_num, cmd)           GDMA_SuspendCmd(channel_num, cmd)
+#define BEE_DMA_GET_TRANSFER_LEN(channel)               GDMA_GetTransferLen(channel)
+#define BEE_DMA_SET_BUFFER_SIZE(channel, size)          GDMA_SetBufferSize(channel, size)
+#define BEE_DMA_SET_SOURCE_ADDRESS(channel, src)        GDMA_SetSourceAddress(channel, src)
+#define BEE_DMA_SET_DESTINATION_ADDRESS(channel, src)   GDMA_SetDestinationAddress(channel, src)
+#define BEE_DMA_INT_CONFIG(channel_num, int, cmd)       GDMA_INTConfig(channel_num, int, cmd)
+#define BEE_DMA_CLEAR_INT_PENDING_BIT(channel_num, int) GDMA_ClearINTPendingBit(channel_num, int)
+#define BEE_DMA_GET_SUSPEND_CHANNEL_STATUS(channel)     GDMA_GetSuspendChannelStatus(channel)
+#define BEE_DMA_SET_LLP_ADDRESS(channel, addr)          GDMA_SetLLPAddress(channel, addr)
+#define BEE_DMA_GET_TRANSFER_INT_STATUS(channel_num)    GDMA_GetTransferINTStatus(channel_num)
+#define BEE_DMA_GET_SUSPEND_STATUS(channel) (((bee_dma_channel_t *)(channel))->GDMA_CFGx_L & BIT8)
+
+/* Address conversion */
+#define DMA_BEE_ADDR(addr) ((uint32_t)addr)
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#define DMA_GET_ERROR_INT_STATUS(channel_num) (!!(GDMA_BASE->STATUS_ERR & BIT(channel_num)))
+/* DMA channel multi-block mode support */
+#define DMA_HAS_MULTI_BLOCK_MODE(id)             ((id) == 0 || (id) == 1)
 
-#define DMA_GET_BLOCK_INT_STATUS(channel_num) (!!(GDMA_BASE->STATUS_BLOCK & BIT(channel_num)))
+/* Type definitions */
+typedef GDMA_ChannelTypeDef bee_dma_channel_t;
+typedef GDMA_InitTypeDef bee_dma_init_t;
+typedef GDMA_TypeDef bee_dma_type_t;
+typedef GDMA_LLIDef bee_dma_lli_t;
+typedef uint32_t bee_dma_data_size_t;
+typedef uint32_t bee_dma_msize_t;
 
-#define BEE_GDMA_REG_CTLx_L CTL_LOW
-#define BEE_GDMA_REG_CFGx_L CFG_LOW
+/* Init structure members */
+#define BEE_DMA_CHANNEL_NUM                      GDMA_ChannelNum
+#define BEE_DMA_STRUCT_INIT                      GDMA_StructInit
+
+/* DMA configuration */
+#define BEE_DMA_DIRECTION                        GDMA_DIR
+#define BEE_DMA_BUFFER_SIZE                      GDMA_BufferSize
+#define BEE_DMA_SOURCE_HANDSHAKE                 GDMA_SourceHandshake
+#define BEE_DMA_DEST_HANDSHAKE                   GDMA_DestHandshake
+#define BEE_DMA_SOURCE_DATA_SIZE                 GDMA_SourceDataSize
+#define BEE_DMA_DEST_DATA_SIZE                   GDMA_DestinationDataSize
+#define BEE_DMA_SOURCE_INC                       GDMA_SourceInc
+#define BEE_DMA_DEST_INC                         GDMA_DestinationInc
+#define BEE_DMA_SOURCE_MSIZE                     GDMA_SourceMsize
+#define BEE_DMA_DEST_MSIZE                       GDMA_DestinationMsize
+#define BEE_DMA_SOURCE_ADDR                      GDMA_SourceAddr
+#define BEE_DMA_DEST_ADDR                        GDMA_DestinationAddr
+#define BEE_DMA_CHANNEL_PRIORITY                 GDMA_ChannelPriority
+#define BEE_DMA_MULTI_BLOCK_EN                   GDMA_Multi_Block_En
+#define BEE_DMA_MULTI_BLOCK_STRUCT               GDMA_Multi_Block_Struct
+#define BEE_DMA_MULTI_BLOCK_MODE                 GDMA_Multi_Block_Mode
+#define BEE_DMA_MSIZE(n)                         GDMA_Msize_##n
+#define BEE_DMA_DATA_SIZE_BYTE                   GDMA_DataSize_Byte
+#define BEE_DMA_DATA_SIZE_HALF_WORD              GDMA_DataSize_HalfWord
+#define BEE_DMA_DATA_SIZE_WORD                   GDMA_DataSize_Word
+#define BEE_DMA_SRC_ADDR_ADJ                     GDMA_SourceAddr_Inc
+#define BEE_DMA_DEST_ADDR_ADJ                    GDMA_DestAddr_Inc
+
+/* Interrupt and status */
+#define BEE_DMA_INT_ERROR                        GDMA_INT_Error
+#define BEE_DMA_INT_TRANSFER                     GDMA_INT_Transfer
+#define BEE_DMA_INT_BLOCK                        GDMA_INT_Block
+
+/* Register access */
+#define BEE_DMA_REG_STATUS_ERR                   STATUS_ERR
+#define BEE_DMA_REG_STATUS_TFR                   STATUS_TFR
+#define BEE_DMA_REG_STATUS_BLOCK                 STATUS_BLOCK
+#define BEE_GDMA_REG_CTLx_L                      CTL_LOW
+#define BEE_GDMA_REG_CFGx_L                      CFG_LOW
+
+/* External function declarations */
+extern FlagStatus GDMA_GetSuspendChannelStatus(bee_dma_channel_t *GDMA_Channelx);
+
+/* Interrupt status macros */
+#define DMA_GET_ERROR_INT_STATUS(channel_num)    (!!(GDMA_BASE->STATUS_ERR & BIT(channel_num)))
+#define DMA_GET_BLOCK_INT_STATUS(channel_num)    (!!(GDMA_BASE->STATUS_BLOCK & BIT(channel_num)))
+
+/* DMA API macros */
+#define BEE_DMA_INIT(channel, struct)            GDMA_Init(channel, struct)
+#define BEE_DMA_CMD(channel_num, cmd)            GDMA_Cmd(channel_num, cmd)
+#define BEE_DMA_SUSPEND_CMD(channel_num, cmd)    GDMA_SuspendCmd(channel_num, cmd)
+#define BEE_DMA_GET_TRANSFER_LEN(channel)        GDMA_GetTransferLen(channel)
+#define BEE_DMA_SET_BUFFER_SIZE(channel, size)   GDMA_SetBufferSize(channel, size)
+#define BEE_DMA_SET_SOURCE_ADDRESS(channel, src) GDMA_SetSourceAddress(channel, src)
+#define BEE_DMA_SET_DESTINATION_ADDRESS(channel, src)   GDMA_SetDestinationAddress(channel, src)
+#define BEE_DMA_INT_CONFIG(channel_num, int, cmd)       GDMA_INTConfig(channel_num, int, cmd)
+#define BEE_DMA_CLEAR_INT_PENDING_BIT(channel_num, int) GDMA_ClearINTPendingBit(channel_num, int)
+#define BEE_DMA_GET_SUSPEND_CHANNEL_STATUS(channel)     GDMA_GetSuspendChannelStatus(channel)
+#define BEE_DMA_SET_LLP_ADDRESS(channel, addr)          GDMA_SetLLPAddress(channel, addr)
+#define BEE_DMA_GET_TRANSFER_INT_STATUS(channel_num)    GDMA_GetTransferINTStatus(channel_num)
+#define BEE_DMA_GET_SUSPEND_STATUS(channel) (((bee_dma_channel_t *)(channel))->CFG_LOW & BIT8)
+
+/* Address conversion */
+#define DMA_BEE_ADDR(addr)                                                                         \
+	(FMC_IS_SPIC0_CACHEABLE_ADDR(addr) ? (FMC_MAIN0_NON_CACHE_ADDR((uint32_t)(addr)))          \
+					   : (uint32_t)(addr))
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+/* DMA channel multi-block mode support */
+#define DMA_HAS_MULTI_BLOCK_MODE(id)                                                               \
+	((id) == 0 || (id) == 1 || (id) == 2 || (id) == 3 || (id) == 4 || (id) == 5)
+
+/* Type definitions */
+typedef DMA_ChannelTypeDef bee_dma_channel_t;
+typedef DMA_InitTypeDef bee_dma_init_t;
+typedef DMA_TypeDef bee_dma_type_t;
+typedef DMA_LLIDef bee_dma_lli_t;
+typedef uint32_t bee_dma_data_size_t;
+typedef uint32_t bee_dma_msize_t;
+
+/* Init structure members */
+#define BEE_DMA_CHANNEL_NUM         DMA_ChannelNum
+#define BEE_DMA_STRUCT_INIT         DMA_StructInit
+
+/* DMA configuration */
+#define BEE_DMA_DIRECTION           DMA_Direction
+#define BEE_DMA_BUFFER_SIZE         DMA_BufferSize
+#define BEE_DMA_SOURCE_HANDSHAKE    DMA_SourceHandshake
+#define BEE_DMA_DEST_HANDSHAKE      DMA_DestHandshake
+#define BEE_DMA_SOURCE_DATA_SIZE    DMA_SourceDataSize
+#define BEE_DMA_DEST_DATA_SIZE      DMA_DestinationDataSize
+#define BEE_DMA_SOURCE_INC          DMA_SourceInc
+#define BEE_DMA_DEST_INC            DMA_DestinationInc
+#define BEE_DMA_SOURCE_MSIZE        DMA_SourceMsize
+#define BEE_DMA_DEST_MSIZE          DMA_DestinationMsize
+#define BEE_DMA_SOURCE_ADDR         DMA_SourceAddr
+#define BEE_DMA_DEST_ADDR           DMA_DestinationAddr
+#define BEE_DMA_CHANNEL_PRIORITY    DMA_ChannelPriority
+#define BEE_DMA_MULTI_BLOCK_EN      DMA_MultiBlockEn
+#define BEE_DMA_MULTI_BLOCK_STRUCT  DMA_MultiBlockStruct
+#define BEE_DMA_MULTI_BLOCK_MODE    DMA_MultiBlockMode
+#define BEE_DMA_MSIZE(n)            DMA_MSIZE_##n
+#define BEE_DMA_DATA_SIZE_BYTE      DMA_DATA_SIZE_BYTE
+#define BEE_DMA_DATA_SIZE_HALF_WORD DMA_DATA_SIZE_HALFWORD
+#define BEE_DMA_DATA_SIZE_WORD      DMA_DATA_SIZE_WORD
+#define BEE_DMA_SRC_ADDR_ADJ        DMA_SourceInc
+#define BEE_DMA_DEST_ADDR_ADJ       DMA_DestInc
+
+/* Interrupt and status */
+#define BEE_DMA_INT_ERROR           DMA_INT_ERROR
+#define BEE_DMA_INT_TRANSFER        DMA_INT_TRANSFER
+#define BEE_DMA_INT_BLOCK           DMA_INT_BLOCK
+
+/* Register access */
+#define BEE_DMA_REG_STATUS_ERR      DMA_STATUSERR_L
+#define BEE_DMA_REG_STATUS_TFR      DMA_STATUSTFR_L
+#define BEE_DMA_REG_STATUS_BLOCK    DMA_MASKBLOCK_L
+#define BEE_GDMA_REG_CTLx_L         DMA_CTLx_L
+#define BEE_GDMA_REG_CFGx_L         DMA_CFGx_L
+
+/* External function declarations */
+extern DMA_TypeDef *DMA_GetDMAxByCh(uint8_t DMA_ChannelNum);
+extern uint8_t DMA_GetDMAChNumByCh(uint8_t DMA_ChannelNum);
+extern FlagStatus DMA_GetSuspendChannelStatus(bee_dma_channel_t *GDMA_Channelx);
+
+/* Interrupt status macros */
+#define DMA_GET_ERROR_INT_STATUS(channel_num)                                                      \
+	(!!(DMA_GetDMAxByCh(channel_num)->DMA_STATUSERR_L & BIT(DMA_GetDMAChNumByCh(channel_num))))
+
+#define DMA_GET_BLOCK_INT_STATUS(channel_num)                                                      \
+	(!!(DMA_GetDMAxByCh(channel_num)->DMA_STATUSBLOCK_L &                                      \
+	    BIT(DMA_GetDMAChNumByCh(channel_num))))
+
+/* DMA API macros */
+#define BEE_DMA_INIT(channel, struct)                   DMA_Init(channel, struct)
+#define BEE_DMA_CMD(channel_num, cmd)                   DMA_Cmd(channel_num, cmd)
+#define BEE_DMA_SUSPEND_CMD(channel_num, cmd)           DMA_SuspendCmd(channel_num, cmd)
+#define BEE_DMA_GET_TRANSFER_LEN(channel)               DMA_GetTransferLen(channel)
+#define BEE_DMA_SET_BUFFER_SIZE(channel, size)          DMA_SetBufferSize(channel, size)
+#define BEE_DMA_SET_SOURCE_ADDRESS(channel, src)        DMA_SetSourceAddress(channel, src)
+#define BEE_DMA_SET_DESTINATION_ADDRESS(channel, src)   DMA_SetDestinationAddress(channel, src)
+#define BEE_DMA_INT_CONFIG(channel_num, int, cmd)       DMA_INTConfig(channel_num, int, cmd)
+#define BEE_DMA_CLEAR_INT_PENDING_BIT(channel_num, int) DMA_ClearINTPendingBit(channel_num, int)
+#define BEE_DMA_GET_SUSPEND_CHANNEL_STATUS(channel)     DMA_GetSuspendChannelStatus(channel)
+#define BEE_DMA_SET_LLP_ADDRESS(channel, addr)          DMA_SetLLPAddress(channel, addr)
+#define BEE_DMA_GET_TRANSFER_INT_STATUS(channel_num)    DMA_GetTransferINTStatus(channel_num)
+#define BEE_DMA_GET_SUSPEND_STATUS(channel) (((bee_dma_channel_t *)(channel))->DMA_CFGx_L & BIT8)
+
+/* Address conversion */
+#define DMA_BEE_ADDR(addr)                  ((uint32_t)addr)
 #endif
 
 BUILD_ASSERT(CONFIG_DMA_BEE_LLI_POOL_COUNT > 0, "DMA LLI pool count must be > 0");
 
-typedef GDMA_LLIDef GDMA_LLITypeDef;
-
-SYS_MEM_BLOCKS_DEFINE(dma_bee_lli_pool, BIT(LOG2CEIL(sizeof(GDMA_LLITypeDef))), 4,
+SYS_MEM_BLOCKS_DEFINE(dma_bee_lli_pool, BIT(LOG2CEIL(sizeof(bee_dma_lli_t))), 4,
 		      CONFIG_DMA_BEE_LLI_POOL_COUNT);
 
 static struct k_spinlock dma_bee_lli_lock;
@@ -97,7 +307,7 @@ struct dma_bee_channel {
 	struct dma_config cfg;
 	bool cyclic;
 	uint32_t total_size;
-	GDMA_LLITypeDef *dma_lli[CONFIG_DMA_BEE_MAX_BLOCKS_PER_CHANNEL];
+	bee_dma_lli_t *dma_lli[CONFIG_DMA_BEE_MAX_BLOCKS_PER_CHANNEL];
 	uint32_t allocated_lli_count;
 };
 
@@ -113,9 +323,7 @@ struct dma_bee_data {
 	struct dma_bee_channel *channels;
 };
 
-extern FlagStatus GDMA_GetSuspendChannelStatus(GDMA_ChannelTypeDef *GDMA_Channelx);
-
-static void dma_bee_reset_block_transfer(GDMA_ChannelTypeDef *dma_channel)
+static void dma_bee_reset_block_transfer(bee_dma_channel_t *dma_channel)
 {
 	dma_channel->BEE_GDMA_REG_CTLx_L |= BIT27 | BIT28;
 	dma_channel->BEE_GDMA_REG_CFGx_L &= ~(BIT30 | BIT31);
@@ -124,20 +332,20 @@ static void dma_bee_reset_block_transfer(GDMA_ChannelTypeDef *dma_channel)
 static int dma_bee_get_width(uint32_t size, void *width)
 {
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
-	GDMADataSize_TypeDef *width_ptr = (GDMADataSize_TypeDef *)width;
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+	bee_dma_data_size_t *width_ptr = (bee_dma_data_size_t *)width;
+#elif defined(CONFIG_SOC_SERIES_RTL8752H) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uint32_t *width_ptr = (uint32_t *)width;
 #endif
 
 	switch (size) {
 	case 1:
-		*width_ptr = GDMA_DataSize_Byte;
+		*width_ptr = BEE_DMA_DATA_SIZE_BYTE;
 		break;
 	case 2:
-		*width_ptr = GDMA_DataSize_HalfWord;
+		*width_ptr = BEE_DMA_DATA_SIZE_HALF_WORD;
 		break;
 	case 4:
-		*width_ptr = GDMA_DataSize_Word;
+		*width_ptr = BEE_DMA_DATA_SIZE_WORD;
 		break;
 	default:
 		return -EINVAL;
@@ -149,35 +357,35 @@ static int dma_bee_get_width(uint32_t size, void *width)
 static int dma_bee_get_msize(uint32_t burst_len, void *msize)
 {
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
-	GDMAMSize_TypeDef *msize_ptr = (GDMAMSize_TypeDef *)msize;
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+	bee_dma_msize_t *msize_ptr = (bee_dma_msize_t *)msize;
+#elif defined(CONFIG_SOC_SERIES_RTL8752H) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uint32_t *msize_ptr = (uint32_t *)msize;
 #endif
 
 	switch (burst_len) {
 	case 1:
-		*msize_ptr = GDMA_Msize_1;
+		*msize_ptr = BEE_DMA_MSIZE(1);
 		break;
 	case 4:
-		*msize_ptr = GDMA_Msize_4;
+		*msize_ptr = BEE_DMA_MSIZE(4);
 		break;
 	case 8:
-		*msize_ptr = GDMA_Msize_8;
+		*msize_ptr = BEE_DMA_MSIZE(8);
 		break;
 	case 16:
-		*msize_ptr = GDMA_Msize_16;
+		*msize_ptr = BEE_DMA_MSIZE(16);
 		break;
 	case 32:
-		*msize_ptr = GDMA_Msize_32;
+		*msize_ptr = BEE_DMA_MSIZE(32);
 		break;
 	case 64:
-		*msize_ptr = GDMA_Msize_64;
+		*msize_ptr = BEE_DMA_MSIZE(64);
 		break;
 	case 128:
-		*msize_ptr = GDMA_Msize_128;
+		*msize_ptr = BEE_DMA_MSIZE(128);
 		break;
 	case 256:
-		*msize_ptr = GDMA_Msize_256;
+		*msize_ptr = BEE_DMA_MSIZE(256);
 		break;
 	default:
 		return -EINVAL;
@@ -219,10 +427,10 @@ static int dma_bee_check_dma_config(const struct dma_bee_config *cfg, uint32_t c
 }
 
 static int configure_multi_block(struct dma_bee_data *data, uint32_t channel,
-				 struct dma_config *dma_cfg, GDMA_InitTypeDef *init_struct)
+				 struct dma_config *dma_cfg, bee_dma_init_t *init_struct)
 {
 	struct dma_block_config *cur_block = dma_cfg->head_block;
-	GDMA_LLITypeDef **lli_ptr_array;
+	bee_dma_lli_t **lli_ptr_array;
 	uint32_t next_lli;
 	uint32_t llp_selected;
 	int ret;
@@ -259,9 +467,9 @@ static int configure_multi_block(struct dma_bee_data *data, uint32_t channel,
 	data->channels[channel].allocated_lli_count = dma_cfg->block_count;
 	lli_ptr_array = data->channels[channel].dma_lli;
 
-	init_struct->GDMA_Multi_Block_En = ENABLE;
-	init_struct->GDMA_Multi_Block_Mode = LLI_TRANSFER;
-	init_struct->GDMA_Multi_Block_Struct = (uint32_t)lli_ptr_array[0];
+	init_struct->BEE_DMA_MULTI_BLOCK_EN = ENABLE;
+	init_struct->BEE_DMA_MULTI_BLOCK_MODE = LLI_TRANSFER;
+	init_struct->BEE_DMA_MULTI_BLOCK_STRUCT = (uint32_t)lli_ptr_array[0];
 
 	data->channels[channel].total_size = 0;
 
@@ -288,17 +496,17 @@ static int configure_multi_block(struct dma_bee_data *data, uint32_t channel,
 		 * either the next block in the list, or the first block again in cyclic mode.
 		 */
 		if (dma_cfg->cyclic || (i < dma_cfg->block_count - 1)) {
-			llp_selected = (init_struct->GDMA_Multi_Block_Mode & LLP_SELECTED_BIT);
+			llp_selected = (init_struct->BEE_DMA_MULTI_BLOCK_MODE & LLP_SELECTED_BIT);
 		} else {
 			llp_selected = 0;
 		}
 
-		lli_ptr_array[i]->CTL_LOW = BIT(0) | (init_struct->GDMA_DestinationDataSize << 1) |
-					    (init_struct->GDMA_SourceDataSize << 4) |
+		lli_ptr_array[i]->CTL_LOW = BIT(0) | (init_struct->BEE_DMA_DEST_DATA_SIZE << 1) |
+					    (init_struct->BEE_DMA_SOURCE_DATA_SIZE << 4) |
 					    (cur_block->dest_addr_adj << 7) |
 					    (cur_block->source_addr_adj << 9) |
-					    (init_struct->GDMA_DestinationMsize << 11) |
-					    (init_struct->GDMA_SourceMsize << 14) |
+					    (init_struct->BEE_DMA_DEST_MSIZE << 11) |
+					    (init_struct->BEE_DMA_SOURCE_MSIZE << 14) |
 					    (dma_cfg->channel_direction << 20) | llp_selected;
 
 		lli_ptr_array[i]->CTL_HIGH = cur_block->block_size / dma_cfg->source_data_size;
@@ -322,8 +530,8 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
-	GDMA_ChannelTypeDef *dma_channel;
-	GDMA_InitTypeDef dma_init_struct;
+	bee_dma_channel_t *dma_channel;
+	bee_dma_init_t dma_init_struct;
 	int ret;
 
 	if (channel >= cfg->channels) {
@@ -332,7 +540,7 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 	}
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
+	dma_channel = (bee_dma_channel_t *)cfg->channel_table[channel].channel_base;
 
 	LOG_DBG("Channel=%d, channel_direction=%d, block_size=%d, "
 		"source_addr_adj=%d dest_addr_adj=%d, "
@@ -350,49 +558,49 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 		return ret;
 	}
 
-	GDMA_Cmd(dma_channel_num, DISABLE);
-	GDMA_StructInit(&dma_init_struct);
+	BEE_DMA_CMD(dma_channel_num, DISABLE);
+	BEE_DMA_STRUCT_INIT(&dma_init_struct);
 
-	if (dma_bee_get_width(dma_cfg->source_data_size, &dma_init_struct.GDMA_SourceDataSize) <
-	    0) {
+	if (dma_bee_get_width(dma_cfg->source_data_size,
+			      &dma_init_struct.BEE_DMA_SOURCE_DATA_SIZE) < 0) {
 		LOG_ERR("Invalid source_data_size %d", dma_cfg->source_data_size);
 		return -EINVAL;
 	}
 
-	if (dma_bee_get_width(dma_cfg->dest_data_size, &dma_init_struct.GDMA_DestinationDataSize) <
+	if (dma_bee_get_width(dma_cfg->dest_data_size, &dma_init_struct.BEE_DMA_DEST_DATA_SIZE) <
 	    0) {
 		LOG_ERR("Invalid dest_data_size %d", dma_cfg->dest_data_size);
 		return -EINVAL;
 	}
 
-	if (dma_bee_get_msize(dma_cfg->source_burst_length, &dma_init_struct.GDMA_SourceMsize) <
+	if (dma_bee_get_msize(dma_cfg->source_burst_length, &dma_init_struct.BEE_DMA_SOURCE_MSIZE) <
 	    0) {
 		LOG_ERR("Invalid source_burst_length %d", dma_cfg->source_burst_length);
 		return -EINVAL;
 	}
 
-	if (dma_bee_get_msize(dma_cfg->dest_burst_length, &dma_init_struct.GDMA_DestinationMsize) <
+	if (dma_bee_get_msize(dma_cfg->dest_burst_length, &dma_init_struct.BEE_DMA_DEST_MSIZE) <
 	    0) {
 		LOG_ERR("Invalid dest_burst_length %d", dma_cfg->dest_burst_length);
 		return -EINVAL;
 	}
 
-	dma_init_struct.GDMA_ChannelNum = dma_channel_num;
-	dma_init_struct.GDMA_DIR = dma_cfg->channel_direction;
-	dma_init_struct.GDMA_BufferSize =
+	dma_init_struct.BEE_DMA_CHANNEL_NUM = dma_channel_num;
+	dma_init_struct.BEE_DMA_DIRECTION = dma_cfg->channel_direction;
+	dma_init_struct.BEE_DMA_BUFFER_SIZE =
 		dma_cfg->head_block->block_size / dma_cfg->source_data_size;
 
 	if (dma_cfg->channel_direction == MEMORY_TO_PERIPHERAL) {
-		dma_init_struct.GDMA_DestHandshake = dma_cfg->dma_slot;
+		dma_init_struct.BEE_DMA_DEST_HANDSHAKE = dma_cfg->dma_slot;
 	} else if (dma_cfg->channel_direction == PERIPHERAL_TO_MEMORY) {
-		dma_init_struct.GDMA_SourceHandshake = dma_cfg->dma_slot;
+		dma_init_struct.BEE_DMA_SOURCE_HANDSHAKE = dma_cfg->dma_slot;
 	}
 
-	dma_init_struct.GDMA_SourceInc = dma_cfg->head_block->source_addr_adj;
-	dma_init_struct.GDMA_DestinationInc = dma_cfg->head_block->dest_addr_adj;
-	dma_init_struct.GDMA_SourceAddr = DMA_BEE_ADDR(dma_cfg->head_block->source_address);
-	dma_init_struct.GDMA_DestinationAddr = DMA_BEE_ADDR(dma_cfg->head_block->dest_address);
-	dma_init_struct.GDMA_ChannelPriority = dma_cfg->channel_priority;
+	dma_init_struct.BEE_DMA_SOURCE_INC = dma_cfg->head_block->source_addr_adj;
+	dma_init_struct.BEE_DMA_DEST_INC = dma_cfg->head_block->dest_addr_adj;
+	dma_init_struct.BEE_DMA_SOURCE_ADDR = DMA_BEE_ADDR(dma_cfg->head_block->source_address);
+	dma_init_struct.BEE_DMA_DEST_ADDR = DMA_BEE_ADDR(dma_cfg->head_block->dest_address);
+	dma_init_struct.BEE_DMA_CHANNEL_PRIORITY = dma_cfg->channel_priority;
 
 	if (DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
 		ret = configure_multi_block(data, channel, dma_cfg, &dma_init_struct);
@@ -400,11 +608,11 @@ static int dma_bee_configure(const struct device *dev, uint32_t channel, struct 
 			return ret;
 		}
 	} else {
-		dma_init_struct.GDMA_Multi_Block_En = DISABLE;
+		dma_init_struct.BEE_DMA_MULTI_BLOCK_EN = DISABLE;
 		data->channels[channel].total_size = dma_cfg->head_block->block_size;
 	}
 
-	GDMA_Init(dma_channel, &dma_init_struct);
+	BEE_DMA_INIT(dma_channel, &dma_init_struct);
 	data->channels[channel].callback = dma_cfg->dma_callback;
 	data->channels[channel].user_data = dma_cfg->user_data;
 	data->channels[channel].cfg = *dma_cfg;
@@ -418,7 +626,7 @@ static int dma_bee_reload(const struct device *dev, uint32_t channel, uint32_t s
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
-	GDMA_ChannelTypeDef *dma_channel;
+	bee_dma_channel_t *dma_channel;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("Reload channel must be < %d (%d)", cfg->channels, channel);
@@ -426,16 +634,16 @@ static int dma_bee_reload(const struct device *dev, uint32_t channel, uint32_t s
 	}
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
+	dma_channel = (bee_dma_channel_t *)cfg->channel_table[channel].channel_base;
 
-	GDMA_Cmd(dma_channel_num, DISABLE);
+	BEE_DMA_CMD(dma_channel_num, DISABLE);
 
 	data->channels[channel].busy = false;
 
 	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
-		GDMA_SetBufferSize(dma_channel, size);
-		GDMA_SetSourceAddress(dma_channel, DMA_BEE_ADDR(src));
-		GDMA_SetDestinationAddress(dma_channel, DMA_BEE_ADDR(dst));
+		BEE_DMA_SET_BUFFER_SIZE(dma_channel, size);
+		BEE_DMA_SET_SOURCE_ADDRESS(dma_channel, DMA_BEE_ADDR(src));
+		BEE_DMA_SET_DESTINATION_ADDRESS(dma_channel, DMA_BEE_ADDR(dst));
 
 		data->channels[channel].total_size = size;
 	} else {
@@ -466,7 +674,7 @@ static int dma_bee_start(const struct device *dev, uint32_t channel)
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
-	GDMA_ChannelTypeDef *dma_channel;
+	bee_dma_channel_t *dma_channel;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("Start channel must be < %d (%d)", cfg->channels, channel);
@@ -474,29 +682,31 @@ static int dma_bee_start(const struct device *dev, uint32_t channel)
 	}
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
+	dma_channel = (bee_dma_channel_t *)cfg->channel_table[channel].channel_base;
 
 	if (!data->channels[channel].cfg.error_callback_dis) {
-		GDMA_INTConfig(dma_channel_num, GDMA_INT_Error, ENABLE);
+		BEE_DMA_INT_CONFIG(dma_channel_num, BEE_DMA_INT_ERROR, ENABLE);
 	}
 
 	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
-		GDMA_INTConfig(dma_channel_num, GDMA_INT_Transfer, ENABLE);
+		BEE_DMA_INT_CONFIG(dma_channel_num, BEE_DMA_INT_TRANSFER, ENABLE);
 		data->channels[channel].busy = true;
-		GDMA_Cmd(dma_channel_num, ENABLE);
+		BEE_DMA_CMD(dma_channel_num, ENABLE);
 	} else {
-		GDMA_INTConfig(dma_channel_num, GDMA_INT_Block | GDMA_INT_Transfer, ENABLE);
+		BEE_DMA_INT_CONFIG(dma_channel_num, BEE_DMA_INT_BLOCK | BEE_DMA_INT_TRANSFER,
+				   ENABLE);
 
 		data->channels[channel].busy = true;
 
-		GDMA_SetBufferSize(dma_channel, data->channels[channel].dma_lli[0]->CTL_HIGH);
-		GDMA_SetLLPAddress(dma_channel, (uint32_t)(data->channels[channel].dma_lli[0]));
+		BEE_DMA_SET_BUFFER_SIZE(dma_channel, data->channels[channel].dma_lli[0]->CTL_HIGH);
+		BEE_DMA_SET_LLP_ADDRESS(dma_channel,
+					(uint32_t)(data->channels[channel].dma_lli[0]));
 		dma_bee_reset_block_transfer(dma_channel);
 
-		GDMA_SetSourceAddress(dma_channel, 0);
-		GDMA_SetDestinationAddress(dma_channel, 0);
+		BEE_DMA_SET_SOURCE_ADDRESS(dma_channel, 0);
+		BEE_DMA_SET_DESTINATION_ADDRESS(dma_channel, 0);
 
-		GDMA_Cmd(dma_channel_num, ENABLE);
+		BEE_DMA_CMD(dma_channel_num, ENABLE);
 	}
 
 	return 0;
@@ -507,7 +717,7 @@ static int dma_bee_stop(const struct device *dev, uint32_t channel)
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
-	GDMA_ChannelTypeDef *dma_channel;
+	bee_dma_channel_t *dma_channel;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("Stop channel must be < %d (%d)", cfg->channels, channel);
@@ -515,19 +725,23 @@ static int dma_bee_stop(const struct device *dev, uint32_t channel)
 	}
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
+	dma_channel = (bee_dma_channel_t *)cfg->channel_table[channel].channel_base;
 
 	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
-		GDMA_INTConfig(dma_channel_num, GDMA_INT_Transfer | GDMA_INT_Error, DISABLE);
-		GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer | GDMA_INT_Error);
+		BEE_DMA_INT_CONFIG(dma_channel_num, BEE_DMA_INT_TRANSFER | BEE_DMA_INT_ERROR,
+				   DISABLE);
+		BEE_DMA_CLEAR_INT_PENDING_BIT(dma_channel_num,
+					      BEE_DMA_INT_TRANSFER | BEE_DMA_INT_ERROR);
 	} else {
-		GDMA_INTConfig(dma_channel_num, GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block,
-			       DISABLE);
-		GDMA_ClearINTPendingBit(dma_channel_num,
-					GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block);
+		BEE_DMA_INT_CONFIG(dma_channel_num,
+				   BEE_DMA_INT_TRANSFER | BEE_DMA_INT_ERROR | BEE_DMA_INT_BLOCK,
+				   DISABLE);
+		BEE_DMA_CLEAR_INT_PENDING_BIT(dma_channel_num, BEE_DMA_INT_TRANSFER |
+								       BEE_DMA_INT_ERROR |
+								       BEE_DMA_INT_BLOCK);
 	}
 
-	GDMA_Cmd(dma_channel_num, DISABLE);
+	BEE_DMA_CMD(dma_channel_num, DISABLE);
 	data->channels[channel].busy = false;
 
 	return 0;
@@ -538,7 +752,7 @@ static int dma_bee_suspend(const struct device *dev, uint32_t channel)
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
-	GDMA_ChannelTypeDef *dma_channel;
+	bee_dma_channel_t *dma_channel;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("Suspend channel must be < %d (%d)", cfg->channels, channel);
@@ -546,14 +760,14 @@ static int dma_bee_suspend(const struct device *dev, uint32_t channel)
 	}
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
+	dma_channel = (bee_dma_channel_t *)cfg->channel_table[channel].channel_base;
 
 	if (!data->channels[channel].busy) {
 		LOG_ERR("Suspend channel not busy");
 		return -EINVAL;
 	}
 
-	GDMA_SuspendCmd(dma_channel, ENABLE);
+	BEE_DMA_SUSPEND_CMD(dma_channel, ENABLE);
 
 	return 0;
 }
@@ -563,7 +777,7 @@ static int dma_bee_resume(const struct device *dev, uint32_t channel)
 	const struct dma_bee_config *cfg = dev->config;
 	struct dma_bee_data *data = dev->data;
 	int dma_channel_num;
-	GDMA_ChannelTypeDef *dma_channel;
+	bee_dma_channel_t *dma_channel;
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("Resume channel must be < %d (%d)", cfg->channels, channel);
@@ -571,19 +785,19 @@ static int dma_bee_resume(const struct device *dev, uint32_t channel)
 	}
 
 	dma_channel_num = cfg->channel_table[channel].channel_num;
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[channel].channel_base;
+	dma_channel = (bee_dma_channel_t *)cfg->channel_table[channel].channel_base;
 
 	if (!data->channels[channel].busy) {
 		LOG_ERR("Resume channel not busy");
 		return -EINVAL;
 	}
 
-	if (!GDMA_GetSuspendChannelStatus(dma_channel)) {
+	if (!BEE_DMA_GET_SUSPEND_CHANNEL_STATUS(dma_channel)) {
 		LOG_ERR("Resume channel not suspend");
 		return -EINVAL;
 	}
 
-	GDMA_SuspendCmd(dma_channel, DISABLE);
+	BEE_DMA_SUSPEND_CMD(dma_channel, DISABLE);
 
 	return 0;
 }
@@ -594,7 +808,7 @@ static int dma_bee_get_status(const struct device *dev, uint32_t ch, struct dma_
 	struct dma_bee_data *data = dev->data;
 	bool suspending;
 	int dma_channel_num;
-	GDMA_ChannelTypeDef *dma_channel;
+	bee_dma_channel_t *dma_channel;
 	uint32_t timeout_cnt = 10000;
 
 	if (ch >= cfg->channels) {
@@ -603,13 +817,13 @@ static int dma_bee_get_status(const struct device *dev, uint32_t ch, struct dma_
 	}
 
 	dma_channel_num = cfg->channel_table[ch].channel_num;
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[ch].channel_base;
-	suspending = GDMA_GetSuspendChannelStatus(dma_channel);
+	dma_channel = (bee_dma_channel_t *)cfg->channel_table[ch].channel_base;
+	suspending = BEE_DMA_GET_SUSPEND_STATUS(dma_channel);
 
 	stat->busy = data->channels[ch].busy;
 	if (data->channels[ch].busy) {
-		GDMA_SuspendCmd(dma_channel, ENABLE);
-		while (!GDMA_GetSuspendChannelStatus(dma_channel)) {
+		BEE_DMA_SUSPEND_CMD(dma_channel, ENABLE);
+		while (!BEE_DMA_GET_SUSPEND_CHANNEL_STATUS(dma_channel)) {
 			if (--timeout_cnt == 0) {
 				LOG_ERR("Get status timeout on channel %d", ch);
 				break;
@@ -617,10 +831,10 @@ static int dma_bee_get_status(const struct device *dev, uint32_t ch, struct dma_
 		}
 
 		stat->pending_length =
-			data->channels[ch].total_size - GDMA_GetTransferLen(dma_channel);
+			data->channels[ch].total_size - BEE_DMA_GET_TRANSFER_LEN(dma_channel);
 
 		if (!suspending) {
-			GDMA_SuspendCmd(dma_channel, DISABLE);
+			BEE_DMA_SUSPEND_CMD(dma_channel, DISABLE);
 		}
 	} else {
 		stat->pending_length = 0;
@@ -657,10 +871,11 @@ static int dma_bee_init(const struct device *dev)
 	for (uint32_t i = 0; i < cfg->channels; i++) {
 		dma_channel_num = cfg->channel_table[i].channel_num;
 		if (dma_channel_num >= 0) {
-			GDMA_INTConfig(dma_channel_num,
-				       GDMA_INT_Transfer | GDMA_INT_Error | GDMA_INT_Block,
-				       DISABLE);
-			GDMA_Cmd(dma_channel_num, DISABLE);
+			BEE_DMA_INT_CONFIG(dma_channel_num,
+					   BEE_DMA_INT_TRANSFER | BEE_DMA_INT_ERROR |
+						   BEE_DMA_INT_BLOCK,
+					   DISABLE);
+			BEE_DMA_CMD(dma_channel_num, DISABLE);
 		}
 	}
 
@@ -683,28 +898,28 @@ static void dma_bee_isr(struct dma_bee_isr_param *param)
 	int dma_channel_num;
 	uint32_t errflag, ftfflag, blockflag;
 	int status = DMA_STATUS_COMPLETE;
-	GDMA_ChannelTypeDef *dma_channel;
+	bee_dma_channel_t *dma_channel;
 
 	dma_channel_num = cfg->channel_table[i].channel_num;
-	dma_channel = (GDMA_ChannelTypeDef *)cfg->channel_table[i].channel_base;
+	dma_channel = (bee_dma_channel_t *)cfg->channel_table[i].channel_base;
 	errflag = DMA_GET_ERROR_INT_STATUS(dma_channel_num);
-	ftfflag = GDMA_GetTransferINTStatus(dma_channel_num);
+	ftfflag = BEE_DMA_GET_TRANSFER_INT_STATUS(dma_channel_num);
 	blockflag = DMA_GET_BLOCK_INT_STATUS(dma_channel_num);
 
 	LOG_DBG("Channel=%d transferlen=%d callback=0x%p ftfflag=%d errflag=%d blockflag=%d "
 		"complete_callback_en=%d",
-		i, GDMA_GetTransferLen(dma_channel), data->channels[i].callback, ftfflag, errflag,
-		blockflag, data->channels[i].cfg.complete_callback_en);
+		i, BEE_DMA_GET_TRANSFER_LEN(dma_channel), data->channels[i].callback, ftfflag,
+		errflag, blockflag, data->channels[i].cfg.complete_callback_en);
 
 	if (!DMA_HAS_MULTI_BLOCK_MODE(dma_channel_num)) {
 		if (errflag == 0 && ftfflag == 0) {
 			return;
 		}
 
-		GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
+		BEE_DMA_CLEAR_INT_PENDING_BIT(dma_channel_num, BEE_DMA_INT_TRANSFER);
 
 		if (errflag) {
-			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
+			BEE_DMA_CLEAR_INT_PENDING_BIT(dma_channel_num, BEE_DMA_INT_ERROR);
 			status = -EIO;
 		}
 
@@ -719,19 +934,20 @@ static void dma_bee_isr(struct dma_bee_isr_param *param)
 		}
 
 		if (errflag) {
-			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Error);
+			BEE_DMA_CLEAR_INT_PENDING_BIT(dma_channel_num, BEE_DMA_INT_ERROR);
 			status = -EIO;
 		}
 
 		if (ftfflag) {
-			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Transfer);
+			BEE_DMA_CLEAR_INT_PENDING_BIT(dma_channel_num, BEE_DMA_INT_TRANSFER);
 			data->channels[i].busy = false;
 		}
 
 		if (blockflag) {
-			GDMA_ClearINTPendingBit(dma_channel_num, GDMA_INT_Block);
+			BEE_DMA_CLEAR_INT_PENDING_BIT(dma_channel_num, BEE_DMA_INT_BLOCK);
 			if (!data->channels[i].cyclic) {
-				data->channels[i].total_size -= GDMA_GetTransferLen(dma_channel);
+				data->channels[i].total_size -=
+					BEE_DMA_GET_TRANSFER_LEN(dma_channel);
 			}
 
 			if (data->channels[i].cfg.complete_callback_en && !errflag) {
@@ -785,6 +1001,13 @@ static DEVICE_API(dma, dma_bee_driver_api) = {
 		{GDMA_Channel1_BASE, GDMA_CH_NUM1},                                                \
 		{GDMA_Channel2_BASE, GDMA_CH_NUM2},                                                \
 	}
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define DMA_CHANNEL_TABLE                                                                          \
+	.channel_table = {                                                                         \
+		{DMA_CH0_BASE, DMA_CH_NUM0}, {DMA_CH1_BASE, DMA_CH_NUM1},                          \
+		{DMA_CH2_BASE, DMA_CH_NUM2}, {DMA_CH3_BASE, DMA_CH_NUM3},                          \
+		{DMA_CH4_BASE, DMA_CH_NUM4}, {DMA_CH5_BASE, DMA_CH_NUM5},                          \
+	}
 #endif
 
 #define ALL_ISR_PARAM_CONFIGURE(n, index)                                                          \
@@ -795,7 +1018,7 @@ static DEVICE_API(dma, dma_bee_driver_api) = {
 
 #define CONFIGURE_ALL_ISR_PARAMS(index, n) LISTIFY(n, ALL_ISR_PARAM_CONFIGURE, (), index)
 
-#define BEE_DMA_INIT(index)                                                                        \
+#define BEE_DMA_DRIVER_INIT(index)                                                                 \
 	static struct dma_bee_isr_param dma_bee_##index##_isr_param[] = {                          \
 		CONFIGURE_ALL_ISR_PARAMS(index, DT_NUM_IRQS(DT_DRV_INST(index)))};                 \
 	static void dma_bee_##index##_irq_configure(void)                                          \
@@ -821,4 +1044,4 @@ static DEVICE_API(dma, dma_bee_driver_api) = {
 			      &dma_bee_##index##_config, PRE_KERNEL_1, CONFIG_DMA_INIT_PRIORITY,   \
 			      &dma_bee_driver_api);
 
-DT_INST_FOREACH_STATUS_OKAY(BEE_DMA_INIT)
+DT_INST_FOREACH_STATUS_OKAY(BEE_DMA_DRIVER_INIT)
