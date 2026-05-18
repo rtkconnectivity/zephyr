@@ -460,6 +460,17 @@
 			clocks = <&cctl APB_CLK(LPQDEC)>;
 			status = "disabled";
 		};
+
+		dma0: dma@400012c0 {
+			compatible = "realtek,bee-dma";
+			reg = <0x400012c0 0x4b0>;
+			interrupts = <32 0>, <33 0>, <34 0>, <35 0>, <36 0>, <37 0>;
+			dma-channels = <6>;
+			clocks = <&cctl APB_CLK(DMA)>;
+			dma-port = <0>;
+			#dma-cells = <3>;
+			status = "disabled";
+		};
 	};
 };
 
