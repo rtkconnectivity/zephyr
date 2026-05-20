@@ -184,6 +184,7 @@ bool os_timer_get_auto_reload_zephyr(void **handle_ptr, long *autoreload);
 bool os_timer_get_timer_number_zephyr(void **handle_ptr, uint8_t *timer_num);
 bool os_timer_dump_zephyr(void);
 void os_timer_init_zephyr(void);
+bool os_timer_max_num_get_zephyr(uint32_t *max_num);
 
 #ifdef __cplusplus
 }

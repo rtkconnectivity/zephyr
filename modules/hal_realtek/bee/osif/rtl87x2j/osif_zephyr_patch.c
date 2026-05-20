@@ -21,6 +21,7 @@
 #include "os_sync.h"
 #include "os_timer.h"
 #include "os_task.h"
+#include "os_pm.h"
 #include "mem_types.h"
 #include "os_interface.h"
 #include "osif.h"
@@ -156,6 +157,27 @@ static bool wrapper_os_msg_peek_intern(void *handle, void *msg, uint32_t wait_ms
 	return os_msg_peek_intern_zephyr(handle, msg, wait_ms, __func__, __LINE__);
 }
 
+static uint32_t wrapper_os_timer_max_num_get_zephyr(uint32_t *p_result)
+{
+	uint32_t max_num;
+	*p_result = os_timer_max_num_get_zephyr(&max_num);
+	return max_num;
+}
+
+static bool os_pm_excluded_handle_register_zephyr(void **handle_ptr,
+						  PlatformExcludedHandleType type)
+{
+	LOG_WRN("os_pm_excluded_handle_register() is invalid in Zephyr");
+	return false;
+}
+
+static bool os_pm_excluded_handle_unregister_zephyr(void **handle_ptr,
+						    PlatformExcludedHandleType type)
+{
+	LOG_WRN("os_pm_excluded_handle_unregister() is invalid in Zephyr");
+	return false;
+}
+
 void os_interface_update(T_OS_INTERFACE_INFO *os_interface)
 {
 	os_interface->os_mem_alloc_intern = wrapper_os_mem_alloc_intern;
@@ -201,6 +223,7 @@ void os_interface_update(T_OS_INTERFACE_INFO *os_interface)
 	os_interface->os_timer_handle_get = os_timer_handle_get_zephyr;
 	os_interface->os_timer_dump = os_timer_dump_zephyr;
 	os_interface->os_timer_init = os_timer_init_zephyr;
+	patch_os_timer_max_num_get = wrapper_os_timer_max_num_get_zephyr;
 
 	os_interface->os_lock = os_lock_zephyr;
 	os_interface->os_unlock = os_unlock_zephyr;
@@ -233,12 +256,13 @@ void os_interface_update(T_OS_INTERFACE_INFO *os_interface)
 	 * os_interface->os_timer_tick_rate_get = os_sys_tick_get_zephyr;
 	 * os_interface->os_timer_tick_increase = osif_timer_tick_increase;
 	 * os_interface->os_pm_next_timeout_value_get = osif_pm_next_timeout_value_get;
-	 * os_interface->os_pm_excluded_handle_register = osif_pm_excluded_handle_register;
-	 * os_interface->os_pm_excluded_handle_unregister = osif_pm_excluded_handle_unregister;
 	 * os_interface->os_pm_tickcount_store = osif_pm_tickcount_store;
 	 * os_interface->os_pm_tickcount_restore = osif_pm_tickcount_restore;
 	 * os_interface->os_pm_init = osif_pm_init;
 	 */
+
+	os_interface->os_pm_excluded_handle_register = os_pm_excluded_handle_register_zephyr;
+	os_interface->os_pm_excluded_handle_unregister = os_pm_excluded_handle_unregister_zephyr;
 }
 
 /************************************************************

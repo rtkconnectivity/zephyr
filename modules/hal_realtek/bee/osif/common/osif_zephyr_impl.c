@@ -1056,6 +1056,15 @@ bool os_timer_get_timer_number_zephyr(void **handle_ptr, uint8_t *timer_num)
 	return false;
 }
 
+bool os_timer_max_num_get_zephyr(uint32_t *max_num)
+{
+	if (!max_num) {
+		return false;
+	}
+	*max_num = CONFIG_REALTEK_BEE_OSIF_TIMER_MAX_COUNT;
+	return true;
+}
+
 bool os_timer_dump_zephyr(void)
 {
 	__ASSERT(false, "os_timer_dump() is invalid in Zephyr");
