@@ -471,6 +471,47 @@
 			#dma-cells = <3>;
 			status = "disabled";
 		};
+
+		spi0: spi@40012000 {
+			compatible = "realtek,bee-spi";
+			reg = <0x40012000 0xf0>;
+			interrupts = <28 0>;
+			clocks = <&cctl APB_CLK(SPI0)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		spi0_slave: spi_slave@40012000 {
+			compatible = "realtek,bee-spi";
+			reg = <0x40012000 0xf0>;
+			interrupts = <28 0>;
+			clocks = <&cctl APB_CLK(SPI0)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			is-slave;
+		};
+
+		spi1: spi@40012400 {
+			compatible = "realtek,bee-spi";
+			reg = <0x40012400 0xf0>;
+			interrupts = <29 0>;
+			clocks = <&cctl APB_CLK(SPI1)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
+		spi2: spi@40012800 {
+			compatible = "realtek,bee-spi";
+			reg = <0x40012800 0xf0>;
+			interrupts = <79 0>;
+			clocks = <&cctl APB_CLK(SPI2)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
 	};
 };
 

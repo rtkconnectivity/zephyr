@@ -28,6 +28,9 @@ LOG_MODULE_REGISTER(spi_bee, CONFIG_SPI_LOG_LEVEL);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_spi.h>
 #include <rtl876x_rcc.h>
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#include <rtl_spi.h>
+#include <rtl_rcc.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
@@ -47,6 +50,32 @@ BUILD_ASSERT(
 			DT_NODE_HAS_STATUS(DT_NODELABEL(spi0_slave), okay) <=
 		1,
 	"Error: Both 'spi0' and 'spi0_slave' nodes are enabled. Only one can be used at a time.");
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define BEE_SPI_RXDMAEN    SPI_RxDmaEn
+#define BEE_SPI_TXDMAEN    SPI_TxDmaEn
+#define BEE_SPI_CPOL_HIGH  SPI_CPOL_High
+#define BEE_SPI_CPOL_LOW   SPI_CPOL_Low
+#define BEE_SPI_CPHA_2EDGE SPI_CPHA_2Edge
+#define BEE_SPI_CPHA_1EDGE SPI_CPHA_1Edge
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#define BEE_SPI_RXDMAEN    SPI_RxDmaEn
+#define BEE_SPI_TXDMAEN    SPI_TxDmaEn
+#define BEE_SPI_CPOL_HIGH  SPI_CPOL_High
+#define BEE_SPI_CPOL_LOW   SPI_CPOL_Low
+#define BEE_SPI_CPHA_2EDGE SPI_CPHA_2Edge
+#define BEE_SPI_CPHA_1EDGE SPI_CPHA_1Edge
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define BEE_SPI_RXDMAEN    SPI_RxDMAEn
+#define BEE_SPI_TXDMAEN    SPI_TxDMAEn
+#define BEE_SPI_CPOL_HIGH  SPI_CPOL_HIGH
+#define BEE_SPI_CPOL_LOW   SPI_CPOL_LOW
+#define BEE_SPI_CPHA_2EDGE SPI_CPHA_2EDGE
+#define BEE_SPI_CPHA_1EDGE SPI_CPHA_1EDGE
+
+#define SPI_RX_FIFO_ADDR(spi) ((uint32_t)(&(spi->SPI_DR[0])))
+#define SPI_TX_FIFO_ADDR(spi) ((uint32_t)(&(spi->SPI_DR[0])))
+#endif
 
 #ifdef CONFIG_SPI_BEE_DMA
 
@@ -86,7 +115,7 @@ struct spi_bee_config {
 
 static bool spi_bee_tx_fifo_not_full(const struct spi_bee_config *cfg)
 {
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 	return SPI_GetTxFIFOLen((SPI_TypeDef *)cfg->reg) <
 	       (cfg->is_slave ? SPI0_SLAVE_TX_FIFO_SIZE : SPI_TX_FIFO_SIZE);
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
@@ -100,7 +129,7 @@ static bool spi_bee_tx_fifo_not_full(const struct spi_bee_config *cfg)
 
 static bool spi_bee_rx_fifo_not_full(const struct spi_bee_config *cfg)
 {
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 	return (SPI_GetRxFIFOLen((SPI_TypeDef *)cfg->reg) +
 			SPI_GetTxFIFOLen((SPI_TypeDef *)cfg->reg) <
 		(cfg->is_slave ? SPI0_SLAVE_RX_FIFO_SIZE : SPI_RX_FIFO_SIZE));
@@ -469,6 +498,14 @@ static int spi_bee_configure(const struct device *dev, const struct spi_config *
 		return 0;
 	}
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	if (SPI_WORD_SIZE_GET(spi_cfg->operation) > 16) {
+		LOG_ERR("Data size: %d is not supported on %s",
+			SPI_WORD_SIZE_GET(spi_cfg->operation), dev->name);
+		return -ENOTSUP;
+	}
+#endif
+
 	if (SPI_OP_MODE_GET(spi_cfg->operation) == SPI_OP_MODE_MASTER && config->is_slave) {
 		LOG_ERR("Master mode is not supported on %s", dev->name);
 		return -EINVAL;
@@ -508,27 +545,31 @@ static int spi_bee_configure(const struct device *dev, const struct spi_config *
 	else {
 		spi_init_struct.SPI_Mode = SPI_Mode_Slave;
 	}
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+	else {
+		spi_init_struct.SPI_Mode = SPI_MODE_SLAVE;
+	}
 #endif
 
 	spi_init_struct.SPI_DataSize = SPI_WORD_SIZE_GET(spi_cfg->operation) - 1;
 	spi_init_struct.SPI_CPOL =
-		spi_cfg->operation & SPI_MODE_CPOL ? SPI_CPOL_High : SPI_CPOL_Low;
+		spi_cfg->operation & SPI_MODE_CPOL ? BEE_SPI_CPOL_HIGH : BEE_SPI_CPOL_LOW;
 	spi_init_struct.SPI_CPHA =
-		spi_cfg->operation & SPI_MODE_CPHA ? SPI_CPHA_2Edge : SPI_CPHA_1Edge;
+		spi_cfg->operation & SPI_MODE_CPHA ? BEE_SPI_CPHA_2EDGE : BEE_SPI_CPHA_1EDGE;
 	spi_init_struct.SPI_TxThresholdLevel = 0;
 	spi_init_struct.SPI_RxThresholdLevel = 0;
 #ifdef CONFIG_SPI_BEE_DMA
 	dma_datasize = SPI_DATASIZE_TO_BYTE(SPI_WORD_SIZE_GET(spi_cfg->operation));
 	if (data->dma_rx.dma_dev != NULL) {
-		spi_init_struct.SPI_RxDmaEn = ENABLE;
+		spi_init_struct.BEE_SPI_RXDMAEN = ENABLE;
 		spi_init_struct.SPI_RxWaterlevel = data->dma_rx.dma_cfg.source_burst_length;
 		data->dma_rx.dma_cfg.source_data_size = dma_datasize;
 		data->dma_rx.dma_cfg.dest_data_size = dma_datasize;
 	}
 
 	if (data->dma_tx.dma_dev != NULL) {
-		spi_init_struct.SPI_TxDmaEn = ENABLE;
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+		spi_init_struct.BEE_SPI_TXDMAEN = ENABLE;
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 		spi_init_struct.SPI_TxWaterlevel =
 			(config->is_slave ? SPI0_SLAVE_TX_FIFO_SIZE : SPI_TX_FIFO_SIZE) -
 			data->dma_tx.dma_cfg.dest_burst_length;
