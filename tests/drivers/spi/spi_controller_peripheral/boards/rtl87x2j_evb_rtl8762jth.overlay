@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&spi1 {
+	status = "okay";
+	pinctrl-0 = <&spi1_default>;
+	pinctrl-names = "default";
+	dmas = <&dma0 3 6 0x30021>, <&dma0 2 7 0x200a>;
+	dma-names = "tx", "rx";
+
+	dut_spi_dt: test-spi-dev@0 {
+		compatible = "vnd,spi-device";
+		reg = <0>;
+		spi-max-frequency = <800>;
+	};
+};
+
+dut_spis: &spi0_slave {
+	status = "okay";
+	dmas = <&dma0 1 4 0x10021>, <&dma0 0 5 0xa>;
+	dma-names = "tx", "rx";
+	pinctrl-0 = <&spi0_slave_default>;
+	pinctrl-names = "default";
+};
+
+&gpioa {
+	pinctrl-0 = <&gpioa_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&dma0 {
+	status = "okay";
+};
+
+&pinctrl {
+	spi1_default: spi1_default {
+		group1 {
+			psels = <BEE_PSEL(SPI1_CLK_MASTER, P4_0)>,
+				<BEE_PSEL(SPI1_MO_MASTER, P4_1)>,
+				<BEE_PSEL(SPI1_MI_MASTER, P4_2)>,
+				<BEE_PSEL(SPI1_SS_N_0_MASTER, P4_3)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	spi0_slave_default: spi0_slave_default {
+		group1 {
+			psels = <BEE_PSEL(SPI0_CLK_SLAVE, P0_4)>,
+				<BEE_PSEL(SPI0_SI_SLAVE, P0_5)>,
+				<BEE_PSEL(SPI0_SO_SLAVE, P0_6)>,
+				<BEE_PSEL(SPI0_SS_N_0_SLAVE, P0_7)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	gpioa_default: gpioa_default {
+		group1 {
+			psels = <BEE_PSEL_GPIOA_30_P4_3>;
+		};
+	};
+};
