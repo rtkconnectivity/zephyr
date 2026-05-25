@@ -21,6 +21,8 @@
 #include <adc_lib.h>
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_adc.h>
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#include <rtl_adc.h>
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
@@ -36,8 +38,13 @@ LOG_MODULE_REGISTER(adc_bee, CONFIG_ADC_LOG_LEVEL);
 #define ADC_BEE_VREF_BYPASS_MV 900
 #define ADC_BEE_VREF_DIVIDE_MV 3300
 
-#if defined(CONFIG_SOC_SERIES_RTL8752H)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define BEE_ADC_DATA_AVE ADC_DataAvgEn
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define ADC_BEE_RTL8752H_UNSUPPORTED_CH 6U
+#define BEE_ADC_DATA_AVE                ADC_DataAvgEn
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define BEE_ADC_DATA_AVE ADC_DataAverageEn
 #endif
 
 struct adc_bee_config {
@@ -245,7 +252,9 @@ static void adc_bee_isr(const struct device *dev)
 	struct adc_bee_data *data = dev->data;
 	const struct adc_bee_config *cfg = dev->config;
 	ADC_TypeDef *adc = (ADC_TypeDef *)cfg->reg;
+#if !defined(CONFIG_SOC_SERIES_RTL87X2J)
 	ADC_ErrorStatus error_status = NO_ERROR;
+#endif
 
 	if (!ADC_GetINTStatus(adc, ADC_INT_ONE_SHOT_DONE)) {
 		return;
@@ -262,19 +271,29 @@ static void adc_bee_isr(const struct device *dev)
 
 		raw_data = (uint16_t)ADC_ReadRawData(adc, i);
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+		voltage = raw_data;
+#endif
+
 		if ((data->bypass_channels & BIT(i)) != 0U) {
+#if !defined(CONFIG_SOC_SERIES_RTL87X2J)
 			voltage = ADC_GetVoltage(BYPASS_SINGLE_MODE, raw_data, &error_status);
+#endif
 			norm_raw = ((uint32_t)MAX(voltage, 0) * ADC_12BIT_FULL_SCALE) /
 				   ADC_BEE_VREF_BYPASS_MV;
 		} else {
+#if !defined(CONFIG_SOC_SERIES_RTL87X2J)
 			voltage = ADC_GetVoltage(DIVIDE_SINGLE_MODE, raw_data, &error_status);
+#endif
 			norm_raw = ((uint32_t)MAX(voltage, 0) * ADC_12BIT_FULL_SCALE) /
 				   ADC_BEE_VREF_DIVIDE_MV;
 		}
 
+#if !defined(CONFIG_SOC_SERIES_RTL87X2J)
 		if (error_status != NO_ERROR) {
 			LOG_ERR("Voltage conversion error on channel %u: %d", i, error_status);
 		}
+#endif
 
 		if (norm_raw > ADC_12BIT_MAX_VALUE) {
 			norm_raw = ADC_12BIT_MAX_VALUE;
@@ -318,11 +337,19 @@ static int adc_bee_init(const struct device *dev)
 		return ret;
 	}
 
+#if !defined(CONFIG_SOC_SERIES_RTL87X2J)
 	ADC_CalibrationInit();
+#endif
 
 	ADC_StructInit(&adc_init_struct);
-	adc_init_struct.ADC_DataAvgEn = DISABLE;
+	adc_init_struct.BEE_ADC_DATA_AVE = DISABLE;
+
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+	/* Disable power always on, or it will keep the  ADC Qactive on. */
+	adc_init_struct.ADC_PowerAlwaysOnEn = DISABLE;
+#else
 	adc_init_struct.ADC_PowerAlwaysOnEn = ENABLE;
+#endif
 
 	for (uint8_t i = 0U; i < cfg->channels; i++) {
 		adc_init_struct.ADC_SchIndex[i] = EXT_SINGLE_ENDED(i);
