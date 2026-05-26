@@ -19,6 +19,19 @@
 			device_type = "cpu";
 			compatible = "arm,cortex-m33f";
 			reg = <0>;
+			#address-cells = <1>;
+			cpu-power-states = <&suspend_to_idle>;
+			#size-cells = <1>;
+		};
+
+		power-states {
+			suspend_to_idle: suspend-to-idle {
+				compatible = "zephyr,power-state";
+				power-state-name = "suspend-to-idle";
+				substate-id = <0>;
+				min-residency-us = <3000>;
+				exit-latency-us = <2500>;
+			};
 		};
 	};
 
