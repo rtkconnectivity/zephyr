@@ -97,6 +97,15 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 	ticks = ticks == K_TICKS_FOREVER ? MAX_TICKS : ticks;
 	ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
 
+	/*
+	 * Hardware workaround: ensure minimum 1.5T interval between consecutive
+	 * GRTC_SetCompValue calls. The GRTC compare register requires ~1.5 clock
+	 * cycles (~47us at 32kHz) to properly latch the new value. Without this
+	 * delay, the interrupt may not trigger reliably when setting a new timeout
+	 * in quick succession.
+	 */
+	platform_delay_us(GRTC_COMP_SET_DELAY_US);
+
 	uint64_t now = get_gtc_counter_unlocked();
 	uint32_t adj, cyc = ticks * CYC_PER_TICK;
 
@@ -112,15 +121,6 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 	if ((int32_t)(cyc + last_count - now) < MIN_DELAY) {
 		cyc += CYC_PER_TICK;
 	}
-
-	/*
-	 * Hardware workaround: ensure minimum 1.5T interval between consecutive
-	 * GRTC_SetCompValue calls. The GRTC compare register requires ~1.5 clock
-	 * cycles (~47us at 32kHz) to properly latch the new value. Without this
-	 * delay, the interrupt may not trigger reliably when setting a new timeout
-	 * in quick succession.
-	 */
-	platform_delay_us(GRTC_COMP_SET_DELAY_US);
 
 	GRTC_SetCompValue(SYS_TIMER_GRTC_CHANNEL, cyc + last_count);
 
@@ -159,24 +159,19 @@ void sys_clock_disable(void)
 
 int sys_clock_driver_init(void)
 {
+	RCC_ClockCmd(GRTC_CLOCK, ENABLE);
+
 	IRQ_CONNECT(OVERFLOW_TIMER_IRQ, 6, gtc_overflow_isr, 0, 0);
 	irq_enable(OVERFLOW_TIMER_IRQ);
-
-	RCC_ClockCmd(GRTC_CLOCK, ENABLE);
-	platform_delay_us(32);
 
 	GRTC_SetCompValue(OVERFLOW_TIMER_GRTC_CHANNEL, 0xFFFFFFFF);
 	GRTC_CompReloadCmd(OVERFLOW_TIMER_GRTC_CHANNEL, DISABLE);
 	GRTC_INTConfig(OVERFLOW_TIMER_GRTC_INT, ENABLE);
-	platform_delay_us(63);
 
 	IRQ_CONNECT(SYS_TIMER_IRQ, 0, sys_timer_isr, 0, 0);
 	irq_enable(SYS_TIMER_IRQ);
 
 	last_count = get_gtc_counter();
-
-	RCC_ClockCmd(GRTC_CLOCK, ENABLE);
-	platform_delay_us(32);
 
 #if (CONFIG_TICKLESS_KERNEL == 1)
 	GRTC_CompReloadCmd(SYS_TIMER_GRTC_CHANNEL, DISABLE);
@@ -188,7 +183,6 @@ int sys_clock_driver_init(void)
 #endif
 
 	GRTC_INTConfig(SYS_TIMER_GRTC_INT, ENABLE);
-	platform_delay_us(63);
 
 	return 0;
 }
