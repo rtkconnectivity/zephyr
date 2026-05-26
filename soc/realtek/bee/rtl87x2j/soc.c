@@ -19,7 +19,6 @@
 #ifdef CONFIG_BT
 #include "image_info.h"
 #endif
-#include "soc_log.h"
 
 LOG_MODULE_REGISTER(soc, CONFIG_SOC_LOG_LEVEL);
 
@@ -64,7 +63,7 @@ static void migrate_ram_vector_table_to_zephyr(void)
 
 	for (int irq = 0; irq < CONFIG_NUM_IRQS; irq++) {
 		if (ram_vector_table[irq] != (uint32_t)default_handler) {
-			LOG_INF("IRQ %d has a non-default handler at address 0x%08X, "
+			LOG_DBG("IRQ %d has a non-default handler at address 0x%08X, "
 				"registering in Zephyr ISR table\n",
 				irq, ram_vector_table[irq]);
 			if (NVIC_GetEnableIRQ(irq) == 1) {
@@ -118,6 +117,10 @@ void soc_late_init_hook(void)
 
 	extern void srand_bl(void);
 	srand_bl();
+
+	/* Switch log UART clock to auto mode for better power saving */
+	extern void log_uart_switch_clock_auto_mode(bool enable);
+	log_uart_switch_clock_auto_mode(true);
 
 #ifdef CONFIG_BT
 	bt_controller_init();
