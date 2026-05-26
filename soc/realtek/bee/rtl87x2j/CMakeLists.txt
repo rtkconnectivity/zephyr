@@ -10,3 +10,5 @@ zephyr_library_sources_ifdef(CONFIG_SOC_FAMILY_REALTEK_BEE_IMAGE_HEADER bee_imag
 zephyr_linker_sources(ROM_START SORT_KEY 0x0header bee_image_header.ld)
 
 set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/linker.ld CACHE INTERNAL "")
+
+zephyr_library_sources_ifdef(CONFIG_PM power.c)
