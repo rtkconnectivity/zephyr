@@ -1,0 +1,7 @@
+# Copyright (c) 2026 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
+
+common:
+  tags: pm
+  platform_allow:
+    - rtl87x2j_evb/rtl8762jth
