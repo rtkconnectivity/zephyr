@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Copyright (c) 2026 Realtek Semiconductor Corporation
+#
+
+description: Realtek Bee eflash controller
+
+compatible: "realtek,bee-eflash-controller"
+
+include: flash-controller.yaml
