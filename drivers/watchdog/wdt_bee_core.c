@@ -10,7 +10,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys_clock.h>
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 #include <rtl_wdt.h>
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #include <rtl876x_wdg.h>
@@ -35,7 +35,7 @@ struct core_wdt_bee_data {
 	uint32_t timeout;
 #ifdef CONFIG_SOC_SERIES_RTL8752H
 	T_WDG_MODE wdt_mode;
-#elif CONFIG_SOC_SERIES_RTL87X2G
+#else
 	WDTMode_TypeDef wdt_mode;
 #endif
 };
@@ -62,6 +62,8 @@ static void core_wdt_bee_isr(const struct device *dev)
 
 #ifdef CONFIG_SOC_SERIES_RTL87X2G
 	WDT_Disable();
+#elif CONFIG_SOC_SERIES_RTL87X2J
+	WDT_ClearINTPendingBit();
 #endif
 
 	if (data->callback) {
@@ -92,10 +94,10 @@ static int core_wdt_bee_disable(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-#ifdef CONFIG_SOC_SERIES_RTL87X2G
-	WDT_Disable();
-#elif CONFIG_SOC_SERIES_RTL8752H
+#ifdef CONFIG_SOC_SERIES_RTL8752H
 	WDG_Disable();
+#else
+	WDT_Disable();
 #endif
 
 	return 0;
@@ -142,10 +144,10 @@ static int core_wdt_bee_feed(const struct device *dev, int channel_id)
 	ARG_UNUSED(dev);
 	ARG_UNUSED(channel_id);
 
-#ifdef CONFIG_SOC_SERIES_RTL87X2G
-	WDT_Kick();
-#elif CONFIG_SOC_SERIES_RTL8752H
+#if CONFIG_SOC_SERIES_RTL8752H
 	WDG_Restart();
+#else
+	WDT_Kick();
 #endif
 
 	return 0;
@@ -189,8 +191,10 @@ static int core_wdt_bee_init(const struct device *dev)
 
 static struct core_wdt_bee_data core_wdt_bee_dev_data;
 
-#ifdef CONFIG_SOC_SERIES_RTL87X2G
+#ifdef CONFIG_SOC_SERIES_RTL8752H
+static const struct core_wdt_bee_config core_wdt_bee_dev_config;
 
+#else
 static void core_wdt_bee_cfg_func(void)
 {
 	IRQ_CONNECT(DT_INST_IRQN(0), DT_INST_IRQ(0, priority), core_wdt_bee_isr,
@@ -202,11 +206,6 @@ static const struct core_wdt_bee_config core_wdt_bee_dev_config = {
 	.irq_num = DT_INST_IRQN(0),
 	.cfg_func = core_wdt_bee_cfg_func,
 };
-
-#elif CONFIG_SOC_SERIES_RTL8752H
-
-static const struct core_wdt_bee_config core_wdt_bee_dev_config;
-
 #endif
 
 DEVICE_DT_INST_DEFINE(0, core_wdt_bee_init, NULL, &core_wdt_bee_dev_data, &core_wdt_bee_dev_config,

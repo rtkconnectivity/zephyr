@@ -173,6 +173,13 @@
 			status = "okay";
 		};
 
+		core_wdt: watchdog@400061e0 {
+			compatible = "realtek,bee-core-wdt";
+			reg = <0x400061e0 0x10>;
+			interrupts = <1 0>;
+			status = "disabled";
+		};
+
 		pinctrl: pin-controller@400001c4 {
 			compatible = "realtek,bee-pinctrl";
 			reg = <0x400001c4 0x864>;
