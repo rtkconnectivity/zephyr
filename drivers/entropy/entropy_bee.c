@@ -9,7 +9,7 @@
 #include <zephyr/drivers/entropy.h>
 #include <string.h>
 
-#include <utils.h>
+#include <rng_interface.h>
 
 static int entropy_bee_get_entropy(const struct device *dev, uint8_t *buffer, uint16_t length)
 {

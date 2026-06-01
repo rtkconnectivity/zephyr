@@ -11,6 +11,10 @@
 #include <zephyr/dt-bindings/i2c/i2c.h>
 
 / {
+	chosen {
+		zephyr,entropy = &trng;
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -481,6 +485,12 @@
 			interrupts = <44 0>;
 			clocks = <&cctl APB_CLK(LPQDEC)>;
 			status = "disabled";
+		};
+
+		trng: trng@40006200 {
+			compatible = "realtek,bee-trng";
+			reg = <0x40006200 0x68>;
+			status = "okay";
 		};
 
 		dma0: dma@400012c0 {
