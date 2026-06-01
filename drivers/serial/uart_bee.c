@@ -107,11 +107,13 @@ struct uart_bee_data {
 	bool rx_int_en;
 #endif
 #if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM)
 	pinctrl_soc_pin_t wakeup_pin;
 	bool tx_on;
 	bool rx_on;
-	bool always_clock_force_on;
 	struct k_timer timer;
+#endif
+	bool always_clock_force_on;
 #endif
 #ifdef CONFIG_UART_ASYNC_API
 	uart_callback_t async_cb;
@@ -425,10 +427,13 @@ static void uart_bee_irq_rx_enable(const struct device *dev)
 	UART_INTConfig(uart, UART_INT_RD_AVA, ENABLE);
 	UART_INTConfig(uart, UART_INT_RX_IDLE, ENABLE);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(dev, false, false);
-	pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
-				  PINCTRL_BEE_WAKEUP_SYS, true);
+
+	if (!data->always_clock_force_on) {
+		pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
+					  PINCTRL_BEE_WAKEUP_SYS, true);
+	}
 #endif
 }
 
@@ -442,11 +447,14 @@ static void uart_bee_irq_rx_disable(const struct device *dev)
 	UART_INTConfig(uart, UART_INT_RD_AVA, DISABLE);
 	UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(dev, false, false);
-	pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
-				  PINCTRL_BEE_WAKEUP_SYS, false);
-	k_timer_stop(&data->timer);
+
+	if (!data->always_clock_force_on) {
+		pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
+					  PINCTRL_BEE_WAKEUP_SYS, false);
+		k_timer_stop(&data->timer);
+	}
 #endif
 }
 
@@ -512,6 +520,7 @@ static void uart_bee_clock_force_on_enable(const struct device *dev, bool is_tx,
 		return;
 	}
 
+#if defined(CONFIG_PM)
 	if (is_tx) {
 		data->tx_on = en;
 	} else {
@@ -523,9 +532,11 @@ static void uart_bee_clock_force_on_enable(const struct device *dev, bool is_tx,
 	} else if (!data->rx_on && !data->tx_on) {
 		UART_ClockAutoModeCmd(uart, ENABLE);
 	}
+#endif
 }
 
-static void uart_rx_wakeup_timer_cb(struct k_timer *timer)
+#if defined(CONFIG_PM)
+static void uart_bee_rx_wakeup_timer_cb(struct k_timer *timer)
 {
 	const struct device *dev = (const struct device *)timer->user_data;
 	struct uart_bee_data *data = dev->data;
@@ -550,6 +561,7 @@ void uart_bee_process_pad_wakeup_cb(void *user_data)
 
 	k_timer_start(&data->timer, K_MSEC(CONFIG_UART_BEE_KEEP_ACTIVE_TIMEOUT_MSEC), K_NO_WAIT);
 }
+#endif
 #endif
 
 #ifdef CONFIG_UART_LINE_CTRL
@@ -760,7 +772,7 @@ void uart_bee_dma_tx_cb(const struct device *dma_dev, void *user_data, uint32_t 
 	/* Disable the UART TX DMA requests */
 	uart_bee_dma_tx_disable(uart_dev);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(uart_dev, true, false);
 #endif
 
@@ -864,7 +876,7 @@ static int uart_bee_async_tx(const struct device *dev, const uint8_t *tx_data, s
 
 	LOG_DBG("bufsize=%d, timeout=%d", buf_size, timeout);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(dev, true, true);
 #endif
 
@@ -935,7 +947,7 @@ static int uart_bee_async_tx_abort(const struct device *dev)
 	while (UART_GetTxFIFODataLen(uart)) {
 	}
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(dev, true, false);
 #endif
 
@@ -955,11 +967,14 @@ static int uart_bee_async_rx_enable(const struct device *dev, uint8_t *rx_buf, s
 
 	LOG_DBG("buf_size=%d, timeout=%d", buf_size, timeout);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	UART_TxOnlyModeCmd(uart, DISABLE);
 	uart_bee_clock_force_on_enable(dev, false, false);
-	pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
-				  PINCTRL_BEE_WAKEUP_SYS, true);
+
+	if (!data->always_clock_force_on) {
+		pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
+					  PINCTRL_BEE_WAKEUP_SYS, true);
+	}
 #endif
 
 	/* Flush the UART RX FIFO to prevent processing stale data received before enabling. */
@@ -1036,12 +1051,15 @@ static int uart_bee_async_rx_disable(const struct device *dev)
 	UART_TypeDef *uart = config->uart;
 	struct dma_status stat;
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	UART_TxOnlyModeCmd(uart, ENABLE);
 	uart_bee_clock_force_on_enable(dev, false, false);
-	pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
-				  PINCTRL_BEE_WAKEUP_SYS, false);
-	k_timer_stop(&data->timer);
+
+	if (!data->always_clock_force_on) {
+		pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
+					  PINCTRL_BEE_WAKEUP_SYS, false);
+		k_timer_stop(&data->timer);
+	}
 #endif
 
 	if (!data->dma_rx.enabled) {
@@ -1225,9 +1243,11 @@ static void uart_bee_isr(const struct device *dev)
 		UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
 		UART_INTConfig(uart, UART_INT_RX_IDLE, ENABLE);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-		k_timer_start(&data->timer, K_MSEC(CONFIG_UART_BEE_KEEP_ACTIVE_TIMEOUT_MSEC),
-			      K_FOREVER);
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+		if (!data->always_clock_force_on) {
+			k_timer_start(&data->timer,
+				      K_MSEC(CONFIG_UART_BEE_KEEP_ACTIVE_TIMEOUT_MSEC), K_FOREVER);
+		}
 #endif
 #ifdef CONFIG_UART_ASYNC_API
 		uart_bee_handle_async_rx_idle(dev);
@@ -1256,6 +1276,7 @@ static int uart_bee_init(const struct device *dev)
 	}
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM)
 	const struct pinctrl_state *state;
 
 	err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
@@ -1275,7 +1296,7 @@ static int uart_bee_init(const struct device *dev)
 			if (state->pins[i].wakeup_low || state->pins[i].wakeup_high) {
 				has_wakeup_pin = true;
 				data->wakeup_pin = state->pins[i];
-				k_timer_init(&data->timer, uart_rx_wakeup_timer_cb, NULL);
+				k_timer_init(&data->timer, uart_bee_rx_wakeup_timer_cb, NULL);
 				data->timer.user_data = (void *)dev;
 				System_RegisterPadWakeupCallback(
 					data->wakeup_pin.pin,
@@ -1290,6 +1311,9 @@ static int uart_bee_init(const struct device *dev)
 			data->always_clock_force_on = true;
 		}
 	}
+#else
+	data->always_clock_force_on = true;
+#endif
 #endif
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);

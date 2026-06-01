@@ -38,7 +38,7 @@
 
 	uart2_sleep: uart2_sleep {
 		group1 {
-			psels = <BEE_PSEL(IDLE_MODE, P3_0)>;
+			psels = <BEE_PSEL(SW_MODE, P3_0)>;
 			sleep-hardware-state;
 			output-enable;
 			output-high;
@@ -46,7 +46,7 @@
 		};
 
 		group2 {
-			psels = <BEE_PSEL(IDLE_MODE, P3_1)>;
+			psels = <BEE_PSEL(SW_MODE, P3_1)>;
 			sleep-hardware-state;
 			output-disable;
 			bias-pull-up;
