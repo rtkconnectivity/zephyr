@@ -1,0 +1,385 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/gpio/realtek-bee-gpio.h>
+#include <zephyr/dt-bindings/led/led.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+/*
+ *  P0_0 GPIO(TEST OUT)
+ *  P0_1 GPIO(TEST IN)
+ *  P0_2 PWM6
+ *  P0_4 I2C0_CLK
+ *  P0_5 I2C0_DAT
+ *  P0_6 UART0_TX
+ *  P1_0 SWD
+ *  P1_1 SWD
+ *  P2_2 ADC
+ *  P2_3 UART0_RX
+ *  P2_4 KSCAN_R0
+ *  P2_5 KSCAN_R1
+ *  P2_6 KSCAN_C0
+ *  P2_7 KSCAN_C1
+ *  P3_0 UART2_TX
+ *  P3_1 UART2_RX
+ *  P3_2 QDECX_A
+ *  P3_3 QDECX_B
+ *  P3_4
+ *  P4_0 SPI0_CLK
+ *  P4_1 SPI0_MO
+ *  P4_2 SPI0_MI
+ *  P4_3 GPIO(SPI0_CS)
+ *  P5_1 GPIO(TEST QDECX)
+ *  P5_2 GPIO(TEST QDECX)
+ */
+
+/ {
+	resources {
+		compatible = "test-gpio-basic-api";
+		// P0_0
+		out-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+		// P0_1
+		in-gpios = <&gpioa 1 GPIO_ACTIVE_HIGH>;
+	};
+
+	zephyr,user {
+		io-channels = <&adc 2>;
+	};
+
+	aliases {
+		test-uart-dma = &uart0;
+		test-counter-timer = &counter5;
+		test-pwm = &pwm6;
+		test-rtc = &rtc;
+		test-qdec = &qdec;
+		test-qenca = &phase_a;
+		test-qencb = &phase_b;
+		test-i2c = &i2c0;
+	};
+
+	encoder-emulate {
+		compatible = "gpio-leds";
+
+		phase_a: phase_a {
+			// P5_1
+			gpios = <&gpioa 11 GPIO_ACTIVE_HIGH>;
+		};
+
+		phase_b: phase_b {
+			// P5_2
+			gpios = <&gpioa 12 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&uart2 {
+	pinctrl-0 = <&uart2_default>;
+	pinctrl-1 = <&uart2_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+	current-speed = <2000000>;
+	parity = "none";
+	stop-bits = "1";
+	data-bits = <8>;
+};
+
+&uart0 {
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-1 = <&uart0_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+	current-speed = <2000000>;
+	parity = "none";
+	stop-bits = "1";
+	data-bits = <8>;
+	dmas = <&dma0 0 23 0xa>, <&dma0 1 15 0x10021>;
+	dma-names = "rx", "tx";
+};
+
+&dma0 {
+	status = "okay";
+};
+
+&gpioa {
+	pinctrl-0 = <&gpioa_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&timer5 {
+	status = "okay";
+	prescaler = <1>;
+
+	counter5: counter {
+		compatible = "realtek,bee-counter-timer";
+		status = "okay";
+	};
+};
+
+&timer6 {
+	status = "okay";
+	prescaler = <1>;
+
+	pwm6: pwm {
+		status = "okay";
+		pinctrl-0 = <&pwm6_default>;
+		pinctrl-names = "default";
+	};
+};
+
+&spi0 {
+	status = "okay";
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+	// P4_3
+	cs-gpios = <&gpioa 31 GPIO_ACTIVE_LOW>;
+
+	test-spi@0 {
+		compatible = "test-spi-loopback";
+		reg = <0>;
+		spi-max-frequency = <500000>;
+	};
+};
+
+&i2c0 {
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-1 = <&i2c0_sleep>;
+	pinctrl-names = "default", "sleep";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	status = "okay";
+};
+
+&rtc_counter {
+	prescaler = <1>;
+	status = "okay";
+
+	rtc: rtc {
+		compatible = "zephyr,rtc-counter";
+		alarms-count = <4>;
+		status = "okay";
+	};
+};
+
+&qdec {
+	x-enable;
+	x-counts-per-revolution = <4>;
+	x-debounce-time-ms = <5>;
+	pinctrl-0 = <&qdec_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&keyscan {
+	pinctrl-0 = <&keyscan_default>;
+	pinctrl-1 = <&keyscan_sleep>;
+	pinctrl-names = "default", "sleep";
+	row-size = <2>;
+	col-size = <2>;
+	scan-div = <15>;
+	delay-div = <63>;
+	debounce-down-ms = <10>;
+	debounce-up-ms = <10>;
+	poll-period-us = <50000>;
+	release-time-us = <5000>;
+	status = "okay";
+};
+
+&adc {
+	pinctrl-0 = <&adc_default>;
+	pinctrl-names = "default";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	channel@2 {
+		reg = <2>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+};
+
+&pinctrl {
+	gpioa_default: gpioa_default {
+		group1 {
+			psels = <BEE_PSEL_GPIOA_0_P0_0>, //P0_0 GPIO(TEST OUT)
+				<BEE_PSEL_GPIOA_1_P0_1>; //P0_1 GPIO(TEST IN)
+		};
+
+		group2 {
+			psels = <BEE_PSEL_GPIOA_11_P5_1>, //P5_1 GPIO(TEST QDECX)
+				<BEE_PSEL_GPIOA_12_P5_2>; //P5_2 GPIO(TEST QDECX)
+		};
+
+		group3 {
+			psels = <BEE_PSEL_GPIOA_31_P4_3>; //P4_3 GPIO(SPI0_CS)
+		};
+	};
+
+	uart0_default: uart0_default {
+		group1 {
+			psels = <BEE_PSEL(UART0_TX, P0_6)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(UART0_RX, P2_3)>;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+
+	uart0_sleep: uart0_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P0_6)>;
+			sleep-hardware-state;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, P2_3)>;
+			sleep-hardware-state;
+			output-disable;
+			bias-pull-up;
+			wakeup-low;
+		};
+	};
+
+	uart2_default: uart2_default {
+		group1 {
+			psels = <BEE_PSEL(UART2_TX, P3_0)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(UART2_RX, P3_1)>;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+
+	uart2_sleep: uart2_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P3_0)>;
+			sleep-hardware-state;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, P3_1)>;
+			sleep-hardware-state;
+			output-disable;
+			bias-pull-up;
+			wakeup-low;
+		};
+	};
+
+	spi0_default: spi0_default {
+		group1 {
+			psels = <BEE_PSEL(SPI0_CLK_MASTER, P4_0)>,
+				<BEE_PSEL(SPI0_MO_MASTER, P4_1)>,
+				<BEE_PSEL(SPI0_MI_MASTER, P4_2)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	pwm6_default: pwm6_default {
+		group1 {
+			psels = <BEE_PSEL(ENPWM0, P0_2)>;
+			output-enable;
+			output-low;
+			bias-pull-down;
+		};
+	};
+
+	qdec_default: qdec_default {
+		group1 {
+			psels = <BEE_PSEL(QDEC_PHASE_A_X, P3_2)>,
+				<BEE_PSEL(QDEC_PHASE_B_X, P3_3)>;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+
+	i2c0_default: i2c0_default {
+		group1 {
+			psels = <BEE_PSEL(I2C0_CLK, P0_4)>,
+				<BEE_PSEL(I2C0_DAT, P0_5)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	i2c0_sleep: i2c0_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P0_4)>,
+				<BEE_PSEL(SW_MODE, P0_5)>;
+			sleep-hardware-state;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	keyscan_default: keyscan_default {
+		group1 {
+			psels = <BEE_PSEL(KEY_COL_0, P2_6)>,
+				<BEE_PSEL(KEY_COL_1, P2_7)>;
+			output-enable;
+			output-low;
+			bias-disable;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(KEY_ROW_0, P2_4)>,
+				<BEE_PSEL(KEY_ROW_1, P2_5)>;
+			output-disable;
+			bias-pull-up;
+			bias-pull-strong;
+		};
+	};
+
+	keyscan_sleep: keyscan_sleep {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P2_6)>,
+				<BEE_PSEL(SW_MODE, P2_7)>;
+			sleep-hardware-state;
+			output-enable;
+			output-low;
+			bias-disable;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, P2_4)>,
+				<BEE_PSEL(SW_MODE, P2_5)>;
+			sleep-hardware-state;
+			output-disable;
+			bias-pull-up;
+			bias-pull-strong;
+			wakeup-low;
+		};
+	};
+
+	adc_default: adc_default {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P2_2)>;
+			output-disable;
+			bias-pull-down;
+		};
+	};
+};
