@@ -11,6 +11,7 @@
 #include <zephyr/devicetree.h>
 
 #include <aon_reg.h>
+#include <pck600_snapshot.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(pm_test);
@@ -28,6 +29,8 @@ static const uint32_t period_list_us[] = {20000, 10000, 9000, 8000, 7000, 6000, 
 #define EXPIRE_PER_PERIOD 10
 #define TOTAL_EXPIRE_CNT  (PERIOD_CNT * EXPIRE_PER_PERIOD)
 
+#define SNAPSHOT 0
+
 struct timer_log_t {
 	uint8_t expire_cnt;
 	uint32_t period_us;
@@ -41,9 +44,38 @@ static uint8_t curr_period_idx;
 static uint8_t expire_cnt_in_period;
 
 static volatile uint16_t log_write_pos;
+#if SNAPSHOT == 1
+static const char *const names[] = {
+	"I2S",        "ADC",        "UART3",      "UART2",      "UART1",      "UART0",
+	"TMETER",     "TIMER1_CH8", "TIMER1_CH7", "TIMER1_CH6", "TIMER1_CH5", "TIMER1_CH4",
+	"TIMER1_CH3", "TIMER1_CH2", "TIMER1_CH1", "TIMER1_CH0", "TIMER0_CH1", "TIMER0_CH0",
+	"SPI3W",      "SPI2",       "SPI1",       "SPI0",       "KEYSCAN",    "IR",
+	"I2C1",       "I2C0",       "GPIO",       "DMA",        "TIMER2_CH0", "CAN",
+	"USB",        "RFC",        "PRO24G",     "PCC",        "MODEM",      "CAL80M",
+	"CAL32K",     "CAL10M",     "BTMAC",      "BT_VEN",     "AUDIO",      "AACK",
+	"AES",        "SHA256",     "CPU",        "SPIC0",      "RNG",        "VDREG"};
+
+void dump_pck600_status(uint64_t mask)
+{
+	for (int i = 0; i < PCK600_SNAPSHOT_DEVICE_MAX; i++) {
+		if (mask & (1ULL << i)) {
+			printf("Module Active: %s (Bit %d)\n", names[i], i);
+		}
+	}
+}
+#endif
 
 static void timer_period_fn(struct k_timer *t)
 {
+	/* DEBUG */
+#if SNAPSHOT == 1
+	uint64_t mask = pck600_snapshot_get_device_mask();
+
+	printf("dump pck600 status start, mask: 0x%016llx\n", mask);
+	dump_pck600_status(mask);
+	printf("dump pck600 status end\n");
+#endif
+
 	uint64_t curr_cycle = k_cycle_get_64();
 
 	uint16_t pos = log_write_pos;
@@ -94,12 +126,12 @@ ZTEST(pm_rtl87x2j, test_timer)
 		const struct timer_log_t *l = &log_buf[i];
 
 		TC_PRINT("Timer period:%u us, exp:%u, delta cycle:%llu, low_power_mode_count:%d\n",
-		       l->period_us, l->expire_cnt, l->delta_cycle, l->low_power_mode_count);
+			 l->period_us, l->expire_cnt, l->delta_cycle, l->low_power_mode_count);
 	}
 
 	for (uint16_t i = 0; i < PERIOD_CNT; i++) {
 		TC_PRINT("Timer period:%u us, exp count: %d, DLPS entry count:%d\n",
-		       period_list_us[i], EXPIRE_PER_PERIOD, entered_dlps_times[i]);
+			 period_list_us[i], EXPIRE_PER_PERIOD, entered_dlps_times[i]);
 	}
 }
 
