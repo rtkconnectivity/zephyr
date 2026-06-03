@@ -51,12 +51,12 @@
 
 		sram: memory@20007000 {
 			device_type = "sram region";
-			reg = <0x20007000 DT_SIZE_K(41)>;
+			reg = <0x20007000 DT_SIZE_K(45)>;
 		};
 
-		heap_sram: memory@20011400 {
+		heap_sram: memory@20012400 {
 			device_type = "sram heap region";
-			reg = <0x20011400 DT_SIZE_K(27)>;
+			reg = <0x20012400 DT_SIZE_K(23)>;
 		};
 
 		sram_non_retention: memory@20018000 {
