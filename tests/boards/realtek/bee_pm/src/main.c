@@ -14,7 +14,7 @@
 #include <pck600_snapshot.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(pm_test);
+LOG_MODULE_REGISTER(bee_pm);
 
 static struct k_timer periodic_timer;
 static struct k_sem periodic_sem;
@@ -145,4 +145,4 @@ void before_fn(void *data)
 	k_sem_init(&periodic_sem, 0, 1);
 }
 
-ZTEST_SUITE(pm_rtl87x2j, NULL, NULL, before_fn, NULL, teardown_fn);
+ZTEST_SUITE(bee_pm, NULL, NULL, before_fn, NULL, teardown_fn);
