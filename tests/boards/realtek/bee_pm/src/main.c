@@ -92,9 +92,9 @@ static void timer_period_fn(struct k_timer *t)
 	k_sem_give(&periodic_sem);
 }
 
-ZTEST(pm_rtl87x2j, test_timer)
+ZTEST(bee_pm, test_timer)
 {
-	TC_PRINT("Start pm_rtl87x2j test, start cycle:%llu\n", k_cycle_get_64());
+	TC_PRINT("Start bee_pm test, start cycle:%llu\n", k_cycle_get_64());
 
 	curr_period_idx = 0;
 	expire_cnt_in_period = 0;
