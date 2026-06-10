@@ -32,6 +32,11 @@ static int entropy_bee_get_entropy(const struct device *dev, uint8_t *buffer, ui
 		length -= to_copy;
 	}
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	extern void deinit_true_random_generator(void);
+	deinit_true_random_generator();
+#endif
+
 	return 0;
 }
 

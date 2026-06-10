@@ -6,6 +6,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/arch/common/init.h>
+#include <zephyr/drivers/entropy.h>
 #include <zephyr/linker/linker-defs.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sw_isr_table.h>
@@ -115,14 +116,35 @@ void soc_late_init_hook(void)
 
 	amu_init();
 
-	extern void srand_bl(void);
-	srand_bl();
-
 	/* Switch log UART clock to auto mode for better power saving */
 	extern void log_uart_switch_clock_auto_mode(bool enable);
 	log_uart_switch_clock_auto_mode(true);
 
 #ifdef CONFIG_BT
+	/*
+	 * The BT controller relies on the rand() implementation in the bootloader (ROM).
+	 * srand_bl() is the corresponding seed initializer for that ROM rand function.
+	 * Use Zephyr's entropy module to supply a hardware-random seed so that each
+	 * boot produces a different random sequence.
+	 */
+	extern void srand_bl(int seed);
+
+#if DT_HAS_CHOSEN(zephyr_entropy)
+	{
+		const struct device *const entropy_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy));
+		uint32_t seed = 0;
+
+		if (entropy_get_entropy(entropy_dev, (uint8_t *)&seed, sizeof(seed)) == 0) {
+			printf("Seeding BT controller RNG with 0x%08X\n", seed);
+			srand_bl((int)seed);
+		} else {
+			srand_bl(0);
+		}
+	}
+#else
+	srand_bl(0);
+#endif
+
 	bt_controller_init();
 #endif
 }
