@@ -488,6 +488,8 @@ static int lpqdec_init(uint32_t reg, const struct bee_qdec_axis_config *axis_cfg
 
 	LPQDEC_NVICCmd(qdec, ENABLE);
 
+	LPQDEC_WakeUpCmd(qdec, ENABLE);
+
 	return 0;
 }
 
