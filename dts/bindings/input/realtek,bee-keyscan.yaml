@@ -50,7 +50,7 @@ properties:
       Clock divider for the Keyscan scanning clock.
       Formula: scan_clock = source_clock / (scan-div + 1).
       Assuming the source_clock is 5MHz, the default value 1 results in a 2.5MHz scan_clock.
-      Maximum value: 65535.
+      Maximum value: 2047.
 
   delay-div:
     type: int
@@ -59,7 +59,7 @@ properties:
       Clock divider for the Keyscan delay clock (used for debounce, poll interval and release).
       Formula: delay_clock = scan_clock / (delay-div + 1).
       With the default 2.5MHz scan_clock, the default value 49 results in a 50kHz delay_clock.
-      Maximum value: 255.
+      Maximum value: 63.
       poll-period-us and release-time-us each depend on the delay_clock period
       (T_delay = 1 / delay_clock), and each has its own maximum of 512 ticks.
       With the default 50kHz delay_clock (20us period), all three properties have:

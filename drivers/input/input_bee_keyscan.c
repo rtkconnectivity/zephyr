@@ -34,21 +34,24 @@ LOG_MODULE_REGISTER(bee_keyscan, CONFIG_INPUT_LOG_LEVEL);
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
 #include "rtl_keyscan.h"
 #include "rtl_pinmux.h"
+#if defined(CONFIG_PM)
+#include <zephyr/dt-bindings/pinctrl/rtl87x2j-pinctrl.h>
+#endif
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
 
-#define BEE_KEYSCAN_MAX_ROWS      12
-#define BEE_KEYSCAN_MAX_COLS      20
 #define BEE_KEYSCAN_SRC_CLK       5000000
-#define BEE_KEYSCAN_MAX_SCAN_DIV  65535
-#define BEE_KEYSCAN_MAX_DELAY_DIV 255
+#define BEE_KEYSCAN_MAX_SCAN_DIV  2047
+#define BEE_KEYSCAN_MAX_DELAY_DIV 63
 #define BEE_KEYSCAN_MAX_TICKS     511
 
 #define BEE_KEYSCAN_DEFAULT_PRE_GUARD_CNT 6
 #define BEE_KEYSCAN_PRE_GUARD_MASK        GENMASK(28, 26)
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define BEE_KEYSCAN_MAX_ROWS                          12
+#define BEE_KEYSCAN_MAX_COLS                          20
 #define BEE_KEYSCAN_STRUCT_INIT(init_struct)          KeyScan_StructInit(init_struct)
 #define BEE_KEYSCAN_INIT(kscan, init_struct)          KeyScan_Init(kscan, init_struct)
 #define BEE_KEYSCAN_INT_CONFIG(kscan, int, cmd)       KeyScan_INTConfig(kscan, int, cmd)
@@ -88,6 +91,8 @@ LOG_MODULE_REGISTER(bee_keyscan, CONFIG_INPUT_LOG_LEVEL);
 #define BEE_KEYSCAN_REG_CLKDIV KEYSCAN_CLK_DIV
 #define BEE_KEYSCAN_FIFO_DEPTH KEYSCAN_FIFO_DEPTH
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#define BEE_KEYSCAN_MAX_ROWS                          12
+#define BEE_KEYSCAN_MAX_COLS                          20
 #define BEE_KEYSCAN_STRUCT_INIT(init_struct)          KeyScan_StructInit(init_struct)
 #define BEE_KEYSCAN_INIT(kscan, init_struct)          KeyScan_Init(kscan, init_struct)
 #define BEE_KEYSCAN_INT_CONFIG(kscan, int, cmd)       KeyScan_INTConfig(kscan, int, cmd)
@@ -127,6 +132,8 @@ LOG_MODULE_REGISTER(bee_keyscan, CONFIG_INPUT_LOG_LEVEL);
 #define BEE_KEYSCAN_REG_CLKDIV CLKDIV
 #define BEE_KEYSCAN_FIFO_DEPTH 26
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define BEE_KEYSCAN_MAX_ROWS                          18
+#define BEE_KEYSCAN_MAX_COLS                          20
 #define BEE_KEYSCAN_STRUCT_INIT(init_struct)          KEYSCAN_StructInit(init_struct)
 #define BEE_KEYSCAN_INIT(kscan, init_struct)          KEYSCAN_Init(kscan, init_struct)
 #define BEE_KEYSCAN_INT_CONFIG(kscan, int, cmd)       KEYSCAN_INTConfig(kscan, int, cmd)
@@ -185,6 +192,12 @@ struct bee_keyscan_config {
 	void (*irq_config_func)(void);
 };
 
+struct bee_keyscan_wakeup_ctx {
+	const struct device *dev;
+	uint8_t row_pad;
+	bool wakeup_detected;
+};
+
 struct bee_keyscan_data {
 	struct input_kbd_matrix_common_data common;
 	struct keyscan_key_index new_keys[BEE_KEYSCAN_FIFO_DEPTH];
@@ -193,6 +206,11 @@ struct bee_keyscan_data {
 #ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
 	struct k_work work;
 	const struct device *dev;
+#endif
+
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+	bool wakeup_configured;
+	struct bee_keyscan_wakeup_ctx *wakeup_ctx;
 #endif
 };
 
@@ -262,7 +280,22 @@ static void manual_keyscan_timer_cb(struct k_timer *timer)
 		return;
 	}
 
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+	const struct bee_keyscan_config *config = dev->config;
+	struct bee_keyscan_data *data = dev->data;
+	struct bee_keyscan_wakeup_ctx *ctx = data->wakeup_ctx;
+	KEYSCAN_TypeDef *keyscan = config->reg;
+
+	for (uint8_t r = 0; r < config->common.row_size; r++) {
+		if (ctx[r].wakeup_detected) {
+			pinctrl_bee_wakeup_config(ctx[r].row_pad, 0, PINCTRL_BEE_WAKEUP_SYS, false);
+		}
+	}
+
+	BEE_KEYSCAN_CMD(keyscan, ENABLE);
+#else
 	bee_keyscan_init_driver(dev, BEE_KEYSCAN_MANUAL_SCAN_MODE, BEE_KEYSCAN_MANUAL_SEL_BIT);
+#endif
 }
 
 static bool
@@ -288,10 +321,6 @@ static void bee_keyscan_process_matrix(const struct device *dev, uint8_t new_pre
 	__maybe_unused struct bee_keyscan_data *data = dev->data;
 	__maybe_unused KEYSCAN_TypeDef *keyscan = config->reg;
 
-#ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
-	BEE_KEYSCAN_CMD(keyscan, DISABLE);
-#endif
-
 	for (int c = 0; c < cfg_common->col_size; c++) {
 		matrix_new_state[c] = 0;
 	}
@@ -311,17 +340,59 @@ static void bee_keyscan_process_matrix(const struct device *dev, uint8_t new_pre
 		goto restart_manual;
 	}
 
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+	for (uint8_t r = 0; r < cfg_common->row_size; r++) {
+		kbd_row_t mask = BIT(r);
+		bool changed = false;
+		bool row_now_pressed = false;
+		bool wakeup_detected = data->wakeup_ctx[r].wakeup_detected;
+
+		for (int c = 0; c < cfg_common->col_size; c++) {
+			if ((matrix_new_state[c] & mask) !=
+			    (cfg_common->matrix_previous_state[c] & mask)) {
+				changed = true;
+			}
+			if (matrix_new_state[c] & mask) {
+				row_now_pressed = true;
+			}
+		}
+
+		if (changed || wakeup_detected) {
+			pinctrl_bee_wakeup_config(data->wakeup_ctx[r].row_pad,
+						  row_now_pressed ? 1 : 0, PINCTRL_BEE_WAKEUP_SYS,
+						  true);
+			data->wakeup_ctx[r].wakeup_detected = changed || wakeup_detected;
+		}
+	}
+#endif
+
 	input_kbd_matrix_update_state(dev);
 
 #ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
 	if (new_press_num == 0 && bee_keyscan_all_released_and_debounced(cfg_common)) {
 		k_timer_stop(&manual_keyscan_timer);
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+		for (uint8_t r = 0; r < cfg_common->row_size; r++) {
+			bool wakeup_detected = data->wakeup_ctx[r].wakeup_detected;
+
+			if (wakeup_detected) {
+				pinctrl_bee_wakeup_config(data->wakeup_ctx[r].row_pad, 0,
+							  PINCTRL_BEE_WAKEUP_SYS, true);
+				data->wakeup_ctx[r].wakeup_detected = false;
+			}
+		}
+#endif
+
+		KEYSCAN_SetManualSelect(keyscan, BEE_KEYSCAN_MANUAL_SEL_KEY);
+#else
 		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
 					(clock_control_subsys_t)&config->clkid);
 		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
 				       (clock_control_subsys_t)&config->clkid);
 		bee_keyscan_init_driver(dev, BEE_KEYSCAN_MANUAL_SCAN_MODE,
 					BEE_KEYSCAN_MANUAL_SEL_KEY);
+#endif
 		return;
 	}
 #endif
@@ -352,6 +423,17 @@ static void bee_keyscan_isr(const struct device *dev)
 	__maybe_unused struct bee_keyscan_data *data = dev->data;
 	KEYSCAN_TypeDef *keyscan = config->reg;
 	uint8_t new_press_num = BEE_KEYSCAN_GET_FIFO_DATA_NUM(keyscan);
+
+#ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+	KEYSCAN_SetManualSelect(keyscan, BEE_KEYSCAN_MANUAL_SEL_BIT);
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+	data->wakeup_configured = false;
+#endif
+#else
+	BEE_KEYSCAN_CMD(keyscan, DISABLE);
+#endif
+#endif
 
 	if (new_press_num > BEE_KEYSCAN_FIFO_DEPTH) {
 		new_press_num = BEE_KEYSCAN_FIFO_DEPTH;
@@ -385,6 +467,35 @@ static void bee_keyscan_isr(const struct device *dev)
 #endif
 }
 
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+void keyscan_bee_process_pad_wakeup_cb(void *user_data)
+{
+	struct bee_keyscan_wakeup_ctx *ctx = (struct bee_keyscan_wakeup_ctx *)user_data;
+	const struct device *dev = ctx->dev;
+	struct bee_keyscan_data *data = dev->data;
+	const struct bee_keyscan_config *config = dev->config;
+	KEYSCAN_TypeDef *keyscan = config->reg;
+
+	for (uint8_t r = 0; r < config->common.row_size; r++) {
+		if (ctx->row_pad == data->wakeup_ctx[r].row_pad) {
+			ctx->wakeup_detected = true;
+			pinctrl_bee_wakeup_config(data->wakeup_ctx[r].row_pad, 0,
+						  PINCTRL_BEE_WAKEUP_SYS, false);
+			break;
+		}
+	}
+
+	if (!data->wakeup_configured) {
+		data->wakeup_configured = true;
+		k_timer_stop(&manual_keyscan_timer);
+
+		KEYSCAN_SetManualSelect(keyscan, BEE_KEYSCAN_MANUAL_SEL_BIT);
+		BEE_KEYSCAN_CMD(keyscan, DISABLE);
+		BEE_KEYSCAN_CMD(keyscan, ENABLE);
+	}
+}
+#endif
+
 static int bee_keyscan_init(const struct device *dev)
 {
 	const struct bee_keyscan_config *config = dev->config;
@@ -398,6 +509,33 @@ static int bee_keyscan_init(const struct device *dev)
 	}
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
+
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+	const struct pinctrl_state *state;
+
+	pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
+	for (uint8_t i = 0; i < state->pin_cnt; i++) {
+		uint16_t fun = state->pins[i].fun;
+
+		if (fun >= BEE_KEY_ROW_0 &&
+		    fun < (uint16_t)(BEE_KEY_ROW_0 + config->common.row_size)) {
+			uint8_t pad = (uint8_t)state->pins[i].pin;
+
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+			uint8_t r = fun - BEE_KEY_ROW_0;
+
+			data->wakeup_ctx[r].dev = dev;
+			data->wakeup_ctx[r].row_pad = pad;
+			System_RegisterPadWakeupCallback(
+				pad, (P_PAD_CBACK)keyscan_bee_process_pad_wakeup_cb,
+				(uint32_t)&data->wakeup_ctx[r]);
+			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_SYS, true);
+#else
+			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_PPU, true);
+#endif
+		}
+	}
+#endif
 
 	bee_keyscan_init_driver(dev,
 				IS_ENABLED(CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE)
@@ -460,17 +598,19 @@ static int bee_keyscan_init(const struct device *dev)
 
 #define BEE_INPUT_KEYSCAN_INIT(index)                                                              \
 	BUILD_ASSERT(DT_INST_PROP(index, row_size) <= BEE_KEYSCAN_MAX_ROWS,                        \
-		     "DT error: 'row-size' exceeds hardware limit (12)");                          \
+		     "row-size exceeds " STRINGIFY(BEE_KEYSCAN_MAX_ROWS));                         \
 	BUILD_ASSERT(DT_INST_PROP(index, col_size) <= BEE_KEYSCAN_MAX_COLS,                        \
-		     "DT error: 'col-size' exceeds hardware limit (20)");                          \
-	BUILD_ASSERT(DT_INST_PROP(index, scan_div) <= BEE_KEYSCAN_MAX_SCAN_DIV,                    \
-		     "DT error: 'scan-div' exceeds limit (65535)");                                \
-	BUILD_ASSERT(DT_INST_PROP(index, delay_div) <= BEE_KEYSCAN_MAX_DELAY_DIV,                  \
-		     "DT error: 'delay-div' exceeds limit (255)");                                 \
+		     "col-size exceeds " STRINGIFY(BEE_KEYSCAN_MAX_COLS));                         \
+	BUILD_ASSERT(                                                                              \
+		DT_INST_PROP(index, scan_div) <= BEE_KEYSCAN_MAX_SCAN_DIV,                         \
+		"DT error: 'scan-div' exceeds limit (" STRINGIFY(BEE_KEYSCAN_MAX_SCAN_DIV) ")");   \
+	BUILD_ASSERT(                                                                              \
+		DT_INST_PROP(index, delay_div) <= BEE_KEYSCAN_MAX_DELAY_DIV,                       \
+		"DT error: 'delay-div' exceeds limit (" STRINGIFY(BEE_KEYSCAN_MAX_DELAY_DIV) ")"); \
 	BEE_INPUT_KEYSCAN_ASSERT_SCAN_INTERVAL(index);                                             \
 	BUILD_ASSERT(BEE_KEYSCAN_CALC_US_TO_TICKS(index, release_time_us, 0) <=                    \
 			     BEE_KEYSCAN_MAX_TICKS,                                                \
-		     "DT error: 'release-time-us' results in ticks > 511. Increase delay-div?");   \
+		     "release-time-us ticks > " STRINGIFY(BEE_KEYSCAN_MAX_TICKS));                 \
                                                                                                    \
 	static void bee_keyscan_irq_config_func_##index(void);                                     \
                                                                                                    \
@@ -493,7 +633,15 @@ static int bee_keyscan_init(const struct device *dev)
 		.irq_config_func = bee_keyscan_irq_config_func_##index,                            \
 	};                                                                                         \
                                                                                                    \
-	static struct bee_keyscan_data bee_keyscan_data_##index;                                   \
+	IF_ENABLED(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP,                                         \
+		(static struct bee_keyscan_wakeup_ctx                                              \
+			bee_keyscan_wakeup_ctx_##index[DT_INST_PROP(index, row_size)];)            \
+		);                                                    \
+                                                                                                   \
+	static struct bee_keyscan_data bee_keyscan_data_##index = {                                \
+		IF_ENABLED(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP,                                 \
+			   (.wakeup_ctx = bee_keyscan_wakeup_ctx_##index,)                         \
+			) };                       \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(index, &bee_keyscan_init, NULL, &bee_keyscan_data_##index,           \
 			      &bee_keyscan_cfg_##index, POST_KERNEL, CONFIG_INPUT_INIT_PRIORITY,   \
