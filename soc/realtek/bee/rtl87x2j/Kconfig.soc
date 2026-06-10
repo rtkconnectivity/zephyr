@@ -16,3 +16,10 @@ config SOC_SERIES
 
 config SOC
 	default "rtl8762jth" if SOC_RTL8762JTH
+
+config PM_DEBUG_SNAPSHOT
+	bool "RTL87x2J PM debug snapshot"
+	help
+	  Periodically log (every 10 s) the CPU WFI enter count, system
+	  low-power mode enter count, and all IPs currently holding a
+	  QActive request.
