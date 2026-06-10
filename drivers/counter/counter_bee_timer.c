@@ -20,7 +20,7 @@ LOG_MODULE_REGISTER(counter_bee_timer, CONFIG_COUNTER_LOG_LEVEL);
 
 #if defined(CONFIG_SOC_SERIES_RTL8752H)
 #define GET_COUNTER_DEV_FROM_TIMER(timer_label)                                                    \
-	DEVICE_DT_GET(DT_CHILD(DT_NODELABEL(timer_label), counter))
+	DEVICE_DT_GET_OR_NULL(DT_CHILD(DT_NODELABEL(timer_label), counter))
 #endif
 struct counter_bee_top_data {
 	counter_top_callback_t callback;
