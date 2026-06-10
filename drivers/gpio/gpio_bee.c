@@ -431,7 +431,8 @@ static int gpio_bee_pin_interrupt_configure(const struct device *port, gpio_pin_
 	BEE_GPIO_INT_CONFIG(port_base, gpio_bit, DISABLE);
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	if (BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) ^ (trig == GPIO_INT_TRIG_LOW)) {
+	if ((BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) && trig == GPIO_INT_TRIG_HIGH) ||
+	    (!BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) && trig == GPIO_INT_TRIG_LOW)) {
 		return -ENOTSUP;
 	}
 
@@ -449,6 +450,10 @@ static int gpio_bee_pin_interrupt_configure(const struct device *port, gpio_pin_
 		gpio_init_struct.GPIO_DebounceCntLimit = data->array[pin].pin_debounce_ms;
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 		gpio_init_struct.GPIO_DebounceTime = data->array[pin].pin_debounce_ms;
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+		gpio_init_struct.GPIO_DebClockSrc = GPIO_DEB_CLOCK_SRC_32K;
+		gpio_init_struct.GPIO_DebClockDiv = GPIO_DEB_CLOCK_DIV_32;
+		gpio_init_struct.GPIO_DebCountLimit = data->array[pin].pin_debounce_ms;
 #endif
 		gpio_init_struct.BEE_GPIO_DEBOUNCE_EN = BEE_GPIO_INT_DEBOUNCE_ENABLE;
 	} else {
@@ -557,6 +562,12 @@ static void gpio_bee_isr(void *arg)
 					      BEE_GPIO_READ_INPUT_DATA_BIT(port_base, BIT(i))
 						      ? BEE_GPIO_POLARITY_ACTIVE_LOW
 						      : BEE_GPIO_POLARITY_ACTIVE_HIGH);
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+			pinctrl_bee_wakeup_config(
+				data->array[i].pad_num,
+				BEE_GPIO_READ_INPUT_DATA_BIT(port_base, BIT(i)) ? 0 : 1,
+				PINCTRL_BEE_WAKEUP_PPU, true);
+#endif
 		}
 	}
 
