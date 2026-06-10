@@ -120,9 +120,8 @@ static inline void sys_clock_unlock(k_spinlock_key_t key)
  * is that one tick announcement should occur within one tick BEFORE
  * the specified expiration (that is, passing ticks==1 means "announce
  * the next tick", this convention was chosen to match legacy usage).
- * Similarly a ticks value of zero (or even negative) is legal and
- * treated identically: it simply indicates the kernel would like the
- * next tick announcement as soon as possible.
+ * Similarly a ticks value of zero is legal: it simply indicates the
+ * kernel would like the next tick announcement as soon as possible.
  *
  * Note that ticks can also be passed the special value K_TICKS_FOREVER,
  * indicating that no future timer interrupts are expected or required
@@ -154,7 +153,7 @@ static inline void sys_clock_unlock(k_spinlock_key_t key)
  * @param idle Hint to the driver that the system is about to enter
  *        the idle state immediately after setting the timeout
  */
-void sys_clock_set_timeout(int32_t ticks, bool idle);
+void sys_clock_set_timeout(uint32_t ticks, bool idle);
 
 /**
  * @brief Timer idle exit notification
@@ -190,7 +189,7 @@ void sys_clock_idle_exit(void);
  * @param ticks Elapsed time, in ticks
  * @param key Lock key obtained from sys_clock_lock().
  */
-void sys_clock_announce_locked(int32_t ticks, k_spinlock_key_t key);
+void sys_clock_announce_locked(uint32_t ticks, k_spinlock_key_t key);
 
 /**
  * @brief Announce time progress to the kernel (legacy wrapper)
@@ -202,7 +201,7 @@ void sys_clock_announce_locked(int32_t ticks, k_spinlock_key_t key);
  *
  * @param ticks Elapsed time, in ticks
  */
-static inline void sys_clock_announce(int32_t ticks)
+static inline void sys_clock_announce(uint32_t ticks)
 {
 	sys_clock_announce_locked(ticks, sys_clock_lock());
 }

@@ -24,7 +24,7 @@ static sys_dlist_t timeout_list = SYS_DLIST_STATIC_INIT(&timeout_list);
 static struct k_spinlock timeout_lock;
 
 /* Ticks left to process in the currently-executing sys_clock_announce() */
-static int announce_remaining;
+static uint32_t announce_remaining;
 
 static struct _timeout *first(void)
 {
@@ -49,7 +49,7 @@ static void remove_timeout(struct _timeout *t)
 	sys_dlist_remove(&t->node);
 }
 
-static int32_t elapsed(void)
+static uint32_t elapsed(void)
 {
 	/* While sys_clock_announce() is executing, new relative timeouts will be
 	 * scheduled relatively to the currently firing timeout's original tick
@@ -102,7 +102,7 @@ k_ticks_t z_add_timeout(struct _timeout *to, _timeout_func_t fn, k_timeout_t tim
 
 	K_SPINLOCK(&timeout_lock) {
 		struct _timeout *t;
-		int32_t ticks_elapsed;
+		uint32_t ticks_elapsed;
 		bool has_elapsed = false;
 
 		if (Z_IS_TIMEOUT_RELATIVE(timeout)) {
@@ -220,7 +220,7 @@ int32_t z_get_next_timeout_expiry(void)
 	return ret;
 }
 
-void sys_clock_announce_locked(int32_t ticks, k_spinlock_key_t key)
+void sys_clock_announce_locked(uint32_t ticks, k_spinlock_key_t key)
 {
 	/* We release the lock around the callbacks below, so on SMP
 	 * systems someone might be already running the loop.  Don't

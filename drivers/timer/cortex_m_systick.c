@@ -422,7 +422,7 @@ __attribute__((interrupt("IRQ"))) void sys_clock_isr(void)
 }
 ARCH_ISR_DIAG_ON
 
-void sys_clock_set_timeout(int32_t ticks, bool idle)
+void sys_clock_set_timeout(uint32_t ticks, bool idle)
 {
 	/* Fast CPUs and a 24 bit counter mean that even idle systems
 	 * need to wake up multiple times per second.  If the kernel
