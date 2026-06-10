@@ -20,3 +20,14 @@ config BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
 	  This is suitable for latency-sensitive scenarios requiring higher scanning speeds.
 	  In manual mode, the system can enter sleep mode between scans when the PM feature is enabled.
 	  This is suitable for power-sensitive scenarios where energy efficiency is the priority.
+
+config BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP
+	bool "Key wakeup the system during sleep"
+	default y
+	depends on PM && !BEE_INPUT_KEYSCAN_AUTOSCAN_MODE && SOC_SERIES_RTL87X2J
+	help
+	  When enabled, row pads are configured as wakeup sources before
+	  entering sleep. A key press or release immediately wakes the
+	  system to perform a scan.
+	  When disabled, the system relies solely on the periodic timer
+	  to wake up and detect key changes.
