@@ -361,6 +361,18 @@ static int i2c_bee_init(const struct device *dev)
 		return err;
 	}
 
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+	const struct pinctrl_state *state;
+
+	err = pinctrl_lookup_state(cfg->pcfg, PINCTRL_STATE_SLEEP, &state);
+	if (err == 0) {
+		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+		if (err < 0 && err != -ENOENT) {
+			return err;
+		}
+	}
+#endif
+
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 	k_mutex_init(&data->bus_mutex);
