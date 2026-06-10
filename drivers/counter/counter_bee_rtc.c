@@ -345,7 +345,7 @@ static DEVICE_API(counter, counter_bee_rtc_driver_api) = {
 	}
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2J)
-#define RTC_CLOCK_ID(index, id) .clkid = DT_INST_CLOCKS_CELL(index, id)
+#define RTC_CLOCK_ID(index, id) .clkid = DT_INST_CLOCKS_CELL(index, id),
 #else
 #define RTC_CLOCK_ID(index, id)
 #endif
@@ -365,8 +365,8 @@ static DEVICE_API(counter, counter_bee_rtc_driver_api) = {
 				.channels = DT_INST_PROP(index, channels),                         \
 			},                                                                         \
 		.reg = DT_INST_REG_ADDR(index),                                                    \
-		RTC_CLOCK_ID(index, id),                                                           \
-		.src_clk_freq = DT_INST_PROP_OR(index, src_clk_freq, 32000),                       \
+		RTC_CLOCK_ID(index, id).src_clk_freq =                                             \
+			DT_INST_PROP_OR(index, src_clk_freq, 32000),                               \
 		.prescaler = DT_INST_PROP(index, prescaler),                                       \
 		.irq_config = irq_config_##index,                                                  \
 		.set_irq_pending = set_irq_pending_##index,                                        \
