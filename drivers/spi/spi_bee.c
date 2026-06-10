@@ -792,7 +792,29 @@ static int spi_bee_init(const struct device *dev)
 		return ret;
 	}
 
+#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+	const struct pinctrl_state *state;
+
+	ret = pinctrl_lookup_state(cfg->pcfg, PINCTRL_STATE_SLEEP, &state);
+	if (ret == 0) {
+		ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+		if (ret < 0 && ret != -ENOENT) {
+			LOG_ERR("Failed to apply pinctrl state");
+			return ret;
+		}
+	}
+#endif
+
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	/* Configure as default mode, or SPI slave will keep the SPI qactive on. */
+	SPI_InitTypeDef spi_init_struct;
+	SPI_TypeDef *spi = (SPI_TypeDef *)cfg->reg;
+
+	SPI_StructInit(&spi_init_struct);
+	SPI_Init(spi, &spi_init_struct);
+#endif
 
 #ifdef CONFIG_SPI_BEE_DMA
 	if ((data->dma_rx.dma_dev && !data->dma_tx.dma_dev) ||
@@ -860,7 +882,7 @@ static DEVICE_API(spi, spi_bee_driver_api) = {
 #if defined(CONFIG_SPI_BEE_DMA)
 #define SPI_DMA_CHANNEL(index, dir)                                                                \
 	.dma_##dir = {COND_CODE_1(DT_INST_DMAS_HAS_NAME(index, dir),                               \
-				  (SPI_DMA_CHANNEL_INIT(index, dir)), (NULL))},
+				  (SPI_DMA_CHANNEL_INIT(index, dir)), (0))},
 #else
 #define SPI_DMA_CHANNEL(index, dir)
 #endif
