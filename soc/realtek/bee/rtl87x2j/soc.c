@@ -17,6 +17,7 @@
 #include "system_init.h"
 #include "mem_config.h"
 #include "utils.h"
+#include "sys_reset.h"
 #ifdef CONFIG_BT
 #include "image_info.h"
 #endif
@@ -155,3 +156,10 @@ void arch_busy_wait(uint32_t usec_to_wait)
 	platform_delay_us(usec_to_wait);
 }
 #endif
+
+/* Overrides the weak ARM implementation */
+void sys_arch_reboot(int type)
+{
+	ARG_UNUSED(type);
+	sys_reset(RESET_REASON_ZEPHYR);
+}
