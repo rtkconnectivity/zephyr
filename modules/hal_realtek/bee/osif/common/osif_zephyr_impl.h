@@ -46,7 +46,6 @@ struct osif_timer {
 	uint32_t interval_ms;
 	uint32_t timer_id;
 	uint8_t type;
-	uint8_t status;
 	const char *name;
 	bool allocated;
 };

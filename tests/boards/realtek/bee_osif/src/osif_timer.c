@@ -60,9 +60,9 @@ ZTEST(osif_timer, test_timer)
 	zassert_true(status == false, "timer1 should be inactive!");
 #endif
 
-	/* Stop the timer before start */
+	/* Stop the timer before start: os_timer_stop is idempotent, always succeeds */
 	status = os_timer_stop(&timer1);
-	zassert_true(status == false, "error while stopping non-active timer");
+	zassert_true(status == true, "error stopping non-active timer (should be idempotent)");
 
 	status = os_timer_start(&timer1);
 	zassert_true(status == true, "error starting one-shot timer");
