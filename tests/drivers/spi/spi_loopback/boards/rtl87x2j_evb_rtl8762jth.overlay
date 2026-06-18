@@ -20,7 +20,6 @@
 	status = "okay";
 	pinctrl-0 = <&spi0_default>;
 	pinctrl-names = "default";
-	cs-gpios = <&gpioa 30 GPIO_ACTIVE_LOW>;
 	dmas = <&dma0 2 4 0x10021>, <&dma0 3 5 0xa>;
 	dma-names = "tx", "rx";
 
@@ -40,9 +39,10 @@
 &pinctrl {
 	spi0_default: spi0_default {
 		group1 {
-			psels = <BEE_PSEL(SPI0_CLK_MASTER, P4_0)>,
-				<BEE_PSEL(SPI0_MO_MASTER, P4_1)>,
-				<BEE_PSEL(SPI0_MI_MASTER, P4_2)>;
+			psels = <BEE_PSEL(SPI0_CLK_MASTER, P6_0)>,
+				<BEE_PSEL(SPI0_MO_MASTER, P6_1)>,
+				<BEE_PSEL(SPI0_MI_MASTER, P6_2)>,
+				<BEE_PSEL(SPI0_SS_N_0_MASTER, P6_3)>;
 			output-enable;
 			output-high;
 			bias-pull-up;
@@ -51,7 +51,7 @@
 
 	gpioa_default: gpioa_default {
 		group1 {
-			psels = <BEE_PSEL_GPIOA_30_P4_3>;
+			psels = <BEE_PSEL_GPIOA_25_P3_5>;
 		};
 	};
 };
