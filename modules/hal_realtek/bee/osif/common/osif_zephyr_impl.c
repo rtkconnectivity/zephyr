@@ -875,7 +875,6 @@ bool os_timer_create_zephyr(void **handle_ptr, const char *timer_name, uint32_t 
 	timer->name = timer_name;
 	timer->timer_id = timer_id;
 	timer->interval_ms = interval_ms;
-	timer->status = OSIF_TIMER_NOT_ACTIVE;
 	timer->type = (uint8_t)reload;
 
 	k_timer_init(&timer->ztimer, (k_timer_expiry_t)timer_callback, NULL);
@@ -899,7 +898,6 @@ bool os_timer_start_zephyr(void **handle_ptr)
 	period = (timer->type == OSIF_TIMER_PERIODIC) ? K_MSEC(timer->interval_ms) : K_NO_WAIT;
 
 	k_timer_start(&timer->ztimer, K_MSEC(timer->interval_ms), period);
-	timer->status = OSIF_TIMER_ACTIVE;
 
 	return true;
 }
@@ -924,8 +922,6 @@ bool os_timer_restart_zephyr(void **handle_ptr, uint32_t interval_ms)
 	period = (timer->type == OSIF_TIMER_PERIODIC) ? K_MSEC(interval_ms) : K_NO_WAIT;
 	k_timer_start(&timer->ztimer, K_MSEC(interval_ms), period);
 
-	timer->status = OSIF_TIMER_ACTIVE;
-
 	return true;
 }
 
@@ -939,12 +935,7 @@ bool os_timer_stop_zephyr(void **handle_ptr)
 
 	timer = (struct osif_timer *)*handle_ptr;
 
-	if (timer->status == OSIF_TIMER_NOT_ACTIVE) {
-		return false;
-	}
-
 	k_timer_stop(&timer->ztimer);
-	timer->status = OSIF_TIMER_NOT_ACTIVE;
 	return true;
 }
 
@@ -961,7 +952,6 @@ bool os_timer_delete_zephyr(void **handle_ptr)
 	k_timer_stop(&timer->ztimer);
 
 	key = irq_lock();
-	timer->status = OSIF_TIMER_NOT_ACTIVE;
 	timer->allocated = false;
 	irq_unlock(key);
 
