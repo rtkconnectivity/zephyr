@@ -1,0 +1,41 @@
+/*
+ * Copyright(c) 2026, Realtek Semiconductor Corporation
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <dt-bindings/pinctrl/rtl87x2g-pinctrl.h>
+
+&pinctrl {
+	uart2_default: uart2_default {
+		group1 {
+			psels = <BEE_PSEL(UART2_TX, P3_0)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(UART2_RX, P3_1)>;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+
+	gpioa_default: gpioa_default {
+		group1 {
+			psels = <BEE_PSEL_GPIOA_21_P2_0>,
+				<BEE_PSEL_GPIOA_18_P8_2>,
+				<BEE_PSEL_GPIOA_17_P8_1>;
+		};
+	};
+
+	gpiob_default: gpiob_default {
+		group1 {
+			psels = <BEE_PSEL_GPIOB_22_P9_1>,
+				<BEE_PSEL_GPIOB_21_P9_0>,
+				<BEE_PSEL_GPIOB_8_P4_3>,
+				<BEE_PSEL_GPIOB_7_P4_2>;
+		};
+	};
+
+};
