@@ -15,4 +15,9 @@ supported:
   - watchdog
   - flash
   - bluetooth
+  - i2c
+  - pwm
+  - dma
+  - spi
+  - adc
 vendor: realtek
