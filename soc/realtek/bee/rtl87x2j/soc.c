@@ -18,6 +18,7 @@
 #include "mem_config.h"
 #include "utils.h"
 #include "sys_reset.h"
+#include "clock_manager.h"
 #ifdef CONFIG_BT
 #include "image_info.h"
 #endif
@@ -100,6 +101,8 @@ void soc_early_init_hook(void)
 
 void soc_late_init_hook(void)
 {
+	set_active_mode_clk_src();
+
 	wakeup_init();
 
 	power_manager_init();
