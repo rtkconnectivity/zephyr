@@ -1,0 +1,33 @@
+identifier: rtl8777g_dongle
+name: RTL8777G Dongle Evaluation Board
+type: mcu
+arch: arm
+ram: 100
+flash: 4096
+toolchain:
+  - zephyr
+  - gnuarmemb
+  - xtools
+supported:
+  - gpio
+  - uart
+  - entropy
+  - ble
+  # TODO: to be tested
+  # - adc
+  # - counter
+  # - dma
+  # - i2c
+  # - kscan
+  # - nvs
+  # - pwm
+  # - spi
+  # - usb_device
+  # - watchdog
+testing:
+  ignore_tags:
+    - net
+    - hwinfo
+    - ipc
+    - pm
+vendor: realtek
