@@ -153,13 +153,6 @@ void soc_late_init_hook(void)
 #endif
 }
 
-#ifdef CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT
-void arch_busy_wait(uint32_t usec_to_wait)
-{
-	platform_delay_us(usec_to_wait);
-}
-#endif
-
 /* Overrides the weak ARM implementation */
 void sys_arch_reboot(int type)
 {

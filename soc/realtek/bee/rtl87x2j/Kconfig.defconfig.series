@@ -14,9 +14,6 @@ config SYS_CLOCK_TICKS_PER_SEC
 	default 1000 if CORTEX_M_SYSTICK #1ms/1tick
 	default 8000 if REALTEK_GRTC_TIMER #125us/tick #2tick is accurate, 1tick need to use pin test further
 
-config ARCH_HAS_CUSTOM_BUSY_WAIT
-	default y
-
 config CORTEX_M_SYSTICK
 	default n if REALTEK_GRTC_TIMER
 
