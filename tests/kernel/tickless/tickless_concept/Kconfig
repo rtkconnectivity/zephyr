@@ -3,6 +3,9 @@
 
 config SYS_CLOCK_TICKS_PER_SEC
 	default 32768 if NRF_RTC_TIMER
+	# Match the RTL87x2J GRTC default. 8000 Hz leaves only 4 GRTC
+	# cycles per tick and can expose one-tick-short timer periods.
+	default 4000 if REALTEK_GRTC_TIMER
 	default 100
 
 source "Kconfig.zephyr"

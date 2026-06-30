@@ -138,7 +138,7 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 #if defined(CONFIG_TICKLESS_KERNEL)
 
 	ticks = ticks == K_TICKS_FOREVER ? MAX_TICKS : ticks;
-	ticks = CLAMP(ticks, 0, (int32_t)MAX_TICKS);
+	ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
 
 	/*
 	 * Only wait when the previous GRTC_SetCompValue() was too recent.
