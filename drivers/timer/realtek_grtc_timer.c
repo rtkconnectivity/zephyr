@@ -32,7 +32,8 @@
 #define MAX_TICKS  ((COUNTER_MAX / CYC_PER_TICK) - 1)
 #define MAX_CYCLES (MAX_TICKS * CYC_PER_TICK)
 
-#define MIN_DELAY MAX(3, (CYC_PER_TICK / 16))
+/* HW latch (GRTC_COMP_MIN_GAP_CYCLES = 2) + 1 cycle margin for CPU path */
+#define MIN_DELAY (GRTC_COMP_MIN_GAP_CYCLES + 1)
 
 /*
  * Minimum interval required between consecutive GRTC_SetCompValue() calls.
