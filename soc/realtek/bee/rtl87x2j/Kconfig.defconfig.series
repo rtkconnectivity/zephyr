@@ -12,10 +12,11 @@ config USE_DT_CODE_PARTITION
 config SYS_CLOCK_TICKS_PER_SEC
 	int
 	default 1000 if CORTEX_M_SYSTICK #1ms/1tick
-	default 8000 if REALTEK_GRTC_TIMER #125us/tick #2tick is accurate, 1tick need to use pin test further
-
-config ARCH_HAS_CUSTOM_BUSY_WAIT
-	default y
+	# Use 4000 Hz with GRTC so each kernel tick spans 8 GRTC cycles.
+	# At 8000 Hz, one tick is only 4 GRTC cycles, leaving little margin
+	# for compare programming latency and tickless early announce. The
+	# timer_behavior test can then observe a 1 ms period one tick short.
+	default 4000 if REALTEK_GRTC_TIMER #250us/tick
 
 config CORTEX_M_SYSTICK
 	default n if REALTEK_GRTC_TIMER
