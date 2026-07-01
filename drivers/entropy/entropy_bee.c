@@ -9,7 +9,11 @@
 #include <zephyr/drivers/entropy.h>
 #include <string.h>
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
 #include <rng_interface.h>
+#else
+#include <utils.h>
+#endif
 
 static int entropy_bee_get_entropy(const struct device *dev, uint8_t *buffer, uint16_t length)
 {
