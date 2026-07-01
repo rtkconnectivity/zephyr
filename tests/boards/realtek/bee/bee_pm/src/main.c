@@ -29,6 +29,31 @@ static const uint32_t period_list_us[] = {20000, 10000, 9000, 8000, 7000, 6000, 
 #define EXPIRE_PER_PERIOD 10
 #define TOTAL_EXPIRE_CNT  (PERIOD_CNT * EXPIRE_PER_PERIOD)
 
+/*
+ * DLPS (suspend-to-idle) entry threshold: the PM policy requires at least
+ * (min_residency_us + exit_latency_us) of idle time before entering DLPS.
+ * Values come from the power-states node in the SoC DTS.
+ */
+#define DLPS_MIN_RESIDENCY_US DT_PROP(DT_NODELABEL(suspend_to_idle), min_residency_us)
+#define DLPS_EXIT_LATENCY_US  DT_PROP(DT_NODELABEL(suspend_to_idle), exit_latency_us)
+#define DLPS_THRESHOLD_US     (DLPS_MIN_RESIDENCY_US + DLPS_EXIT_LATENCY_US)
+
+/*
+ * Acceptable timer accuracy: ±TIMER_TOLERANCE_CYCLES GRTC cycles.
+ *
+ * Each delta is measured from the main-thread k_cycle_get_64() call before
+ * k_timer_start() to the ISR k_cycle_get_64() at expiry.  The GRTC fires at
+ * the exact comparison-match cycle, so the only error source is tick-boundary
+ * quantisation inside sys_clock_set_timeout().  Observed worst-case deviation
+ * is −2 cycles (≈ −62.5 µs).
+ *
+ * exp:1 of every period is excluded because the tick-alignment in
+ * sys_clock_set_timeout() can shift the actual expiry by up to CYC_PER_TICK
+ * cycles relative to the main-thread capture point, making the deviation
+ * unpredictable in sign and magnitude.
+ */
+#define TIMER_TOLERANCE_CYCLES 2
+
 #define SNAPSHOT 0
 
 struct timer_log_t {
@@ -101,6 +126,25 @@ ZTEST(bee_pm, test_timer)
 
 	k_timer_init(&periodic_timer, timer_period_fn, NULL);
 
+	/*
+	 * Warmup: fire one throwaway expiration before the measured sequence.
+	 *
+	 * On cold boot the kernel's last_count (most recent tick boundary) can
+	 * lag the live cycle counter by more than one tick.  When
+	 * sys_clock_set_timeout() fires, it calls elapsed() which returns that
+	 * surplus, and folds it into the first comparison value — effectively
+	 * shortening the measured delta by up to CYC_PER_TICK cycles.
+	 *
+	 * After this warmup expiration sys_clock_announce() refreshes
+	 * last_count to a recent tick, so the immediately following exp:1
+	 * starts from the same baseline as exp:2+.  The warmup log entry is
+	 * discarded by resetting log_write_pos.
+	 */
+	last_cycle = k_cycle_get_64();
+	k_timer_start(&periodic_timer, K_USEC(period_list_us[0]), K_NO_WAIT);
+	k_sem_take(&periodic_sem, K_FOREVER);
+	log_write_pos = 0; /* discard warmup entry */
+
 	for (curr_period_idx = 0; curr_period_idx < PERIOD_CNT; curr_period_idx++) {
 		uint32_t next_us = period_list_us[curr_period_idx];
 
@@ -132,6 +176,62 @@ ZTEST(bee_pm, test_timer)
 	for (uint16_t i = 0; i < PERIOD_CNT; i++) {
 		TC_PRINT("Timer period:%u us, exp count: %d, DLPS entry count:%d\n",
 			 period_list_us[i], EXPIRE_PER_PERIOD, entered_dlps_times[i]);
+	}
+
+	/*
+	 * Pass criteria 1: timer accuracy within ±TIMER_TOLERANCE_CYCLES GRTC cycles.
+	 *
+	 * Only expirations 2..N within each period are checked (expire_cnt > 1).
+	 * Each delta spans from the main-thread k_cycle_get_64() before
+	 * k_timer_start() to the ISR k_cycle_get_64() at expiry.  The GRTC fires
+	 * at the exact comparison-match cycle, so the only error source is
+	 * tick-boundary quantisation (≤2 cycles).
+	 *
+	 * exp:1 is skipped because its baseline (last_cycle) was captured in the
+	 * main thread before k_timer_start(), and the GRTC's tick alignment can
+	 * shift the actual expiry by up to CYC_PER_TICK cycles relative to that
+	 * capture point, making the deviation unpredictable.
+	 *
+	 *   expected_cycles = period_us * CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC
+	 *                     / 1000000
+	 *
+	 * We check:
+	 *   |delta_cycle - expected_cycles| <= TIMER_TOLERANCE_CYCLES
+	 */
+	for (uint16_t i = 0; i < log_write_pos; i++) {
+		const struct timer_log_t *l = &log_buf[i];
+
+		uint64_t expected_cycles =
+			(uint64_t)l->period_us * CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000ULL;
+		int64_t diff = (int64_t)l->delta_cycle - (int64_t)expected_cycles;
+
+		zassert_true(diff >= -TIMER_TOLERANCE_CYCLES && diff <= TIMER_TOLERANCE_CYCLES,
+			     "Timer period %u us exp %u: delta_cycle %llu, expected %llu, "
+			     "diff %lld (tolerance ±%d cycles)",
+			     l->period_us, l->expire_cnt, l->delta_cycle, expected_cycles, diff,
+			     TIMER_TOLERANCE_CYCLES);
+	}
+
+	/*
+	 * Pass criteria 2: DLPS entry count matches expectation.
+	 *
+	 * DLPS is only entered when the next timer wake-up is far enough away:
+	 *   period_us >= DLPS_THRESHOLD_US (min_residency + exit_latency)
+	 *
+	 * When the period is long enough every expiration should be preceded by
+	 * one DLPS entry, so expected_dlps == EXPIRE_PER_PERIOD.
+	 * When the period is too short the CPU never enters DLPS, so expected == 0.
+	 */
+	TC_PRINT("DLPS threshold: %u us (min_residency:%u + exit_latency:%u)\n", DLPS_THRESHOLD_US,
+		 DLPS_MIN_RESIDENCY_US, DLPS_EXIT_LATENCY_US);
+
+	for (uint16_t i = 0; i < PERIOD_CNT; i++) {
+		int expected_dlps =
+			(period_list_us[i] >= DLPS_THRESHOLD_US) ? EXPIRE_PER_PERIOD : 0;
+
+		zassert_equal(entered_dlps_times[i], expected_dlps,
+			      "Timer period %u us: DLPS entry count %d, expected %d",
+			      period_list_us[i], entered_dlps_times[i], expected_dlps);
 	}
 }
 
