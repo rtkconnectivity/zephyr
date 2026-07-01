@@ -3,9 +3,12 @@
 
 config SYS_CLOCK_TICKS_PER_SEC
 	default 32768 if NRF_RTC_TIMER
-	# Match the RTL87x2J GRTC default. 8000 Hz leaves only 4 GRTC
-	# cycles per tick and can expose one-tick-short timer periods.
-	default 4000 if REALTEK_GRTC_TIMER
+	# RTL87x2J GRTC runs at 32 kHz.  At 4000 Hz each tick spans only
+	# 8 GRTC cycles; the MIN_DELAY guard (3 cycles) then represents
+	# 37.5% of a tick and causes the time-slice test to fail
+	# intermittently.  2000 Hz gives 16 cycles per tick, keeping
+	# MIN_DELAY well below 20% and matching the SoC default.
+	default 2000 if REALTEK_GRTC_TIMER
 	default 100
 
 source "Kconfig.zephyr"
