@@ -91,5 +91,6 @@ tests:
     extra_args:
       - CONF_FILE="prj_gpio.conf"
       - EXTRA_DTC_OVERLAY_FILE="gpio.overlay"
+      - platform:rtl87x2j_evb/rtl8762jth:EXTRA_CONF_FILE="boards/rtl87x2j_evb_rtl8762jth.conf"
     integration_platforms:
       - native_sim
