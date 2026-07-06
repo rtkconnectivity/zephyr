@@ -95,6 +95,6 @@
 };
 
 &rtc_counter {
-	prescaler = <1>;
+	prescaler = <10>;
 	status = "okay";
 };
