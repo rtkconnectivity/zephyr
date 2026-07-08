@@ -4,6 +4,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/ {
+	sram {
+		/delete-node/ memory@20012400;
+
+		sram: memory@20007000 {
+			device_type = "sram region";
+			reg = <0x20007000 DT_SIZE_K(60)>;
+		};
+
+		heap_sram: memory@20016000 {
+			device_type = "sram heap region";
+			reg = <0x20016000 DT_SIZE_K(8)>;
+		};
+	};
+};
+
 &gpioa {
 	status = "okay";
 	pinctrl-0 = <&gpioa_default>;
