@@ -69,12 +69,11 @@ static void thread_tslice(void *p1, void *p2, void *p3)
 		thread_idx = (thread_idx + 1) % (NUM_THREAD);
 
 		k_sem_give(&sema1);
-
 		/* Keep the current thread busy for more than one slice,
 		 * even though, when timeslice used up the next thread
 		 * should be scheduled in.
 		 */
-		spin_for_ms(BUSY_MS);
+		k_busy_wait(BUSY_MS * USEC_PER_MSEC);
 	}
 }
 
@@ -180,7 +179,7 @@ ZTEST(threads_scheduling, test_slice_scheduling)
 		 * even though, when timeslice used up the next thread
 		 * should be scheduled in.
 		 */
-		spin_for_ms(BUSY_MS);
+		k_busy_wait(BUSY_MS * USEC_PER_MSEC);
 
 		/* all threads should have run by now */
 		ticks_delta(&elapsed_slice);
