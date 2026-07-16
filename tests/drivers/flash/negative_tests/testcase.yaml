@@ -17,4 +17,5 @@ tests:
       - rtl8752h_evb/rtl8752hjl
       - rtl8752h_evb/rtl8752hkf
       - rtl8752h_evb/rtl8752hmf
+      - rtl87x2j_evb/rtl8762jth
       - sam_e54_xpro
