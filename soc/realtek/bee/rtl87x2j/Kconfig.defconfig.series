@@ -29,9 +29,6 @@ config SYS_CLOCK_HW_CYCLES_PER_SEC
 config TICKLESS_KERNEL
 	default y
 
-config TIMESLICE_SIZE
-	default 10
-
 config INIT_STACKS
 	default y
 
