@@ -1,0 +1,96 @@
+# Copyright(c) 2026, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Realtek Bee series IR (infrared) controller.
+
+  The controller drives / captures the raw carrier on a single IR line and is
+  half-duplex: the same peripheral is time-shared between transmit (TX) and
+  receive (RX). It supports both a interrupt path and a DMA data path,
+  selected per direction by whether a DMA channel is wired up (see "dmas"
+  below).
+
+  Configuration overview
+  -----------------------
+
+  Pin control (required):
+    Two pinctrl states must be provided via "pinctrl-names":
+      - "ir-tx" : applied on tx enable (IRDA_TX driven output).
+      - "ir-rx" : applied on rx enable (IRDA_RX input, typically pull-up).
+    The driver switches between them automatically on tx/rx enable. There is no
+    "default" state: the driver never applies one at init (pinctrl state IDs are
+    matched by name, not by index, so "ir-tx" may be pinctrl-0).
+
+  DMA (optional, per direction):
+    Add a "dmas" entry named "tx" and/or "rx". Whichever names are present
+    enable the DMA data path for that direction; a direction with no DMA entry
+    falls back to the interrupt/FIFO path. Both can be enabled independently.
+
+  RX trigger edge (optional):
+    See "rx-falling-edge-trig".
+
+  Example:
+
+      &dma0 {
+          status = "okay";
+      };
+
+      &ir {
+          pinctrl-0 = <&ir_tx>;
+          pinctrl-1 = <&ir_rx>;
+          pinctrl-names = "ir-tx", "ir-rx";
+
+          /* Optional: enable DMA for TX and RX. Omit an entry to use the
+           * interrupt/FIFO path for that direction instead.
+           */
+          dmas = <&dma0 0 27 0x26a1>, <&dma0 0 28 0x268a>;
+          dma-names = "tx", "rx";
+
+          status = "okay";
+      };
+
+compatible: "realtek,bee-ir"
+
+include: [base.yaml, pinctrl-device.yaml]
+
+bus: ir
+
+properties:
+  reg:
+    required: true
+
+  clocks:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+    description: |
+      Names of the pinctrl states. Must include "ir-tx" and "ir-rx":
+        - "ir-tx": applied automatically on tx enable.
+        - "ir-rx": applied automatically on rx enable.
+      No "default" state is used.
+
+  dmas:
+    description: |
+      Optional TX and/or RX DMA channel specifiers. Use "dma-names" to tag them
+      "tx" and/or "rx". A direction is driven by DMA only when its name is
+      present here; otherwise the interrupt/FIFO path is used for that
+      direction.
+
+  dma-names:
+    description: |
+      Names for the "dmas" entries. Valid names are "tx" and "rx".
+
+  rx-falling-edge-trig:
+    type: boolean
+    description: |
+      Select the RX capture trigger edge. When present, RX is triggered on the
+      falling edge (and the level-counter threshold counts the high level).
+      When absent (default), RX is triggered on the rising edge (and the
+      counter counts the low level).

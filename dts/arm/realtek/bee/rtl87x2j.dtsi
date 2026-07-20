@@ -471,6 +471,14 @@
 			status = "disabled";
 		};
 
+		ir: ir@40015800 {
+			compatible = "realtek,bee-ir";
+			reg = <0x40015800 0x54>;
+			interrupts = <42 0>;
+			clocks = <&cctl APB_CLK(IR)>;
+			status = "disabled";
+		};
+
 		rtc_counter: rtc@40000768 {
 			compatible = "realtek,bee-counter-rtc";
 			reg = <0x40000768 0x40>;

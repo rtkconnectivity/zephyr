@@ -1,0 +1,27 @@
+# IR driver configuration options
+
+# Copyright (c) 2026, Realtek Semiconductor Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig IR
+	bool "IR drivers"
+	help
+	  Enable options for ir drivers.
+
+if IR
+
+comment "Capabilities"
+config IR_INIT_PRIORITY
+	int "IR init priority"
+	default KERNEL_INIT_PRIORITY_DEVICE
+	help
+	  IR driver device initialization priority.
+
+module = IR
+module-str = ir
+source "subsys/logging/Kconfig.template.log_config"
+
+comment "IR Drivers"
+
+source "drivers/ir/Kconfig.bee"
+endif # IR
