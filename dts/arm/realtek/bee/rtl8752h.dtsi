@@ -332,6 +332,14 @@
 			status = "disabled";
 		};
 
+		ir: ir@40015800 {
+			compatible = "realtek,bee-ir";
+			reg = <0x40015800 0x54>;
+			interrupts = <28 0>;
+			clocks = <&cctl APB_CLK(IR)>;
+			status = "disabled";
+		};
+
 		i2c0: i2c@40015000 {
 			compatible = "realtek,bee-i2c";
 			reg = <0x40015000 0xa0>;

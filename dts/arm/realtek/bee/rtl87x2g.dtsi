@@ -462,6 +462,14 @@
 			status = "disabled";
 		};
 
+		ir: ir@40038000 {
+			compatible = "realtek,bee-ir";
+			reg = <0x40038000 0x54>;
+			interrupts = <60 0>;
+			clocks = <&cctl APB_CLK(IR)>;
+			status = "disabled";
+		};
+
 		qdec: qdec@40001bd0 {
 			compatible = "realtek,bee-aon-qdec";
 			reg = <0x40001bd0 0x3>;
