@@ -39,20 +39,17 @@ static const uint32_t period_list_us[] = {20000, 10000, 9000, 8000, 7000, 6000, 
 #define DLPS_THRESHOLD_US     (DLPS_MIN_RESIDENCY_US + DLPS_EXIT_LATENCY_US)
 
 /*
- * Acceptable timer accuracy: ±TIMER_TOLERANCE_CYCLES GRTC cycles.
+ * Acceptable timer accuracy: ±TIMER_TOLERANCE_TICKS.
  *
  * Each delta is measured from the main-thread k_cycle_get_64() call before
- * k_timer_start() to the ISR k_cycle_get_64() at expiry.  The GRTC fires at
- * the exact comparison-match cycle, so the only error source is tick-boundary
- * quantisation inside sys_clock_set_timeout().  Observed worst-case deviation
- * is −2 cycles (≈ −62.5 µs).
- *
- * exp:1 of every period is excluded because the tick-alignment in
- * sys_clock_set_timeout() can shift the actual expiry by up to CYC_PER_TICK
- * cycles relative to the main-thread capture point, making the deviation
- * unpredictable in sign and magnitude.
+ * k_timer_start() to the ISR k_cycle_get_64() at expiry.  This measures the
+ * end-to-end wake-up path, so allow one kernel tick for tick-boundary
+ * quantisation instead of requiring only a couple of GRTC cycles.
  */
-#define TIMER_TOLERANCE_CYCLES 2
+#define TIMER_TOLERANCE_TICKS 1
+#define TIMER_TOLERANCE_CYCLES \
+	DIV_ROUND_UP((uint64_t)TIMER_TOLERANCE_TICKS * CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC, \
+		     CONFIG_SYS_CLOCK_TICKS_PER_SEC)
 
 #define SNAPSHOT 0
 
@@ -179,18 +176,13 @@ ZTEST(bee_pm, test_timer)
 	}
 
 	/*
-	 * Pass criteria 1: timer accuracy within ±TIMER_TOLERANCE_CYCLES GRTC cycles.
+	 * Pass criteria 1: timer accuracy within ±TIMER_TOLERANCE_TICKS.
 	 *
-	 * Only expirations 2..N within each period are checked (expire_cnt > 1).
 	 * Each delta spans from the main-thread k_cycle_get_64() before
-	 * k_timer_start() to the ISR k_cycle_get_64() at expiry.  The GRTC fires
-	 * at the exact comparison-match cycle, so the only error source is
-	 * tick-boundary quantisation (≤2 cycles).
-	 *
-	 * exp:1 is skipped because its baseline (last_cycle) was captured in the
-	 * main thread before k_timer_start(), and the GRTC's tick alignment can
-	 * shift the actual expiry by up to CYC_PER_TICK cycles relative to that
-	 * capture point, making the deviation unpredictable.
+	 * k_timer_start() to the ISR k_cycle_get_64() at expiry.  This is an
+	 * end-to-end wake-up latency measurement across normal and low-power
+	 * operation, so allow one kernel tick for tick-boundary quantisation instead
+	 * of requiring only a couple of GRTC cycles.
 	 *
 	 *   expected_cycles = period_us * CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC
 	 *                     / 1000000
@@ -205,11 +197,12 @@ ZTEST(bee_pm, test_timer)
 			(uint64_t)l->period_us * CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000ULL;
 		int64_t diff = (int64_t)l->delta_cycle - (int64_t)expected_cycles;
 
-		zassert_true(diff >= -TIMER_TOLERANCE_CYCLES && diff <= TIMER_TOLERANCE_CYCLES,
+		zassert_true(diff >= -(int64_t)TIMER_TOLERANCE_CYCLES &&
+			     diff <= (int64_t)TIMER_TOLERANCE_CYCLES,
 			     "Timer period %u us exp %u: delta_cycle %llu, expected %llu, "
-			     "diff %lld (tolerance ±%d cycles)",
+			     "diff %lld (tolerance ±%u tick / ±%llu cycles)",
 			     l->period_us, l->expire_cnt, l->delta_cycle, expected_cycles, diff,
-			     TIMER_TOLERANCE_CYCLES);
+			     TIMER_TOLERANCE_TICKS, (unsigned long long)TIMER_TOLERANCE_CYCLES);
 	}
 
 	/*
