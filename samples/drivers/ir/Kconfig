@@ -1,0 +1,30 @@
+# Copyright (c) 2026, Realtek Semiconductor Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+# IR sample application options
+
+config IR_APP_SENDER_ONLY
+	bool "Build the IR sample as a dedicated transmitter"
+	default n
+	help
+	  When enabled, the sample sends CONFIG_IR_APP_TX_FRAMES frames and then
+	  goes idle, and never enables RX. Flash this onto the board that acts as
+	  the pure signal source, so it does not echo frames back and collide
+	  on-air with the receiver's echo. Leave it disabled on the board that
+	  receives and echoes frames back.
+
+config IR_APP_TX_FRAMES
+	int "Number of frames to transmit in sender-only mode"
+	default 6
+	depends on IR_APP_SENDER_ONLY
+	help
+	  How many demo frames the dedicated transmitter emits before going idle.
+
+config IR_APP_TX_INTERVAL_MS
+	int "Interval between transmitted frames (ms)"
+	default 1000
+	help
+	  Gap between consecutive TX frames. On the receive+echo board this is
+	  also the startup TX cadence.
+
+source "Kconfig.zephyr"

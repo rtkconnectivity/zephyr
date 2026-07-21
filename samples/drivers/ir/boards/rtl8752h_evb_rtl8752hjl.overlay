@@ -1,0 +1,39 @@
+/*
+ * Copyright(c) 2025, Realtek Semiconductor Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <dt-bindings/pinctrl/rtl8752h-pinctrl.h>
+
+&dma0 {
+	status = "okay";
+};
+
+&ir {
+	pinctrl-0 = <&ir_tx>;
+	pinctrl-1 = <&ir_rx>;
+	pinctrl-names = "ir-tx", "ir-rx";
+	dmas = <&dma0 0 27 0x26a1>, <&dma0 0 28 0x268a>;
+	dma-names = "tx", "rx";
+	status = "okay";
+};
+
+&pinctrl {
+	ir_tx: ir_tx {
+		group1 {
+			psels = <BEE_PSEL(IRDA_TX, P0_0)>;
+			output-enable;
+			output-low;
+			bias-disable;
+		};
+	};
+
+	ir_rx: ir_rx {
+		group1 {
+			psels = <BEE_PSEL(IRDA_RX, P0_1)>;
+			output-disable;
+			bias-disable;
+		};
+	};
+};
