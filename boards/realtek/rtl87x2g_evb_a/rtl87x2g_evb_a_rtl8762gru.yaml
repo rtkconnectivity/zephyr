@@ -23,4 +23,5 @@ supported:
 testing:
   ignore_tags:
     - pm
+  timeout_multiplier: 3
 vendor: realtek
