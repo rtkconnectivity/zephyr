@@ -1,0 +1,13 @@
+sample:
+  name: Realtek Bee IR TX/RX
+common:
+  tags: ir
+tests:
+  sample.drivers.ir.bee:
+    build_only: true
+    platform_allow:
+      - rtl8752h_evb_rtl8752hjl
+      - rtl87x2g_evb_a_rtl8762gku
+      - rtl87x2j_evb_rtl8762jth
+    integration_platforms:
+      - rtl87x2j_evb_rtl8762jth
