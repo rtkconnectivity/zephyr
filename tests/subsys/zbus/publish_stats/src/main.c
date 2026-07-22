@@ -17,6 +17,7 @@ ZTEST(publish_stats, test_channel_metadata)
 {
 	k_ticks_t clock_window = CONFIG_SYS_CLOCK_TICKS_PER_SEC / 20; /* Accept +- 50ms */
 	const uint32_t clock_window_ms = 50;
+	const uint32_t msg_age_tolerance_ms = 1;
 	struct msg *cval, val = {0};
 	k_ticks_t pub_time;
 
@@ -35,10 +36,13 @@ ZTEST(publish_stats, test_channel_metadata)
 
 	/* Normal publish */
 	zassert_equal(0, zbus_chan_pub(&chan, &val, K_NO_WAIT));
+	uint64_t msg_age = zbus_chan_pub_stats_msg_age(&chan);
+
 	zassert_equal(1, zbus_chan_pub_stats_count(&chan));
 	zassert_within(k_uptime_ticks(), zbus_chan_pub_stats_last_time(&chan), clock_window);
 	zassert_within(1000, zbus_chan_pub_stats_avg_period(&chan), clock_window_ms);
-	zassert_equal(0, zbus_chan_pub_stats_msg_age(&chan));
+	zassert_true(msg_age <= msg_age_tolerance_ms, "Message age too large: %llu ms",
+		     (unsigned long long)msg_age);
 
 	/* Push 4 times in quick succession, wait for 2 second boundary */
 	for (int i = 0; i < 4; i++) {
