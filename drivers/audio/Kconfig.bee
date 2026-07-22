@@ -1,0 +1,11 @@
+# Copyright (c) 2026, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config AUDIO_CODEC_BEE
+	bool "BEE family Audio Codec driver"
+	default y
+	depends on DT_HAS_REALTEK_BEE_CODEC_ENABLED
+	select I2S
+	select HAL_REALTEK_BEE_CODEC
+	help
+	  Enable Audio Codec driver for Realtek BEE family SoCs (rtl8752h, rtl87x2g, rtl87x2j).
