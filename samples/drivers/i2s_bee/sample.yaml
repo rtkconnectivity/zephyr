@@ -1,0 +1,13 @@
+sample:
+  name: Realtek Bee I2S TX/RX with CODEC
+common:
+  tags: i2s audio
+tests:
+  sample.drivers.i2s.bee:
+    build_only: true
+    platform_allow:
+      - rtl8752h_evb/rtl8752hjl
+      - rtl87x2g_evb_a/rtl8762gku
+      - rtl87x2j_evb/rtl8762jth
+    integration_platforms:
+      - rtl87x2j_evb/rtl8762jth
