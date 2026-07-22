@@ -362,6 +362,16 @@
 			status = "disabled";
 		};
 
+		i2s0: i2s@40029000 {
+			compatible = "realtek,bee-i2s";
+			reg = <0x40029000 0x28>;
+			interrupts = <6 0>, <7 0>;
+			clocks = <&cctl APB_CLK(I2S0)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
 		rtc_counter: rtc@40000100 {
 			compatible = "realtek,bee-counter-rtc";
 			reg = <0x40000100 0x40>;

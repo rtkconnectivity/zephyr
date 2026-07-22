@@ -554,6 +554,16 @@
 			#size-cells = <0>;
 		};
 
+		i2s0: i2s@40029000 {
+			compatible = "realtek,bee-i2s";
+			reg = <0x40029000 0x68>;
+			interrupts = <64 0>, <65 0>;
+			clocks = <&cctl APB_CLK(I2S)>;
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+		};
+
 		adc: adc@40010000 {
 			compatible = "realtek,bee-adc";
 			reg = <0x40010000 0x60>;
