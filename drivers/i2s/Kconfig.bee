@@ -1,0 +1,38 @@
+# Copyright (c) 2026, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+config I2S_BEE
+	bool "BEE family I2S driver"
+	default y
+	depends on DT_HAS_REALTEK_BEE_I2S_ENABLED
+	select HAL_REALTEK_BEE_I2S
+	select PINCTRL
+	select DMA
+	help
+	  Enable I2S driver for Realtek BEE family SoCs.
+
+if I2S_BEE
+
+config I2S_BEE_TX
+	bool "I2S BEE TX support"
+	help
+	  Enable I2S BEE TX (transmit) support.
+
+config I2S_BEE_RX
+	bool "I2S BEE RX support"
+	help
+	  Enable I2S BEE RX (receive) support.
+
+config I2S_BEE_TX_BLOCK_COUNT
+	int "Number of TX blocks / msg queue size"
+	default 4
+	help
+	  Number of TX buffers / message queue size.
+
+config I2S_BEE_RX_BLOCK_COUNT
+	int "Number of RX blocks / msg queue size"
+	default 4
+	help
+	  Number of RX buffers / message queue size.
+
+endif # I2S_BEE
