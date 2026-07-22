@@ -1,0 +1,122 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	aliases {
+		dump-mic = &uart0;
+		test-i2s = &i2s0;
+		test-codec = &codec;
+	};
+};
+
+&dma0 {
+	status = "okay";
+};
+
+/* i2s_tx/i2s_rx/i2s_codec_rx */
+&i2s0 {
+	dmas = <&dma0 0 16 0x26a1>, <&dma0 1 17 0x648a>;
+	dma-names = "tx", "rx";
+	pinctrl-0 = <&i2s0_default>;
+	pinctrl-names = "default";
+	status = "okay";
+
+	/* internal codec rx, delete if use external codec */
+	codec: codec@0 {
+		compatible = "realtek,bee-codec";
+		reg = <0>;
+		channel-sequence = "l_r";
+		mic-bias = "1_8";
+		mic-bst-gain = "30dB";
+		mic-bst-mode = "differential";
+		mic-type = "amic"; /* amic */
+		/* mic-type = "dmic"; /* dmic */
+		dmic-data-latch = "rising_latch";
+		ad-gain = <0x2f>;
+		boost-gain = "0dB";
+		pinctrl-0 = <&codec_default>;
+		pinctrl-names = "default";
+		status = "okay";
+	};
+};
+
+&uart0 {
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-1 = <&uart0_sleep>;
+	pinctrl-names = "default", "sleep";
+	status = "okay";
+	current-speed = <2000000>;
+	parity = "none";
+	stop-bits = "1";
+	data-bits = <8>;
+};
+
+&pinctrl {
+	i2s0_default: i2s0_default {
+		group1 {
+			psels = <BEE_PSEL(BCLK_SPORT0, P2_0)>,
+				<BEE_PSEL(LRC_SPORT0, P2_1)>, /* i2s_tx/i2s_codec_rx waveform */
+				<BEE_PSEL(SDI_CODEC_SLAVE, P2_2)>, /* i2s_codec_rx waveform */
+				<BEE_PSEL(SDO_CODEC_SLAVE, P2_3)>, /* i2s_codec_rx waveform */
+				<BEE_PSEL(ADCDAT_SPORT0, P2_4)>, /* i2s_tx waveform */
+				<BEE_PSEL(DACDAT_SPORT0, P2_5)>; /* i2s_tx waveform */
+			output-enable;
+			output-low;
+			bias-disable;
+		};
+	};
+
+	codec_default: codec_default {
+		group1 {
+			psels = <BEE_PSEL(PWR_OFF, P2_6)>, /* amic */
+				<BEE_PSEL(PWR_OFF, P2_7)>; /* amic */
+			/* <BEE_PSEL(DMIC1_CLK, P2_6)>, /* dmic */
+			/* <BEE_PSEL(DMIC1_DAT, P2_7)>; /* dmic */
+			output-disable;
+			bias-disable;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, MICBIAS)>; /* amic */
+			output-enable;
+			output-high;
+			bias-disable;
+		};
+	};
+
+	uart0_default: uart0_default {
+		group1 {
+			psels = <BEE_PSEL(UART0_TX, P0_0)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		/* To avoid dummy data in RX fifo, which pulls qactive line */
+		group2 {
+			psels = <BEE_PSEL(UART0_RX, P0_1)>;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+
+	uart0_sleep: uart0_sleep {
+		group1 {
+			psels = <BEE_PSEL(IDLE_MODE, P0_0)>;
+			sleep-hardware-state;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(IDLE_MODE, P0_1)>;
+			sleep-hardware-state;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+};
