@@ -71,6 +71,7 @@ struct uart_bee_config {
 	uint16_t clkid;
 	uint8_t rx_threshold;
 	bool hw_flow_ctrl;
+	bool clock_force_on;
 	const struct pinctrl_dev_config *pcfg;
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
 	uart_irq_config_func_t irq_config_func;
@@ -108,6 +109,7 @@ struct uart_bee_data {
 #endif
 #if defined(CONFIG_SOC_SERIES_RTL87X2J)
 #if defined(CONFIG_PM)
+	bool has_wakeup_pin;
 	pinctrl_soc_pin_t wakeup_pin;
 	bool tx_on;
 	bool rx_on;
@@ -430,7 +432,7 @@ static void uart_bee_irq_rx_enable(const struct device *dev)
 #if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(dev, false, false);
 
-	if (!data->always_clock_force_on) {
+	if (data->has_wakeup_pin) {
 		pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
 					  PINCTRL_BEE_WAKEUP_SYS, true);
 	}
@@ -450,7 +452,7 @@ static void uart_bee_irq_rx_disable(const struct device *dev)
 #if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(dev, false, false);
 
-	if (!data->always_clock_force_on) {
+	if (data->has_wakeup_pin) {
 		pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
 					  PINCTRL_BEE_WAKEUP_SYS, false);
 		k_timer_stop(&data->timer);
@@ -971,7 +973,7 @@ static int uart_bee_async_rx_enable(const struct device *dev, uint8_t *rx_buf, s
 	UART_TxOnlyModeCmd(uart, DISABLE);
 	uart_bee_clock_force_on_enable(dev, false, false);
 
-	if (!data->always_clock_force_on) {
+	if (data->has_wakeup_pin) {
 		pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
 					  PINCTRL_BEE_WAKEUP_SYS, true);
 	}
@@ -1055,7 +1057,7 @@ static int uart_bee_async_rx_disable(const struct device *dev)
 	UART_TxOnlyModeCmd(uart, ENABLE);
 	uart_bee_clock_force_on_enable(dev, false, false);
 
-	if (!data->always_clock_force_on) {
+	if (data->has_wakeup_pin) {
 		pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
 					  PINCTRL_BEE_WAKEUP_SYS, false);
 		k_timer_stop(&data->timer);
@@ -1244,7 +1246,7 @@ static void uart_bee_isr(const struct device *dev)
 		UART_INTConfig(uart, UART_INT_RX_IDLE, ENABLE);
 
 #if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
-		if (!data->always_clock_force_on) {
+		if (data->has_wakeup_pin) {
 			k_timer_start(&data->timer,
 				      K_MSEC(CONFIG_UART_BEE_KEEP_ACTIVE_TIMEOUT_MSEC), K_FOREVER);
 		}
@@ -1279,22 +1281,15 @@ static int uart_bee_init(const struct device *dev)
 #if defined(CONFIG_PM)
 	const struct pinctrl_state *state;
 
+	data->always_clock_force_on = config->clock_force_on;
+
 	err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
 	if (err == 0) {
-		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
-		if (err < 0 && err != -ENOENT) {
-			data->always_clock_force_on = true;
-		}
-	} else {
-		data->always_clock_force_on = true;
-	}
-
-	if (!data->always_clock_force_on) {
-		bool has_wakeup_pin = false;
+		pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
 
 		for (uint8_t i = 0; i < state->pin_cnt; i++) {
 			if (state->pins[i].wakeup_low || state->pins[i].wakeup_high) {
-				has_wakeup_pin = true;
+				data->has_wakeup_pin = true;
 				data->wakeup_pin = state->pins[i];
 				k_timer_init(&data->timer, uart_bee_rx_wakeup_timer_cb, NULL);
 				data->timer.user_data = (void *)dev;
@@ -1306,10 +1301,10 @@ static int uart_bee_init(const struct device *dev)
 							  PINCTRL_BEE_WAKEUP_SYS, true);
 			}
 		}
+	}
 
-		if (!has_wakeup_pin) {
-			data->always_clock_force_on = true;
-		}
+	if (!data->always_clock_force_on && !data->has_wakeup_pin) {
+		LOG_ERR("%s: no wakeup pin and always-clock-force-on not set", dev->name);
 	}
 #else
 	data->always_clock_force_on = true;
@@ -1452,6 +1447,7 @@ static DEVICE_API(uart, uart_bee_driver_api) = {
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
 		.rx_threshold = DT_INST_PROP_OR(index, rx_threshold, 10),                          \
 		.hw_flow_ctrl = DT_INST_PROP_OR(index, flow_ctrl, false),                          \
+		.clock_force_on = DT_INST_PROP_OR(index, always_clock_force_on, false),            \
 		BEE_UART_IRQ_HANDLER_FUNC(index)};                                                 \
                                                                                                    \
 	static struct uart_bee_data uart_bee_data_##index = {                                      \
