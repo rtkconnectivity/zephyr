@@ -83,8 +83,6 @@ LOG_MODULE_REGISTER(codec_bee, CONFIG_AUDIO_CODEC_LOG_LEVEL);
 #define BEE_CODEC_BOOST_GAIN_12dB   Ch0_Boost_Gain_12dB
 #define BEE_CODEC_BOOST_GAIN_24dB   Ch0_Boost_Gain_24dB
 #define BEE_CODEC_BOOST_GAIN_36dB   Ch0_Boost_Gain_36dB
-#define BEE_SAMPLE_RATE_8KHz        SAMPLE_RATE_8KHz
-#define BEE_SAMPLE_RATE_16KHz       SAMPLE_RATE_16KHz
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define BEE_CODEC_CH_AMIC              CODEC_CH0_AMIC
 #define BEE_CODEC_CH_DMIC              CODEC_CH0_DMIC
@@ -134,8 +132,6 @@ LOG_MODULE_REGISTER(codec_bee, CONFIG_AUDIO_CODEC_LOG_LEVEL);
 #define BEE_CODEC_BOOST_GAIN_12dB   Ch0_Boost_Gain_12dB
 #define BEE_CODEC_BOOST_GAIN_24dB   Ch0_Boost_Gain_24dB
 #define BEE_CODEC_BOOST_GAIN_36dB   Ch0_Boost_Gain_36dB
-#define BEE_SAMPLE_RATE_8KHz        SAMPLE_RATE_8KHz
-#define BEE_SAMPLE_RATE_16KHz       SAMPLE_RATE_16KHz
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
 #define BEE_CODEC_CH_AMIC              CODEC_CH_AMIC
 #define BEE_CODEC_CH_DMIC              CODEC_CH_DMIC
@@ -185,8 +181,6 @@ LOG_MODULE_REGISTER(codec_bee, CONFIG_AUDIO_CODEC_LOG_LEVEL);
 #define BEE_CODEC_BOOST_GAIN_12dB   CODEC_CH0_BOOST_GAIN_12dB
 #define BEE_CODEC_BOOST_GAIN_24dB   CODEC_CH0_BOOST_GAIN_24dB
 #define BEE_CODEC_BOOST_GAIN_36dB   CODEC_CH0_BOOST_GAIN_36dB
-#define BEE_SAMPLE_RATE_8KHz        CODEC_SAMPLE_RATE_8KHz
-#define BEE_SAMPLE_RATE_16KHz       CODEC_SAMPLE_RATE_16KHz
 
 #endif
 
@@ -245,6 +239,49 @@ static const uint32_t codec_boost_gain_table[] = {
 };
 #endif
 
+struct codec_bee_sample_rate {
+	uint32_t rate_hz;
+	uint32_t hal_rate;
+};
+
+/* Sample rates supported by each SoC's CODEC HAL (see IS_SAMPLE_RATE()). */
+static const struct codec_bee_sample_rate codec_sample_rate_table[] = {
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+	{8000, SAMPLE_RATE_8KHz},       {11025, SAMPLE_RATE_11025Hz},
+	{12000, SAMPLE_RATE_12KHz},     {16000, SAMPLE_RATE_16KHz},
+	{22050, SAMPLE_RATE_22050Hz},   {24000, SAMPLE_RATE_24KHz},
+	{32000, SAMPLE_RATE_32KHz},     {44100, SAMPLE_RATE_44100Hz},
+	{48000, SAMPLE_RATE_48KHz},     {88200, SAMPLE_RATE_88200Hz},
+	{96000, SAMPLE_RATE_96KHz},     {176400, SAMPLE_RATE_176KHz},
+	{192000, SAMPLE_RATE_192KHz},
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+	{8000, SAMPLE_RATE_8KHz},       {16000, SAMPLE_RATE_16KHz},
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+	{8000, CODEC_SAMPLE_RATE_8KHz},     {11025, CODEC_SAMPLE_RATE_11025Hz},
+	{12000, CODEC_SAMPLE_RATE_12KHz},   {16000, CODEC_SAMPLE_RATE_16KHz},
+	{22050, CODEC_SAMPLE_RATE_22050Hz}, {24000, CODEC_SAMPLE_RATE_24KHz},
+	{32000, CODEC_SAMPLE_RATE_32KHz},   {44100, CODEC_SAMPLE_RATE_44100Hz},
+	{48000, CODEC_SAMPLE_RATE_48KHz},
+#endif
+};
+
+static int codec_bee_set_sample_rate(struct codec_bee_data *data, uint32_t rate_hz)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(codec_sample_rate_table); i++) {
+		if (rate_hz == codec_sample_rate_table[i].rate_hz) {
+			data->codec_initstruct.BEE_CODEC_ADC_SampleRate =
+				codec_sample_rate_table[i].hal_rate;
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+			data->codec_initstruct.BEE_CODEC_DAC_SampleRate =
+				codec_sample_rate_table[i].hal_rate;
+#endif
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
 
 static int codec_bee_configure(const struct device *dev, struct audio_codec_cfg *cfg)
 {
@@ -296,11 +333,8 @@ static int codec_bee_configure(const struct device *dev, struct audio_codec_cfg 
 		return -EINVAL;
 	}
 
-	if (i2s_cfg->frame_clk_freq == 8000) {
-		data->codec_initstruct.BEE_CODEC_ADC_SampleRate = BEE_SAMPLE_RATE_8KHz;
-	} else if (i2s_cfg->frame_clk_freq == 16000) {
-		data->codec_initstruct.BEE_CODEC_ADC_SampleRate = BEE_SAMPLE_RATE_16KHz;
-	} else {
+	if (codec_bee_set_sample_rate(data, i2s_cfg->frame_clk_freq) != 0) {
+		LOG_ERR("unsupported sample rate: %d", i2s_cfg->frame_clk_freq);
 		return -EINVAL;
 	}
 
@@ -415,8 +449,6 @@ static int codec_bee_init(const struct device *dev)
 	.codec_initstruct = {                                                                      \
 		.CODEC_AdSampleRateSrc = SAMPLE_RATE_SRC0,                                         \
 		.CODEC_DaSampleRateSrc = SAMPLE_RATE_SRC1,                                         \
-		.BEE_CODEC_ADC_SampleRate = BEE_SAMPLE_RATE_16KHz,                                 \
-		.BEE_CODEC_DAC_SampleRate = SAMPLE_RATE_16KHz,                                     \
 		.CODEC_I2SFormat = BEE_I2S_DATA_FORMAT_I2S,                                       \
 		.BEE_CODEC_I2SDataWidth = BEE_I2S_DATA_WIDTH_16BITS,                          \
 		.CODEC_I2STxDataWidth = BEE_I2S_DATA_WIDTH_16BITS,                            \
@@ -450,7 +482,6 @@ static int codec_bee_init(const struct device *dev)
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
 #define BEE_CODEC_STRUCT_INIT(index)                                                               \
 	.codec_initstruct = {                                                                      \
-		.BEE_CODEC_ADC_SampleRate = BEE_SAMPLE_RATE_16KHz,                                 \
 		.CODEC_I2SFormat = BEE_I2S_DATA_FORMAT_I2S,                                       \
 		.CODEC_I2SDataWidth = BEE_I2S_DATA_WIDTH_16BITS,                              \
 		.CODEC_I2SChSequence = codec_channel_sequence_table[DT_INST_ENUM_IDX_OR(           \
@@ -474,7 +505,6 @@ static int codec_bee_init(const struct device *dev)
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
 #define BEE_CODEC_STRUCT_INIT(index)                                                               \
 	.codec_initstruct = {                                                                      \
-		.BEE_CODEC_ADC_SampleRate = BEE_SAMPLE_RATE_16KHz,                                 \
 		.CODEC_DmicClock = BEE_DMIC_CLOCK_2500KHz,                                         \
 		.BEE_CODEC_I2S_FORMAT_FIELD = BEE_I2S_DATA_FORMAT_I2S,                             \
 		.BEE_CODEC_I2SDataWidth = BEE_I2S_DATA_WIDTH_16BITS,                               \
