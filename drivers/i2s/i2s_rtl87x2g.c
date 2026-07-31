@@ -595,17 +595,22 @@ static int i2s_rtl87x2g_configure(const struct device *dev, enum i2s_dir dir,
 	I2S_InitStruct.I2S_RxFifoUsed = I2S_FIFO_USE_0_REG_0;
 #endif
 
-	if (i2s_cfg->frame_clk_freq == 8000) {
-		*blck_mi = 0x186A;
-		*blck_ni = 0x50;
-	} else if (i2s_cfg->frame_clk_freq == 16000) {
-		*blck_mi = 0x186A;
-		*blck_ni = 0xA0;
-	} else if (i2s_cfg->frame_clk_freq == 0) {
+	if (i2s_cfg->frame_clk_freq == 0) {
 		(void)clock_control_off(RTL87X2G_CLOCK_CONTROLLER,
 					(clock_control_subsys_t)&dev_cfg->clkid);
 
 		i2s_set_satus(dev_data, dir, I2S_STATE_NOT_READY);
+	} else if ((i2s_cfg->frame_clk_freq % 25U) == 0U &&
+		   (i2s_cfg->frame_clk_freq / 25U) <= 0x7FFFU) {
+		/*
+		 * BCLK = I2S_SRC_CLK * (Ni / Mi), with a 64 * fs frame (32-bit
+		 * channel width, stereo). Fixing Mi at 25000 gives Ni = fs / 25,
+		 * which is exact for every standard audio rate (8k - 192k) and
+		 * fits the 15-bit Ni field (max 192000 / 25 = 7680). This
+		 * reproduces the legacy 8k/16k/48k ratios.
+		 */
+		*blck_mi = 25000U;
+		*blck_ni = i2s_cfg->frame_clk_freq / 25U;
 	} else {
 		LOG_ERR("invalid i2s sample rate: %d", i2s_cfg->frame_clk_freq);
 		i2s_set_satus(dev_data, dir, I2S_STATE_NOT_READY);
