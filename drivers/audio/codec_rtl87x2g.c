@@ -92,6 +92,37 @@ static const uint32_t codec_dmic_data_latch_table[] = {
 	RTL87X2G_DMIC_Ch_Rising_Latch,
 };
 
+struct codec_rtl87x2g_sample_rate {
+	uint32_t rate_hz;
+	uint32_t hal_rate;
+};
+
+/* Sample rates supported by the CODEC HAL. */
+static const struct codec_rtl87x2g_sample_rate codec_sample_rate_table[] = {
+	{8000, SAMPLE_RATE_8KHz},       {11025, SAMPLE_RATE_11025Hz},
+	{12000, SAMPLE_RATE_12KHz},     {16000, SAMPLE_RATE_16KHz},
+	{22050, SAMPLE_RATE_22050Hz},   {24000, SAMPLE_RATE_24KHz},
+	{32000, SAMPLE_RATE_32KHz},     {44100, SAMPLE_RATE_44100Hz},
+	{48000, SAMPLE_RATE_48KHz},     {88200, SAMPLE_RATE_88200Hz},
+	{96000, SAMPLE_RATE_96KHz},     {176400, SAMPLE_RATE_176KHz},
+	{192000, SAMPLE_RATE_192KHz},
+};
+
+static int codec_rtl87x2g_set_sample_rate(struct codec_rtl87x2g_data *data, uint32_t rate_hz)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(codec_sample_rate_table); i++) {
+		if (rate_hz == codec_sample_rate_table[i].rate_hz) {
+			data->codec_initstruct.RTL87X2G_CODEC_ADC_SampleRate =
+				codec_sample_rate_table[i].hal_rate;
+			data->codec_initstruct.RTL87X2G_CODEC_DAC_SampleRate =
+				codec_sample_rate_table[i].hal_rate;
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
 static int codec_rtl87x2g_configure(const struct device *dev, struct audio_codec_cfg *cfg)
 {
 	struct codec_rtl87x2g_data *data = dev->data;
@@ -140,13 +171,8 @@ static int codec_rtl87x2g_configure(const struct device *dev, struct audio_codec
 		return -EINVAL;
 	}
 
-	if (i2s_cfg->frame_clk_freq == 8000) {
-		data->codec_initstruct.RTL87X2G_CODEC_ADC_SampleRate = SAMPLE_RATE_8KHz;
-	}
-
-	if (i2s_cfg->frame_clk_freq == 16000) {
-		data->codec_initstruct.RTL87X2G_CODEC_ADC_SampleRate = SAMPLE_RATE_16KHz;
-	} else {
+	if (codec_rtl87x2g_set_sample_rate(data, i2s_cfg->frame_clk_freq) != 0) {
+		LOG_ERR("unsupported sample rate: %d", i2s_cfg->frame_clk_freq);
 		return -EINVAL;
 	}
 
@@ -178,11 +204,16 @@ static int codec_rtl87x2g_set_property(const struct device *dev, audio_property_
 	} else if (property == AUDIO_PROPERTY_OUTPUT_VOLUME) {
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 		data->codec_initstruct.CODEC_Ch0Mute =
-			val.mute ? RTL87X2G_CODEC_MUTE : RTL87X2G_CODEC_UNMUTE;
+			val.vol ? RTL87X2G_CODEC_UNMUTE : RTL87X2G_CODEC_MUTE;
+		data->codec_initstruct.CODEC_Ch0AdGain = val.vol;
 		if (data->codec_initstruct.CODEC_Ch1MicType == RTL87X2G_CODEC_CH_DMIC &&
 		    data->i2s_cfg.channels == 2) {
+			data->codec_initstruct.CODEC_Ch1Mute =
+				val.vol ? RTL87X2G_CODEC_UNMUTE : RTL87X2G_CODEC_MUTE;
 			data->codec_initstruct.CODEC_Ch1AdGain = val.vol;
 		} else if (data->i2s_cfg.channels == 0) {
+			data->codec_initstruct.CODEC_DaMute =
+				val.vol ? RTL87X2G_CODEC_UNMUTE : RTL87X2G_CODEC_MUTE;
 			data->codec_initstruct.CODEC_DaGain = val.vol;
 		}
 #endif

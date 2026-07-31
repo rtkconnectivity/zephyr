@@ -35,7 +35,7 @@ BUILD_ASSERT(CONFIG_HEAP_MEM_POOL_SIZE > 0);
 	 (id) == 6 || (id) == 7 || (id) == 8)
 #endif
 
-#define DBG_DIRECT_SHOW 1
+#define DBG_DIRECT_SHOW 0
 LOG_MODULE_REGISTER(dma_rtl87x2g, CONFIG_DMA_LOG_LEVEL);
 
 struct dma_rtl87x2g_config {
