@@ -81,6 +81,7 @@ struct i2c_bee_config {
 	uint16_t clkid;
 	const struct pinctrl_dev_config *pcfg;
 	void (*irq_cfg_func)(void);
+	k_timeout_t transfer_timeout;
 #ifdef CONFIG_I2C_BEE_BUS_RECOVERY
 	struct gpio_dt_spec scl_gpio;
 	struct gpio_dt_spec sda_gpio;
@@ -88,11 +89,16 @@ struct i2c_bee_config {
 };
 
 struct i2c_bee_data {
-	struct k_mutex bus_mutex;
+	struct k_sem lock;
 	struct k_sem sync_sem;
 	struct i2c_bee_context ctx;
 	uint32_t dev_config;
 	uint8_t errs;
+#ifdef CONFIG_I2C_CALLBACK
+	i2c_callback_t cb;
+	void *userdata;
+	struct k_timer timeout_timer;
+#endif
 };
 
 static inline bool i2c_bee_next_msg_available(struct i2c_bee_context *ctx)
@@ -229,6 +235,58 @@ static void i2c_bee_log_err(struct i2c_bee_data *data)
 	}
 }
 
+static void i2c_bee_start(const struct device *dev, struct i2c_msg *msgs, uint8_t num_msgs,
+			  uint16_t addr)
+{
+	struct i2c_bee_data *data = dev->data;
+	const struct i2c_bee_config *cfg = dev->config;
+	I2C_TypeDef *i2c = (I2C_TypeDef *)cfg->reg;
+
+	data->ctx.msgs = msgs;
+	data->ctx.num_msgs = num_msgs;
+	data->ctx.msg_idx = 0U;
+	data->ctx.tx_idx = 0U;
+	data->ctx.rx_idx = 0U;
+	data->errs = BEE_I2C_SUCCESS;
+
+	I2C_Cmd(i2c, ENABLE);
+	I2C_SetSlaveAddress(i2c, addr);
+
+	I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, ENABLE);
+
+	i2c_bee_do_tx(dev);
+}
+
+static void i2c_bee_complete(const struct device *dev, int result)
+{
+	struct i2c_bee_data *data = dev->data;
+	const struct i2c_bee_config *cfg = dev->config;
+	I2C_TypeDef *i2c = (I2C_TypeDef *)cfg->reg;
+
+	I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, DISABLE);
+	I2C_Cmd(i2c, DISABLE);
+
+#ifdef CONFIG_I2C_CALLBACK
+	/* Cancel the async watchdog; harmless no-op when it is the one that fired. */
+	k_timer_stop(&data->timeout_timer);
+
+	if (data->cb != NULL) {
+		i2c_callback_t cb = data->cb;
+		void *userdata = data->userdata;
+
+		data->cb = NULL;
+		data->userdata = NULL;
+
+		k_sem_give(&data->lock);
+		cb(dev, result, userdata);
+		return;
+	}
+#endif /* CONFIG_I2C_CALLBACK */
+
+	ARG_UNUSED(result);
+	k_sem_give(&data->sync_sem);
+}
+
 static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint8_t num_msgs,
 			    uint16_t addr)
 {
@@ -241,30 +299,26 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 		return 0;
 	}
 
-	k_mutex_lock(&data->bus_mutex, K_FOREVER);
+	k_sem_take(&data->lock, K_FOREVER);
 
-	data->ctx.msgs = msgs;
-	data->ctx.num_msgs = num_msgs;
-	data->ctx.msg_idx = 0U;
-	data->ctx.tx_idx = 0U;
-	data->ctx.rx_idx = 0U;
-	data->errs = BEE_I2C_SUCCESS;
+#ifdef CONFIG_I2C_CALLBACK
+	data->cb = NULL;
+#endif
 	k_sem_reset(&data->sync_sem);
 
-	I2C_Cmd(i2c, ENABLE);
-	I2C_SetSlaveAddress(i2c, addr);
+	i2c_bee_start(dev, msgs, num_msgs, addr);
 
-	I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, ENABLE);
-
-	i2c_bee_do_tx(dev);
-
-	k_sem_take(&data->sync_sem, K_FOREVER);
+	if (k_sem_take(&data->sync_sem, cfg->transfer_timeout) != 0) {
+		I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, DISABLE);
+		I2C_Cmd(i2c, DISABLE);
+		k_sem_give(&data->lock);
+		LOG_ERR("transfer timed out");
+		return -ETIMEDOUT;
+	}
 
 	ret = (data->errs == BEE_I2C_SUCCESS) ? 0 : -EIO;
 
-	I2C_Cmd(i2c, DISABLE);
-
-	k_mutex_unlock(&data->bus_mutex);
+	k_sem_give(&data->lock);
 
 	if (ret < 0) {
 		i2c_bee_log_err(data);
@@ -272,6 +326,42 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 
 	return ret;
 }
+
+#ifdef CONFIG_I2C_CALLBACK
+static void i2c_bee_timeout(struct k_timer *timer)
+{
+	const struct device *dev = k_timer_user_data_get(timer);
+
+	i2c_bee_complete(dev, -ETIMEDOUT);
+}
+
+static int i2c_bee_transfer_cb(const struct device *dev, struct i2c_msg *msgs, uint8_t num_msgs,
+			       uint16_t addr, i2c_callback_t cb, void *userdata)
+{
+	struct i2c_bee_data *data = dev->data;
+	const struct i2c_bee_config *cfg = dev->config;
+
+	if (cb == NULL) {
+		return -EINVAL;
+	}
+
+	/* The bus lock is released from the ISR when the transfer completes. */
+	if (k_sem_take(&data->lock, K_NO_WAIT) != 0) {
+		return -EWOULDBLOCK;
+	}
+
+	data->cb = cb;
+	data->userdata = userdata;
+
+	if (!K_TIMEOUT_EQ(cfg->transfer_timeout, K_FOREVER)) {
+		k_timer_start(&data->timeout_timer, cfg->transfer_timeout, K_NO_WAIT);
+	}
+
+	i2c_bee_start(dev, msgs, num_msgs, addr);
+
+	return 0;
+}
+#endif /* CONFIG_I2C_CALLBACK */
 
 static int i2c_bee_do_configure(const struct device *dev, uint32_t dev_config)
 {
@@ -325,9 +415,9 @@ static int i2c_bee_configure(const struct device *dev, uint32_t dev_config)
 	struct i2c_bee_data *data = dev->data;
 	int err;
 
-	k_mutex_lock(&data->bus_mutex, K_FOREVER);
+	k_sem_take(&data->lock, K_FOREVER);
 	err = i2c_bee_do_configure(dev, dev_config);
-	k_mutex_unlock(&data->bus_mutex);
+	k_sem_give(&data->lock);
 
 	return err;
 }
@@ -413,7 +503,7 @@ static int i2c_bee_recover_bus(const struct device *dev)
 		return -ENOSYS;
 	}
 
-	k_mutex_lock(&data->bus_mutex, K_FOREVER);
+	k_sem_take(&data->lock, K_FOREVER);
 
 	ret = 0;
 #if !defined(CONFIG_SOC_SERIES_RTL8752H)
@@ -448,7 +538,7 @@ static int i2c_bee_recover_bus(const struct device *dev)
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 	(void)i2c_bee_do_configure(dev, dev_config);
 
-	k_mutex_unlock(&data->bus_mutex);
+	k_sem_give(&data->lock);
 
 	return ret;
 }
@@ -462,11 +552,11 @@ static void i2c_bee_isr(const struct device *dev)
 
 	if (I2C_GetINTStatus(i2c, I2C_INT_TX_ABRT)) {
 		data->errs = I2C_CheckAbortStatus(i2c);
-		I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, DISABLE);
 		I2C_ClearINTPendingBit(i2c, I2C_INT_TX_ABRT);
 		I2C_ClearINTPendingBit(i2c, I2C_INT_RX_FULL);
 		I2C_ClearINTPendingBit(i2c, I2C_INT_TX_EMPTY);
-		k_sem_give(&data->sync_sem);
+		i2c_bee_complete(dev, -EIO);
+		return;
 	}
 
 	if (I2C_GetINTStatus(i2c, I2C_INT_RX_FULL)) {
@@ -480,10 +570,7 @@ static void i2c_bee_isr(const struct device *dev)
 	}
 
 	if (!i2c_bee_next_msg_available(&data->ctx) && !I2C_GetFlagState(i2c, I2C_FLAG_ACTIVITY)) {
-		I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, DISABLE);
-		I2C_Cmd(i2c, DISABLE);
-
-		k_sem_give(&data->sync_sem);
+		i2c_bee_complete(dev, 0);
 	}
 }
 
@@ -508,9 +595,14 @@ static int i2c_bee_init(const struct device *dev)
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
-	k_mutex_init(&data->bus_mutex);
+	k_sem_init(&data->lock, 1, 1);
 
 	k_sem_init(&data->sync_sem, 0, K_SEM_MAX_LIMIT);
+
+#ifdef CONFIG_I2C_CALLBACK
+	k_timer_init(&data->timeout_timer, i2c_bee_timeout, NULL);
+	k_timer_user_data_set(&data->timeout_timer, (void *)dev);
+#endif
 
 	cfg->irq_cfg_func();
 
@@ -524,6 +616,9 @@ static DEVICE_API(i2c, i2c_bee_driver_api) = {
 	.configure = i2c_bee_configure,
 	.get_config = i2c_bee_get_config,
 	.transfer = i2c_bee_transfer,
+#ifdef CONFIG_I2C_CALLBACK
+	.transfer_cb = i2c_bee_transfer_cb,
+#endif
 #ifdef CONFIG_I2C_BEE_BUS_RECOVERY
 	.recover_bus = i2c_bee_recover_bus,
 #endif
@@ -558,6 +653,7 @@ static DEVICE_API(i2c, i2c_bee_driver_api) = {
 		.clkid = DT_INST_CLOCKS_CELL(index, id),                                           \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
 		.irq_cfg_func = i2c_bee_irq_cfg_func_##index,                                      \
+		.transfer_timeout = I2C_DT_INST_TRANSFER_TIMEOUT(index),                           \
 		I2C_BEE_RECOVERY_INIT(index)                                                       \
 	};                                                                                         \
 	I2C_DEVICE_DT_INST_DEFINE(index, i2c_bee_init, NULL, &i2c_bee_data_##index,                \
