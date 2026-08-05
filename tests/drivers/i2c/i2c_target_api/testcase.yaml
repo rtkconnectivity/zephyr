@@ -78,6 +78,8 @@ tests:
       - nrf54lm20dk/nrf54lm20b/cpuapp
       - nrf7120dk/nrf7120/cpuapp
       - ophelia4ev/nrf54l15/cpuapp
+      - rtl8752h_evb/rtl8752hjl
+      - rtl87x2g_evb_a/rtl8762gku
       - s32k5xxcvb/s32k566/m7
       - s32k5xxcvb/s32k566/r52
       - it51xxx_evb/it51526aw
