@@ -1,8 +1,11 @@
+# Copyright (c) 2026, Realtek Semiconductor Corporation
+# SPDX-License-Identifier: Apache-2.0
+
 description: |
     This binding provides resources required to build and run the
-    bee_pm_device.
+    tests/drivers/gpio/gpio_basic_api test in Zephyr.
 
-compatible: "bee-pm-device-gpio"
+compatible: "test-gpio-basic-api"
 
 properties:
   out-gpios:
