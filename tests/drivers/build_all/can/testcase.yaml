@@ -46,3 +46,6 @@ tests:
     platform_allow:
       - native_sim
       - native_sim/native/64
+  drivers.can.build_all.realtek_bee:
+    platform_allow:
+      - rtl87x2g_evb_a/rtl8762gku
