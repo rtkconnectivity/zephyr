@@ -15,6 +15,14 @@ config USB_DEVICE_AUDIO
 
 if USB_DEVICE_AUDIO
 
+config USB_DEVICE_AUDIO_SAMPLE_RATE
+	int "USB Audio sample rate (Hz)"
+	default 16000
+	help
+	  Sample rate used to build the USB Audio Class descriptors
+	  (tSamFreq and isochronous endpoint wMaxPacketSize). Must match
+	  the rate the application drives the audio data path at.
+
 module = USB_AUDIO
 module-str = USB Audio
 source "subsys/logging/Kconfig.template.log_config"

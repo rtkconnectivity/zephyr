@@ -364,6 +364,45 @@ static void audio_cb_usb_status(struct usb_cfg_data *cfg,
 	case USB_DC_SOF:
 		audio_dc_sof(cfg, audio_dev_data);
 		break;
+	case USB_DC_INTERFACE: {
+		/* RTL87x2G does not fire USB_DC_SOF, and usb_set_interface() in
+		 * usb_device.c handles SET_INTERFACE without calling custom_handler,
+		 * so tx_enable is never set via the normal audio_custom_handler path.
+		 * Handle it here by reading bAlternateSetting from the if_descriptor
+		 * passed as param.
+		 *
+		 * For bidirectional (headset) devices, identify which streaming
+		 * interface changed by matching bInterfaceNumber against the
+		 * header's baInterfaceNr[], then set the correct enable flag:
+		 *   IN  endpoint -> tx_enable (MIC, upstream to host)
+		 *   OUT endpoint -> rx_enable (HP, downstream from host)
+		 */
+		const struct usb_if_descriptor *if_desc =
+			(const struct usb_if_descriptor *)param;
+		if (if_desc != NULL) {
+			const struct cs_ac_if_descriptor *hdr =
+				audio_dev_data->desc_hdr;
+			uint8_t iface = if_desc->bInterfaceNumber;
+			bool alt = if_desc->bAlternateSetting != 0;
+
+			for (int i = 0; i < hdr->bInCollection; i++) {
+				if (iface != hdr->baInterfaceNr[i] ||
+				    i >= cfg->num_endpoints) {
+					continue;
+				}
+				if (cfg->endpoint[i].ep_addr & USB_EP_DIR_MASK) {
+					audio_dev_data->tx_enable = alt;
+					if (alt) {
+						audio_dc_sof(cfg, audio_dev_data);
+					}
+				} else {
+					audio_dev_data->rx_enable = alt;
+				}
+				break;
+			}
+		}
+		break;
+	}
 	default:
 		break;
 	}

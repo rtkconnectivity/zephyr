@@ -172,7 +172,7 @@
 #define SYNC_TYPE(dev, i) (SYNC_TYPE_##dev(i) << 2)
 
 #define EP_SIZE(dev, i) \
-	((GET_RES(dev, i)/8) * CH_CNT(dev, i) * 48)
+	((GET_RES(dev, i)/8) * CH_CNT(dev, i) * (CONFIG_USB_DEVICE_AUDIO_SAMPLE_RATE / 1000))
 
 /* *_ID() macros are used to give proper Id to each entity describing
  * the device. Entities Id must start from 1 that's why 1 is added.
@@ -491,7 +491,11 @@ struct dev##_descriptor_##i {						\
 	.bSubframeSize = res/8,					\
 	.bBitResolution = res,					\
 	.bSamFreqType = 1,					\
-	.tSamFreq = {0x80, 0xBB, 0x00},				\
+	.tSamFreq = {						\
+		(CONFIG_USB_DEVICE_AUDIO_SAMPLE_RATE) & 0xFF,		\
+		((CONFIG_USB_DEVICE_AUDIO_SAMPLE_RATE) >> 8) & 0xFF,	\
+		((CONFIG_USB_DEVICE_AUDIO_SAMPLE_RATE) >> 16) & 0xFF,	\
+	},							\
 }
 
 #define INIT_STD_AS_AD_EP(dev, i, addr)					\
@@ -501,7 +505,7 @@ struct dev##_descriptor_##i {						\
 	.bEndpointAddress = addr,					\
 	.bmAttributes = (USB_DC_EP_ISOCHRONOUS | SYNC_TYPE(dev, i)),	\
 	.wMaxPacketSize = sys_cpu_to_le16(EP_SIZE(dev, i)),		\
-	.bInterval = 0x01,						\
+	.bInterval = 0x04,						\
 	.bRefresh = 0x00,						\
 	.bSynchAddress = 0x00,						\
 }
