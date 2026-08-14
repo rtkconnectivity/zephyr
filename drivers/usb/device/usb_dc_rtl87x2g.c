@@ -67,8 +67,10 @@ K_HEAP_DEFINE(ep_heap, CONFIG_USB_EP_HEAP_SIZE);
 
 #define USB_DW_CORE_RST_TIMEOUT_US 10000
 
-/* FIXME: The actual MPS depends on endpoint type and bus speed. */
-#define DW_USB_MAX_PACKET_SIZE 64
+/* USB FS isochronous endpoints support up to 1023 bytes; hardware FIFOs are
+ * large enough (EP1=2048, EP4=384). Raise limit to allow 96-byte audio frames.
+ */
+#define DW_USB_MAX_PACKET_SIZE 1023
 
 /* Number of SETUP back-to-back packets */
 #define USB_DW_SUP_CNT 1
@@ -97,7 +99,38 @@ struct usb_ep_ctrl_prv {
 	uint32_t data_len;
 	uint32_t rsvd_tx_len;
 	const uint8_t *rsvd_tx_buf;
+	/* ISO IN frame-parity tracking (see usb_dw_tx / INCOMPISOIN recovery).
+	 * iso_poll_odd is the even/odd (micro)frame parity the host polls this
+	 * endpoint on.  iso_poll_known latches once a transfer actually completes
+	 * on that parity: after that point INCOMPISOIN (which the core also raises
+	 * for the idle microframes of a bInterval>1 endpoint) must NOT flip the
+	 * guess, or a correctly-streaming endpoint would be knocked off parity.
+	 * Both are reset at each stream start so a restarted recording re-searches
+	 * in case the host reschedules the poll slot.
+	 */
+	uint8_t iso_poll_odd;
+	uint8_t iso_poll_known;
+	/* Set once usb_dw_tx has armed this ISO IN endpoint in the current
+	 * stream.  A stale INCOMPISOIN left over from the previous stream (the
+	 * endpoint can stay EP_ENA across a stop/restart) must not flip the
+	 * parity before we have armed anything, or the first real transfer goes
+	 * out on the wrong parity and never converges.
+	 */
+	uint8_t iso_armed;
+	/* SOFFN captured when this ISO IN endpoint was last armed.  INCOMPISOIN
+	 * can be raised on a (micro)frame before the host's scheduled poll slot
+	 * has come around, so a miss is only genuine once at least one full poll
+	 * period has elapsed since the arm.  Flipping earlier would knock a
+	 * would-be-correct parity off before it ever gets a chance to transmit.
+	 */
+	uint16_t iso_arm_soffn;
 };
+
+static inline bool usb_dw_ep_is_iso(struct usb_dw_reg *const base, uint8_t ep_idx)
+{
+	return (base->in_ep_reg[ep_idx].diepctl & USB_DW_DEPCTL_EP_TYPE_MASK) ==
+	       ((uint32_t)USB_DW_DEPCTL_EP_TYPE_ISO << USB_DW_DEPCTL_EP_TYPE_OFFSET);
+}
 
 static void usb_dw_isr_handler(const void *unused);
 
@@ -377,6 +410,9 @@ static int usb_dw_ep_set(uint8_t ep, uint32_t ep_mps, enum usb_dc_ep_transfer_ty
 		case USB_DC_EP_CONTROL:
 			*p_depctl |= USB_DW_DEPCTL_EP_TYPE_CONTROL << USB_DW_DEPCTL_EP_TYPE_OFFSET;
 			break;
+		case USB_DC_EP_ISOCHRONOUS:
+			*p_depctl |= USB_DW_DEPCTL_EP_TYPE_ISO << USB_DW_DEPCTL_EP_TYPE_OFFSET;
+			break;
 		case USB_DC_EP_BULK:
 			*p_depctl |= USB_DW_DEPCTL_EP_TYPE_BULK << USB_DW_DEPCTL_EP_TYPE_OFFSET;
 			break;
@@ -511,7 +547,7 @@ static void usb_dw_handle_reset(void)
 
 	/* enable global EP interrupts */
 	base->doepmsk = 0U;
-	base->gintmsk |= USB_DW_GINTSTS_RX_FLVL;
+	base->gintmsk |= USB_DW_GINTSTS_RX_FLVL | USB_DW_GINTSTS_IEP_INT;
 	base->diepmsk |= USB_DW_DIEPINT_XFER_COMPL;
 #endif
 }
@@ -760,6 +796,30 @@ static int usb_dw_tx(uint8_t ep, const uint8_t *const data, uint32_t data_len)
 	/* Set number of packets and transfer size */
 	base->in_ep_reg[ep_idx].dieptsiz = (pkt_cnt << USB_DW_DEPTSIZ_PKT_CNT_OFFSET) | data_len;
 
+	/* For ISO IN, the DW OTG core transmits a transfer only in the (micro)frame
+	 * whose even/odd parity matches the SetEvenFr/SetOddFr bit, so the parity
+	 * must be programmed on every arm.  The host polls a periodic IN endpoint at
+	 * a fixed slot every bInterval, and the poll interval is a whole number of
+	 * (micro)frames, so successive polls always land on the SAME parity.  The
+	 * target parity is therefore constant for the life of the stream, but not
+	 * known in advance (and it may differ after a stop/restart if the host
+	 * reschedules the endpoint to another slot).
+	 *
+	 * So just arm with the current best guess in iso_poll_odd (starts EVEN); if
+	 * it is wrong the core raises INCOMPISOIN with no XFER_COMPL, and the
+	 * recovery path flips the guess so we converge within one or two frames.
+	 */
+	if (usb_dw_ep_is_iso(base, ep_idx)) {
+		if (usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_poll_odd) {
+			base->in_ep_reg[ep_idx].diepctl |= BIT(29); /* SetOddFr */
+		} else {
+			base->in_ep_reg[ep_idx].diepctl |= BIT(28); /* SetEvenFr */
+		}
+		usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_armed = 1U;
+		usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_arm_soffn =
+			(base->dsts >> 8) & 0x3FFF;
+	}
+
 	/* Clear NAK and enable ep */
 	base->in_ep_reg[ep_idx].diepctl |= (USB_DW_DEPCTL_EP_ENA | USB_DW_DEPCTL_CNAK);
 
@@ -1001,6 +1061,14 @@ static inline void usb_dw_int_iep_handler(void)
 
 			ep_cb = usb_dw_ctrl.in_ep_ctrl[ep_idx].cb;
 			if (ep_cb && (ep_int_status & USB_DW_DIEPINT_XFER_COMPL)) {
+				/* A completed ISO IN transfer proves the current parity
+				 * guess is correct: latch it so subsequent INCOMPISOIN
+				 * (raised for this endpoint's idle microframes) does not
+				 * flip us off the working parity.
+				 */
+				if (usb_dw_ep_is_iso(base, ep_idx)) {
+					usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_poll_known = 1U;
+				}
 				/* Call the registered callback */
 				ep_cb(USB_EP_GET_ADDR(ep_idx, USB_EP_DIR_IN), USB_DC_EP_DATA_IN);
 			}
@@ -1099,6 +1167,111 @@ static void usb_dw_isr_handler(const void *unused)
 	DBG_DIRECT("[%s]", __func__);
 #endif
 	ARG_UNUSED(unused);
+
+	/* INCOMPISOIN (GINTSTS bit 21) is raised when an ISO IN token lands on
+	 * the wrong frame parity.  The core leaves the endpoint enabled but never
+	 * transmits and never raises XFER_COMPL, so the mic send chain stalls
+	 * forever (the transfer framework waits for a completion that never comes).
+	 * It is not in gintmsk, so check the raw status.
+	 *
+	 * Recover by disabling and flushing any stuck ISO IN endpoint, then
+	 * synthesising its DATA_IN completion callback.  That drives the transfer
+	 * framework to complete the (already FIFO-drained) transfer and the class
+	 * driver arms the next frame with freshly computed parity, keeping the
+	 * chain alive.  The stale audio frame is dropped, which is acceptable for
+	 * an isochronous stream.
+	 */
+	if (base->gintsts & BIT(21)) {
+		for (uint8_t iso_ep = 1U; iso_ep < USB_DW_IN_EP_NUM; iso_ep++) {
+			uint32_t diepctl = base->in_ep_reg[iso_ep].diepctl;
+
+			if ((diepctl & USB_DW_DEPCTL_EP_TYPE_MASK) !=
+			    ((uint32_t)USB_DW_DEPCTL_EP_TYPE_ISO
+			     << USB_DW_DEPCTL_EP_TYPE_OFFSET) ||
+			    !(diepctl & USB_DW_DEPCTL_EP_ENA)) {
+				continue;
+			}
+
+			usb_dc_ep_callback ep_cb = usb_dw_ctrl.in_ep_ctrl[iso_ep].cb;
+
+			/* A miss on an endpoint we have not armed this stream is a
+			 * leftover from the previous stream: ignore it (do not flip
+			 * parity), just let it be cleared below.
+			 */
+			if (!usb_dw_ctrl.in_ep_ctrl[iso_ep].iso_armed) {
+				continue;
+			}
+
+			/* Once a transfer has completed on the locked parity the core
+			 * still raises INCOMPISOIN for this endpoint's idle microframes
+			 * (bInterval > 1 at high speed).  That is normal, not a miss:
+			 * leave the endpoint alone so the in-flight transfer keeps
+			 * driving XFER_COMPL.
+			 */
+			if (usb_dw_ctrl.in_ep_ctrl[iso_ep].iso_poll_known) {
+				continue;
+			}
+
+			/* INCOMPISOIN can be raised on a (micro)frame before the
+			 * host's scheduled poll slot has even come around.  If we
+			 * flip on such a premature miss we knock a would-be-correct
+			 * parity off before it ever gets its poll, which makes the
+			 * search oscillate and never lock (the intermittent second
+			 * recording).  Only treat the miss as genuine once at least
+			 * one full poll period has elapsed since we armed.
+			 */
+			uint32_t soffn_now = (base->dsts >> 8) & 0x3FFF;
+			uint32_t delta = (soffn_now -
+					  usb_dw_ctrl.in_ep_ctrl[iso_ep].iso_arm_soffn) &
+					 0x3FFF;
+
+			if (delta < 16U) {
+				continue;
+			}
+
+			/* Still searching: the miss means the parity we armed with was
+			 * wrong, so flip it and re-arm the other parity.
+			 */
+			usb_dw_ctrl.in_ep_ctrl[iso_ep].iso_poll_odd ^= 1U;
+
+			/* Disable the stuck ISO IN endpoint following the DWC OTG
+			 * databook sequence, otherwise EP_DIS never takes and a
+			 * subsequent EP_ENA leaves the endpoint wedged:
+			 *   1. set SNAK, wait for INEPNAKEFF (DIEPINT bit 6)
+			 *   2. set EP_DIS|SNAK, wait for EPDISBLD (DIEPINT bit 1)
+			 *   3. flush the TX FIFO
+			 * Both waits are bounded so a missing handshake cannot hang
+			 * the ISR.
+			 */
+			base->in_ep_reg[iso_ep].diepctl |= USB_DW_DEPCTL_SNAK;
+			for (int spin = 0; spin < 100000; spin++) {
+				if (base->in_ep_reg[iso_ep].diepint & BIT(6)) {
+					break;
+				}
+			}
+			base->in_ep_reg[iso_ep].diepint = BIT(6);
+
+			base->in_ep_reg[iso_ep].diepctl |=
+				(USB_DW_DEPCTL_EP_DIS | USB_DW_DEPCTL_SNAK);
+			for (int spin = 0; spin < 100000; spin++) {
+				if (base->in_ep_reg[iso_ep].diepint & BIT(1)) {
+					break;
+				}
+			}
+			base->in_ep_reg[iso_ep].diepint = BIT(1);
+
+			/* Drop the stale frame stuck in the TX FIFO. */
+			usb_dw_flush_tx_fifo(iso_ep);
+
+			/* Synthesise completion so the chain re-arms. */
+			if (ep_cb) {
+				ep_cb(USB_EP_GET_ADDR(iso_ep, USB_EP_DIR_IN),
+				      USB_DC_EP_DATA_IN);
+			}
+		}
+		base->gintsts = BIT(21);
+	}
+
 	/*  Read interrupt status */
 	while ((int_status = (base->gintsts & base->gintmsk))) {
 		LOG_WRN("current addr:%d",
@@ -1136,11 +1309,15 @@ static void usb_dw_isr_handler(const void *unused)
 			LOG_WRN("USB_DW_GINTSTS_USB_SUSP");
 			/* Clear interrupt. */
 			base->gintsts = USB_DW_GINTSTS_USB_SUSP;
+#ifdef CONFIG_PM
+			/* PHY power-down is only meaningful with DLPS sleep. Without PM
+			 * the PHY must stay active so the host can finish descriptor reads
+			 * after a brief bus idle during enumeration.
+			 */
 			extern int hal_usb_suspend_enter(void);
-
 			hal_usb_suspend_enter();
-
 			usb_power_is_on = false;
+#endif
 
 			usb_dw_ctrl.current_status = USB_DC_SUSPEND;
 			if (usb_dw_ctrl.status_cb) {
@@ -1362,9 +1539,7 @@ int usb_dc_ep_configure(const struct usb_dc_ep_cfg_data *const ep_cfg)
 		return -EINVAL;
 	}
 
-	usb_dw_ep_set(ep, ep_cfg->ep_mps, ep_cfg->ep_type);
-
-	return 0;
+	return usb_dw_ep_set(ep, ep_cfg->ep_mps, ep_cfg->ep_type);
 }
 
 int usb_dc_ep_set_stall(const uint8_t ep)
@@ -1486,6 +1661,26 @@ int usb_dc_ep_enable(const uint8_t ep)
 		base->daintmsk |= USB_DW_DAINT_OUT_EP_INT(ep_idx);
 	} else {
 		base->daintmsk |= USB_DW_DAINT_IN_EP_INT(ep_idx);
+			/* Clear any stale DIEPINT bits from a previous session
+			 * so that a spurious XFER_COMPL does not complete a
+			 * newly-submitted transfer before the FIFO is written.
+			 */
+			base->in_ep_reg[ep_idx].diepint = 0xFFFFFFFFU;
+			/* Fresh stream: forget the parity we converged on last time.
+			 * The host may schedule this alt setting on a different
+			 * microframe slot, so re-search parity from scratch.
+			 */
+			usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_poll_odd = 0U;
+			usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_poll_known = 0U;
+			usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_armed = 0U;
+			/* Drop any INCOMPISOIN left pending by the previous stream
+			 * so it cannot flip parity before the first arm.
+			 */
+			base->gintsts = BIT(21);
+		/* Restore the global XFER_COMPL mask shared by all IN EPs.
+		 * usb_dc_ep_disable() must not clear it, but guard here anyway.
+		 */
+		base->diepmsk |= USB_DW_DIEPINT_XFER_COMPL;
 	}
 
 	/* Activate Ep */
@@ -1570,9 +1765,12 @@ int usb_dc_ep_disable(const uint8_t ep)
 		base->daintmsk &= ~USB_DW_DAINT_OUT_EP_INT(ep_idx);
 		base->doepmsk &= ~USB_DW_DOEPINT_SET_UP;
 	} else {
+		/* only clear the per-endpoint bit in daintmsk. Do NOT touch
+		 * diepmsk.XFER_COMPL (shared by all IN EPs) or
+		 * gintmsk.RX_FLVL (needed for EP0 SETUP reception). Both are
+		 * re-enabled globally on reset and must not be masked here.
+		 */
 		base->daintmsk &= ~USB_DW_DAINT_IN_EP_INT(ep_idx);
-		base->diepmsk &= ~USB_DW_DIEPINT_XFER_COMPL;
-		base->gintmsk &= ~USB_DW_GINTSTS_RX_FLVL;
 	}
 
 	/* De-activate, disable and set NAK for Ep */
@@ -1581,9 +1779,43 @@ int usb_dc_ep_disable(const uint8_t ep)
 			~(USB_DW_DEPCTL_USB_ACT_EP | USB_DW_DEPCTL_EP_ENA | USB_DW_DEPCTL_SNAK);
 		usb_dw_ctrl.out_ep_ctrl[ep_idx].ep_ena = 0U;
 	} else {
-		base->in_ep_reg[ep_idx].diepctl &=
-			~(USB_DW_DEPCTL_USB_ACT_EP | USB_DW_DEPCTL_EP_ENA | USB_DW_DEPCTL_SNAK);
+		/* A still-enabled IN endpoint (an armed ISO IN in particular)
+		 * cannot be stopped by simply clearing EP_ENA: the DWC OTG core
+		 * ignores a direct write to that bit while a transfer is armed,
+		 * leaving the endpoint wedged so the host can never re-open the
+		 * stream (the "second recording never starts" failure).  Follow
+		 * the databook disable sequence when the endpoint is enabled:
+		 *   1. set SNAK, wait for INEPNAKEFF (DIEPINT bit 6)
+		 *   2. set EP_DIS|SNAK, wait for EPDISBLD (DIEPINT bit 1)
+		 *   3. flush the TX FIFO
+		 * Both waits are bounded so a missing handshake cannot hang.
+		 */
+		if (base->in_ep_reg[ep_idx].diepctl & USB_DW_DEPCTL_EP_ENA) {
+			base->in_ep_reg[ep_idx].diepint = BIT(6);
+			base->in_ep_reg[ep_idx].diepctl |= USB_DW_DEPCTL_SNAK;
+			for (int spin = 0; spin < 100000; spin++) {
+				if (base->in_ep_reg[ep_idx].diepint & BIT(6)) {
+					break;
+				}
+			}
+			base->in_ep_reg[ep_idx].diepint = BIT(6);
+
+			base->in_ep_reg[ep_idx].diepctl |=
+				(USB_DW_DEPCTL_EP_DIS | USB_DW_DEPCTL_SNAK);
+			for (int spin = 0; spin < 100000; spin++) {
+				if (base->in_ep_reg[ep_idx].diepint & BIT(1)) {
+					break;
+				}
+			}
+			base->in_ep_reg[ep_idx].diepint = BIT(1);
+
+			usb_dw_flush_tx_fifo(ep_idx);
+		}
+
+		base->in_ep_reg[ep_idx].diepctl &= ~USB_DW_DEPCTL_USB_ACT_EP;
 		usb_dw_ctrl.in_ep_ctrl[ep_idx].ep_ena = 0U;
+		usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_armed = 0U;
+		usb_dw_ctrl.in_ep_ctrl[ep_idx].iso_poll_known = 0U;
 	}
 
 #if CONFIG_USB_DC_RTL87X2G_DMA
