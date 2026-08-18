@@ -35,4 +35,26 @@ config I2S_BEE_RX_BLOCK_COUNT
 	help
 	  Number of RX buffers / message queue size.
 
+config I2S_BEE_TX_BLOCK_SIZE_MAX
+	int "Maximum TX block size (bytes)"
+	depends on I2S_BEE_TX
+	default 512
+	help
+	  Upper bound, in bytes, for the TX block size an application may
+	  request through i2s_config. The driver reserves two ping-pong DMA
+	  buffers of this size per instance; a configuration with a larger
+	  block_size is rejected. Raise this if your application uses larger
+	  I2S TX blocks.
+
+config I2S_BEE_RX_BLOCK_SIZE_MAX
+	int "Maximum RX block size (bytes)"
+	depends on I2S_BEE_RX
+	default 512
+	help
+	  Upper bound, in bytes, for the RX block size an application may
+	  request through i2s_config. The driver reserves two ping-pong DMA
+	  buffers of this size per instance; a configuration with a larger
+	  block_size is rejected. Raise this if your application uses larger
+	  I2S RX blocks.
+
 endif # I2S_BEE

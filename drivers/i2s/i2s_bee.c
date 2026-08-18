@@ -181,11 +181,13 @@ struct i2s_bee_data {
 	struct stream dma_tx;
 	void *tx_in_msgs[CONFIG_I2S_BEE_TX_BLOCK_COUNT];
 	void *tx_out_msgs[CONFIG_I2S_BEE_TX_BLOCK_COUNT];
+	uint8_t tx_ping_pong[2][CONFIG_I2S_BEE_TX_BLOCK_SIZE_MAX] __aligned(4);
 #endif
 #if defined(CONFIG_I2S_BEE_RX)
 	struct stream dma_rx;
 	void *rx_in_msgs[CONFIG_I2S_BEE_RX_BLOCK_COUNT];
 	void *rx_out_msgs[CONFIG_I2S_BEE_RX_BLOCK_COUNT];
+	uint8_t rx_ping_pong[2][CONFIG_I2S_BEE_RX_BLOCK_SIZE_MAX] __aligned(4);
 #endif
 };
 
@@ -337,22 +339,10 @@ static int i2s_tx_stream_start(const struct device *dev)
 	const struct device *dma_dev = strm->dma_dev;
 	struct dma_block_config *blk_cfg = strm->blk_cfg;
 
-	if (blk_cfg[0].block_size != strm->cfg.block_size) {
-		if (strm->ping_pong_buf[0] != NULL) {
-			k_free(strm->ping_pong_buf[0]);
-			k_free(strm->ping_pong_buf[1]);
-		}
-
-		strm->ping_pong_buf[0] = k_malloc(strm->cfg.block_size);
-		if (strm->ping_pong_buf[0] == NULL) {
-			return -EIO;
-		}
-
-		strm->ping_pong_buf[1] = k_malloc(strm->cfg.block_size);
-		if (strm->ping_pong_buf[1] == NULL) {
-			k_free(strm->ping_pong_buf[0]);
-			return -EIO;
-		}
+	if (strm->cfg.block_size > CONFIG_I2S_BEE_TX_BLOCK_SIZE_MAX) {
+		LOG_ERR("TX block size %u exceeds max %u", strm->cfg.block_size,
+			CONFIG_I2S_BEE_TX_BLOCK_SIZE_MAX);
+		return -EINVAL;
 	}
 
 	/* retrieve buffer from input queue */
@@ -451,22 +441,10 @@ static int i2s_rx_stream_start(const struct device *dev)
 	uint8_t num_of_bufs;
 	struct dma_block_config *blk_cfg = strm->blk_cfg;
 
-	if (blk_cfg[0].block_size != strm->cfg.block_size) {
-		if (strm->ping_pong_buf[0] != NULL) {
-			k_free(strm->ping_pong_buf[0]);
-			k_free(strm->ping_pong_buf[1]);
-		}
-		strm->ping_pong_buf[0] = k_malloc(strm->cfg.block_size);
-		if (strm->ping_pong_buf[0] == NULL) {
-			LOG_ERR("[%s] buf malloc fail! line%d\n", __func__, __LINE__);
-			return -EIO;
-		}
-		strm->ping_pong_buf[1] = k_malloc(strm->cfg.block_size);
-		if (strm->ping_pong_buf[1] == NULL) {
-			k_free(strm->ping_pong_buf[0]);
-			LOG_ERR("[%s] buf malloc fail! line%d\n", __func__, __LINE__);
-			return -EIO;
-		}
+	if (strm->cfg.block_size > CONFIG_I2S_BEE_RX_BLOCK_SIZE_MAX) {
+		LOG_ERR("RX block size %u exceeds max %u", strm->cfg.block_size,
+			CONFIG_I2S_BEE_RX_BLOCK_SIZE_MAX);
+		return -EINVAL;
 	}
 
 	num_of_bufs = k_mem_slab_num_free_get(strm->cfg.mem_slab);
@@ -1028,6 +1006,8 @@ static int i2s_bee_init(const struct device *dev)
 	dev_data->dma_tx.blk_cfg[1].next_block = NULL;
 	dev_data->dma_tx.dma_cfg.head_block = &dev_data->dma_tx.blk_cfg[0];
 	dev_data->dma_tx.dma_cfg.user_data = (void *)dev;
+	dev_data->dma_tx.ping_pong_buf[0] = dev_data->tx_ping_pong[0];
+	dev_data->dma_tx.ping_pong_buf[1] = dev_data->tx_ping_pong[1];
 
 	dev_data->dma_tx.state = I2S_STATE_NOT_READY;
 #endif
@@ -1053,6 +1033,8 @@ static int i2s_bee_init(const struct device *dev)
 	dev_data->dma_rx.blk_cfg[1].next_block = NULL;
 	dev_data->dma_rx.dma_cfg.head_block = &dev_data->dma_rx.blk_cfg[0];
 	dev_data->dma_rx.dma_cfg.user_data = (void *)dev;
+	dev_data->dma_rx.ping_pong_buf[0] = dev_data->rx_ping_pong[0];
+	dev_data->dma_rx.ping_pong_buf[1] = dev_data->rx_ping_pong[1];
 
 	dev_data->dma_rx.state = I2S_STATE_NOT_READY;
 #endif
