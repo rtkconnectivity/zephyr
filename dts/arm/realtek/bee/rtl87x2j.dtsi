@@ -496,6 +496,14 @@
 			status = "disabled";
 		};
 
+		lppwm: lppwm@4000080c {
+			compatible = "realtek,bee-lppwm";
+			reg = <0x4000080c 0x18>;
+			clocks = <&cctl APB_CLK(LPPWM)>;
+			#pwm-cells = <3>;
+			status = "disabled";
+		};
+
 		trng: trng@40006200 {
 			compatible = "realtek,bee-trng";
 			reg = <0x40006200 0x68>;

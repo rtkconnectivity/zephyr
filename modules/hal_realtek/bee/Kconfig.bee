@@ -43,6 +43,9 @@ config HAL_REALTEK_BEE_NVIC
 config HAL_REALTEK_BEE_PINMUX
 	bool
 
+config HAL_REALTEK_BEE_PWM
+	bool
+
 config HAL_REALTEK_BEE_AON_QDEC
 	bool
 
