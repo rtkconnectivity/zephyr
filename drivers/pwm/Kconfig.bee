@@ -10,3 +10,14 @@ config PWM_BEE
 	select PINCTRL
 	help
 	  This option enables the PWM driver for Realtek Bee SoCs.
+
+config PWM_BEE_LPPWM
+	bool "Realtek Bee low-power PWM (LPPWM) driver"
+	default y
+	depends on DT_HAS_REALTEK_BEE_LPPWM_ENABLED
+	select HAL_REALTEK_BEE_PWM
+	select PINCTRL
+	help
+	  This option enables the always-on low-power PWM (LPPWM) driver. The
+	  LPPWM keeps toggling its single output channel while the SoC is in a
+	  low-power sleep state.
