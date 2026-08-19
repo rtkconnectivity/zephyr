@@ -48,9 +48,21 @@ ZTEST_USER(test_mbedtls_psa, test_sha224)
 		0x70, 0x55, 0xff, 0xdb, 0x88, 0x79, 0x56, 0x3a, 0xe9, 0x80, 0x78, 0xd6, 0xd6, 0xd5};
 	size_t out_len;
 	psa_status_t status;
+	timing_t start;
+	timing_t end;
+	uint64_t cycles;
+	uint64_t nanoseconds;
 
+	timing_init();
+	timing_start();
+	start = timing_counter_get();
 	status = psa_hash_compute(PSA_ALG_SHA_224, in_buf, sizeof(in_buf), out_buf, sizeof(out_buf),
 				  &out_len);
+	end = timing_counter_get();
+	cycles = timing_cycles_get(&start, &end);
+	nanoseconds = timing_cycles_to_ns(cycles);
+	TC_PRINT("SHA-224 compute time: %llu ns (%llu cycles)\n", (unsigned long long)nanoseconds,
+		 (unsigned long long)cycles);
 	zassert_equal(status, PSA_SUCCESS);
 	zassert_mem_equal(out_buf, out_buf_ref, sizeof(out_buf_ref));
 }
@@ -221,7 +233,189 @@ ZTEST_USER(test_mbedtls_psa, test_aes_ecb)
 	zassert_equal(status, PSA_SUCCESS);
 }
 
-ZTEST_SUITE(test_mbedtls_psa, NULL, NULL, NULL, NULL, NULL);
+/*
+ * SHA-256 multipart (psa_hash_operation_t) test data.
+ * NIST FIPS 180-4 448-bit message test vector:
+ *   "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq" (56 bytes)
+ *   SHA-256 = 248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1
+ */
+static const uint8_t sha256_mp_input[] = {
+	'a', 'b', 'c', 'd', 'b', 'c', 'd', 'e', 'c', 'd', 'e', 'f', 'd', 'e', 'f', 'g',
+	'e', 'f', 'g', 'h', 'f', 'g', 'h', 'i', 'g', 'h', 'i', 'j', 'h', 'i', 'j', 'k',
+	'i', 'j', 'k', 'l', 'j', 'k', 'l', 'm', 'k', 'l', 'm', 'n', 'l', 'm', 'n', 'o',
+	'm', 'n', 'o', 'p', 'n', 'o', 'p', 'q'};
+
+static const uint8_t sha256_mp_ref[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = {
+	0x24, 0x8d, 0x6a, 0x61, 0xd2, 0x06, 0x38, 0xb8, 0xe5, 0xc0, 0x26,
+	0x93, 0x0c, 0x3e, 0x60, 0x39, 0xa3, 0x3c, 0xe4, 0x59, 0x64, 0xff,
+	0x21, 0x67, 0xf6, 0xec, 0xed, 0xd4, 0x19, 0xdb, 0x06, 0xc1};
+
+static timing_t test_mbedtls_psa_suite_start;
+
+static void *test_mbedtls_psa_setup(void)
+{
+	timing_init();
+	timing_start();
+	test_mbedtls_psa_suite_start = timing_counter_get();
+	return NULL;
+}
+
+static void test_mbedtls_psa_teardown(void *data)
+{
+	timing_t end = timing_counter_get();
+	uint64_t cycles = timing_cycles_get(&test_mbedtls_psa_suite_start, &end);
+	uint64_t nanoseconds = timing_cycles_to_ns(cycles);
+
+	(void)data;
+	TC_PRINT("=== test_mbedtls_psa suite total time: %llu ns (%llu cycles) ===\n",
+		 (unsigned long long)nanoseconds, (unsigned long long)cycles);
+}
+
+/*
+ * Test SHA-256 multipart: psa_hash_setup → psa_hash_update × 3 → psa_hash_finish.
+ * Splits the 56-byte NIST test vector into three chunks (16 + 16 + 24 bytes).
+ */
+ZTEST_USER(test_mbedtls_psa, test_sha256_multipart)
+{
+	psa_hash_operation_t op = PSA_HASH_OPERATION_INIT;
+	uint8_t out_buf[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = {0};
+	timing_t start;
+	timing_t end;
+	uint64_t cycles;
+	uint64_t nanoseconds;
+	size_t out_len;
+	psa_status_t status;
+
+	timing_init();
+	timing_start();
+	start = timing_counter_get();
+
+	status = psa_hash_setup(&op, PSA_ALG_SHA_256);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_setup failed (%d)", status);
+
+	/* Chunk 1: bytes  0–15 */
+	status = psa_hash_update(&op, sha256_mp_input, 16);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_update (1) failed (%d)", status);
+	/* Chunk 2: bytes 16–31 */
+	status = psa_hash_update(&op, sha256_mp_input + 16, 16);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_update (2) failed (%d)", status);
+	/* Chunk 3: bytes 32–55 */
+	status = psa_hash_update(&op, sha256_mp_input + 32, 24);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_update (3) failed (%d)", status);
+
+	status = psa_hash_finish(&op, out_buf, sizeof(out_buf), &out_len);
+	end = timing_counter_get();
+	cycles = timing_cycles_get(&start, &end);
+	nanoseconds = timing_cycles_to_ns(cycles);
+	TC_PRINT("SHA-256 multipart (setup+update*3+finish) time: %llu ns (%llu cycles)\n",
+		 (unsigned long long)nanoseconds, (unsigned long long)cycles);
+
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_finish failed (%d)", status);
+	zassert_equal(out_len, PSA_HASH_LENGTH(PSA_ALG_SHA_256));
+	zassert_mem_equal(out_buf, sha256_mp_ref, sizeof(sha256_mp_ref));
+}
+
+/*
+ * Test SHA-256 multipart: psa_hash_setup → psa_hash_update × 2 → psa_hash_verify.
+ * Splits the same 56-byte NIST test vector into two equal 28-byte chunks and
+ * verifies the digest in-place without exposing the hash bytes to the caller.
+ */
+ZTEST_USER(test_mbedtls_psa, test_sha256_multipart_verify)
+{
+	psa_hash_operation_t op = PSA_HASH_OPERATION_INIT;
+	timing_t start;
+	timing_t end;
+	uint64_t cycles;
+	uint64_t nanoseconds;
+	psa_status_t status;
+
+	timing_init();
+	timing_start();
+	start = timing_counter_get();
+
+	status = psa_hash_setup(&op, PSA_ALG_SHA_256);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_setup failed (%d)", status);
+
+	/* Chunk 1: bytes  0–27 */
+	status = psa_hash_update(&op, sha256_mp_input, 28);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_update (1) failed (%d)", status);
+	/* Chunk 2: bytes 28–55 */
+	status = psa_hash_update(&op, sha256_mp_input + 28, 28);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_update (2) failed (%d)", status);
+
+	status = psa_hash_verify(&op, sha256_mp_ref, sizeof(sha256_mp_ref));
+	end = timing_counter_get();
+	cycles = timing_cycles_get(&start, &end);
+	nanoseconds = timing_cycles_to_ns(cycles);
+	TC_PRINT("SHA-256 multipart verify (setup+update*2+verify) time: %llu ns (%llu cycles)\n",
+		 (unsigned long long)nanoseconds, (unsigned long long)cycles);
+
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_verify failed (%d)", status);
+}
+
+/*
+ * Test SHA-256 multipart with psa_hash_clone: feeds the first 32 bytes, clones
+ * the mid-stream operation, then feeds the remaining 24 bytes independently to
+ * both; both must yield the same final digest.
+ */
+ZTEST_USER(test_mbedtls_psa, test_sha256_multipart_clone)
+{
+	psa_hash_operation_t op = PSA_HASH_OPERATION_INIT;
+	psa_hash_operation_t op_clone = PSA_HASH_OPERATION_INIT;
+	uint8_t out_buf[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = {0};
+	uint8_t out_clone[PSA_HASH_LENGTH(PSA_ALG_SHA_256)] = {0};
+	timing_t start;
+	timing_t end;
+	uint64_t cycles;
+	uint64_t nanoseconds;
+	size_t out_len;
+	size_t out_clone_len;
+	psa_status_t status;
+
+	timing_init();
+	timing_start();
+	start = timing_counter_get();
+
+	status = psa_hash_setup(&op, PSA_ALG_SHA_256);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_setup failed (%d)", status);
+
+	/* Feed the first 32 bytes before cloning */
+	status = psa_hash_update(&op, sha256_mp_input, 32);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_update failed (%d)", status);
+
+	/* Snapshot the mid-stream state */
+	status = psa_hash_clone(&op, &op_clone);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_clone failed (%d)", status);
+
+	/* Feed the remaining 24 bytes to both original and clone independently */
+	status = psa_hash_update(&op, sha256_mp_input + 32, 24);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_update (orig) failed (%d)", status);
+	status = psa_hash_update(&op_clone, sha256_mp_input + 32, 24);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_update (clone) failed (%d)", status);
+
+	/* Finalise both */
+	status = psa_hash_finish(&op, out_buf, sizeof(out_buf), &out_len);
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_finish (orig) failed (%d)", status);
+	status = psa_hash_finish(&op_clone, out_clone, sizeof(out_clone), &out_clone_len);
+	end = timing_counter_get();
+	cycles = timing_cycles_get(&start, &end);
+	nanoseconds = timing_cycles_to_ns(cycles);
+	TC_PRINT("SHA-256 multipart clone (setup+update+clone+update*2+finish*2)"
+		 " time: %llu ns (%llu cycles)\n",
+		 (unsigned long long)nanoseconds, (unsigned long long)cycles);
+
+	zassert_equal(status, PSA_SUCCESS, "psa_hash_finish (clone) failed (%d)", status);
+	zassert_equal(out_len, PSA_HASH_LENGTH(PSA_ALG_SHA_256));
+	zassert_equal(out_clone_len, PSA_HASH_LENGTH(PSA_ALG_SHA_256));
+	/* Both paths must match the known reference */
+	zassert_mem_equal(out_buf, sha256_mp_ref, sizeof(sha256_mp_ref));
+	zassert_mem_equal(out_clone, sha256_mp_ref, sizeof(sha256_mp_ref));
+	/* And each other */
+	zassert_mem_equal(out_buf, out_clone, sizeof(out_buf));
+}
+
+ZTEST_SUITE(test_mbedtls_psa, NULL, test_mbedtls_psa_setup, NULL, NULL,
+	    test_mbedtls_psa_teardown);
 static const uint8_t aes_mode_key[] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,
 				       0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c};
 
