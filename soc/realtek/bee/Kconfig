@@ -27,12 +27,14 @@ config CRYPTO_BEE_PSA_ACCELERATOR
 	select PSA_WANT_ALG_CFB
 	select PSA_WANT_ALG_OFB
 	select PSA_WANT_ALG_CTR
+	select PSA_WANT_ALG_SHA_224 if SOC_SERIES_RTL87X2J
 	select PSA_WANT_ALG_SHA_256
 	select PSA_WANT_ALG_ECDH if SOC_SERIES_RTL87X2G
 	select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_BASIC if SOC_SERIES_RTL87X2G
 	help
-	  Route PSA AES and SHA-256 operations to the Realtek Bee hardware engine.
-	  This also accelerates composite PSA algorithms such as CCM and
-	  HMAC-SHA-256.
+	  Route supported PSA cryptographic operations to the Realtek Bee hardware
+	  engine. RTL87x2J accelerates AES, SHA-224, and SHA-256; the other supported
+	  Bee series accelerate AES and SHA-256. This also accelerates composite
+	  algorithms such as CCM and HMAC-SHA-256.
 
 endif # SOC_FAMILY_REALTEK_BEE
