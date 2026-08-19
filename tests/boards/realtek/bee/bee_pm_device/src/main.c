@@ -139,6 +139,7 @@ static const struct device *const dev_out = DEVICE_DT_GET_OR_NULL(DEV_OUT);
 
 #ifdef CONFIG_PWM
 static const struct device *pwm_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_pwm));
+static const struct device *lppwm_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_lppwm));
 #endif
 
 #ifdef CONFIG_SPI
@@ -613,7 +614,7 @@ static int shell_pm_test_pwm(const struct shell *sh, size_t argc, char **argv)
 	printf("[%lld] [PWM]: %s, [period]: %u, [pulse]: %u\n", k_uptime_get(), pwm_dev->name,
 	       period, pulse);
 	pwm_set_cycles(pwm_dev, 0, period, pulse, 0);
-	k_busy_wait(500000);
+	k_sleep(K_MSEC(500));
 
 #if defined(CONFIG_PM_DEVICE)
 	k_sleep(K_MSEC(10));
@@ -638,6 +639,75 @@ static int shell_pm_test_pwm(const struct shell *sh, size_t argc, char **argv)
 	printf("[%lld] [PWM]: %s, [period]: %u, [pulse]: %u\n", k_uptime_get(), pwm_dev->name,
 	       period, pulse);
 	pwm_set_cycles(pwm_dev, 0, period, pulse, 0);
+
+#endif /* CONFIG_PWM */
+
+	return 0;
+}
+
+/* LPPWM PM test */
+
+static int shell_pm_test_lppwm(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(sh);
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
+#endif
+
+#ifdef CONFIG_PWM
+	uint32_t period;
+	uint32_t pulse;
+
+	printf("[%lld] connect pwm pin to LA to watch the waveform\n", k_uptime_get());
+
+	/* First waveform */
+	period = 5 * 32;
+	pulse = 1 * 32;
+	printf("[%lld] [PWM]: %s, [period]: %u, [pulse]: %u\n", k_uptime_get(), lppwm_dev->name,
+	       period, pulse);
+	pwm_set_cycles(lppwm_dev, 0, period, pulse, 0);
+	k_sleep(K_MSEC(500));
+
+#if defined(CONFIG_PM_DEVICE)
+	/* Enter DLPS in the middle of PWM test */
+	pm_test_enter_dlps_timeout(K_MSEC(500));
+	k_busy_wait(500000);
+#endif
+
+	/* Stop PWM */
+	period = 0;
+	pulse = 0;
+	printf("[%lld] [PWM]: %s, [period]: %u, [pulse]: %u\n", k_uptime_get(), lppwm_dev->name,
+	       period, pulse);
+	pwm_set_cycles(lppwm_dev, 0, period, pulse, 0);
+	k_sleep(K_MSEC(500));
+
+#if defined(CONFIG_PM_DEVICE)
+	k_sleep(K_MSEC(10));
+#endif
+
+	/* Second waveform */
+	period = 5 * 32;
+	pulse = 4 * 32;
+	printf("[%lld] [PWM]: %s, [period]: %u, [pulse]: %u\n", k_uptime_get(), lppwm_dev->name,
+	       period, pulse);
+	pwm_set_cycles(lppwm_dev, 0, period, pulse, 0);
+	k_sleep(K_MSEC(500));
+
+#if defined(CONFIG_PM_DEVICE)
+	pm_test_enter_dlps_timeout(K_MSEC(500));
+	k_busy_wait(500000);
+#endif
+
+	/* Stop again */
+	period = 0;
+	pulse = 0;
+	printf("[%lld] [PWM]: %s, [period]: %u, [pulse]: %u\n", k_uptime_get(), lppwm_dev->name,
+	       period, pulse);
+	pwm_set_cycles(lppwm_dev, 0, period, pulse, 0);
 
 #endif /* CONFIG_PWM */
 
@@ -1436,6 +1506,7 @@ INPUT_CALLBACK_DEFINE(DEVICE_DT_GET(DT_NODELABEL(keyscan)), keyscan_input_cb, NU
 		SHELL_CMD_ARG(uartdma, NULL, "uart dma pm test", shell_pm_test_uart_dma, 0, 0),    \
 		SHELL_CMD_ARG(gpio, NULL, "gpio pm test [debounce_ms]", shell_pm_test_gpio, 0, 1), \
 		SHELL_CMD_ARG(pwm, NULL, "pwm pm test", shell_pm_test_pwm, 0, 0),                  \
+		SHELL_CMD_ARG(lppwm, NULL, "lppwm pm test", shell_pm_test_lppwm, 0, 0),     \
 		SHELL_CMD_ARG(counter, NULL, "counter pm test (input time in ms)",                 \
 			      shell_pm_test_counter, 2, 0),                                        \
 		SHELL_CMD_ARG(spi, NULL, "spi pm test", shell_pm_test_spi, 0, 0),                  \
