@@ -13,7 +13,7 @@
 
 /*
  *  P0_0
- *  P0_1
+ *  P0_1 LPPWM
  *  P0_2 PWM9
  *  P0_4 GPIO(TEST LPQDECX)
  *  P0_5 GPIO(TEST LPQDECX)
@@ -69,6 +69,7 @@
 		test-uart-dma = &uart0;
 		test-counter-timer = &counter8;
 		test-pwm = &pwm9;
+		test-lppwm = &lppwm;
 		test-rtc = &rtc;
 		test-qdec = &qdec;
 		test-qenca = &phase_a;
@@ -150,6 +151,12 @@
 		pinctrl-0 = <&pwm9_default>;
 		pinctrl-names = "default";
 	};
+};
+
+&lppwm {
+	status = "okay";
+	pinctrl-0 = <&lppwm_default>;
+	pinctrl-names = "default";
 };
 
 &spi0 {
@@ -315,7 +322,7 @@
 				<BEE_PSEL(SPI0_SS_N_0_MASTER, P6_3)>;
 			output-enable;
 			output-high;
-			bias-pull-up;
+			bias-disable;
 		};
 	};
 
@@ -336,7 +343,16 @@
 			psels = <BEE_PSEL(PWM9_P, P0_2)>;
 			output-enable;
 			output-low;
-			bias-pull-down;
+			bias-disable;
+		};
+	};
+
+	lppwm_default: lppwm_default {
+		group1 {
+			psels = <BEE_PSEL(LPPWM_CH0, P0_1)>;
+			output-enable;
+			output-low;
+			bias-disable;
 		};
 	};
 
@@ -345,7 +361,7 @@
 			psels = <BEE_PSEL(LPQDEC_PHA, P3_4)>,
 				<BEE_PSEL(LPQDEC_PHB, P3_5)>;
 			output-disable;
-			bias-pull-up;
+			bias-disable;
 		};
 	};
 
@@ -392,7 +408,7 @@
 		group1 {
 			psels = <BEE_PSEL(SW_MODE, P2_2)>;
 			output-disable;
-			bias-pull-down;
+			bias-disable;
 		};
 	};
 
