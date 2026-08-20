@@ -20,4 +20,5 @@ supported:
   - dma
   - spi
   - adc
+  - can
 vendor: realtek
