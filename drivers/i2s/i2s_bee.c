@@ -963,11 +963,41 @@ static void i2s_bee_isr(const struct device *dev)
 	ARG_UNUSED(dev);
 }
 
+#if defined(CONFIG_I2S_BEE_TX) || defined(CONFIG_I2S_BEE_RX)
+/*
+ * Claim the devicetree-assigned channel through the DMA controller's allocation
+ * bitmap so a dma_request_channel(dev, NULL) caller on the same controller can
+ * never be handed it. A BIT(channel) filter forces exactly the DT channel and
+ * fails loudly if it is already in use.
+ */
+static int i2s_bee_claim_dma_channel(const struct device *dma_dev, uint32_t channel)
+{
+	uint32_t filter = BIT(channel);
+	int ret = dma_request_channel(dma_dev, &filter);
+
+	return ret < 0 ? ret : 0;
+}
+#endif
+
+#if defined(CONFIG_I2S_BEE_RX)
+static bool i2s_rx_shares_tx_channel(const struct i2s_bee_data *dev_data)
+{
+#if defined(CONFIG_I2S_BEE_TX)
+	return dev_data->dma_rx.dma_dev == dev_data->dma_tx.dma_dev &&
+	       dev_data->dma_rx.dma_channel == dev_data->dma_tx.dma_channel;
+#else
+	ARG_UNUSED(dev_data);
+	return false;
+#endif
+}
+#endif
+
 static int i2s_bee_init(const struct device *dev)
 {
 	const struct i2s_bee_config *dev_cfg = dev->config;
 	struct i2s_bee_data *dev_data = dev->data;
 	I2S_TypeDef *base = (I2S_TypeDef *)dev_cfg->base;
+	int ret = 0;
 
 #if defined(CONFIG_I2S_BEE_TX)
 	if (!dev_data->dma_tx.dma_dev) {
@@ -985,8 +1015,12 @@ static int i2s_bee_init(const struct device *dev)
 
 	/* Initialize the buffer queues */
 #if defined(CONFIG_I2S_BEE_TX)
-	atomic_set_bit(((struct dma_context *)dev_data->dma_tx.dma_dev->data)->atomic,
-		       dev_data->dma_tx.dma_channel);
+	ret = i2s_bee_claim_dma_channel(dev_data->dma_tx.dma_dev,
+					dev_data->dma_tx.dma_channel);
+	if (ret < 0) {
+		LOG_ERR("I2S TX DMA channel %u already in use", dev_data->dma_tx.dma_channel);
+		return ret;
+	}
 	k_msgq_init(&dev_data->dma_tx.in_queue, (char *)dev_data->tx_in_msgs, sizeof(void *),
 		    CONFIG_I2S_BEE_TX_BLOCK_COUNT);
 	k_msgq_init(&dev_data->dma_tx.out_queue, (char *)dev_data->tx_out_msgs, sizeof(void *),
@@ -1012,8 +1046,21 @@ static int i2s_bee_init(const struct device *dev)
 	dev_data->dma_tx.state = I2S_STATE_NOT_READY;
 #endif
 #if defined(CONFIG_I2S_BEE_RX)
-	atomic_set_bit(((struct dma_context *)dev_data->dma_rx.dma_dev->data)->atomic,
-		       dev_data->dma_rx.dma_channel);
+	/*
+	 * Claim the RX channel too. When a board places I2S TX and RX on one
+	 * shared DMA channel it is already reserved by the TX claim above, so only
+	 * request RX when it is a distinct channel to avoid a spurious -EINVAL
+	 * from the double claim.
+	 */
+	if (!i2s_rx_shares_tx_channel(dev_data)) {
+		ret = i2s_bee_claim_dma_channel(dev_data->dma_rx.dma_dev,
+						dev_data->dma_rx.dma_channel);
+		if (ret < 0) {
+			LOG_ERR("I2S RX DMA channel %u already in use",
+				dev_data->dma_rx.dma_channel);
+			return ret;
+		}
+	}
 	k_msgq_init(&dev_data->dma_rx.in_queue, (char *)dev_data->rx_in_msgs, sizeof(void *),
 		    CONFIG_I2S_BEE_RX_BLOCK_COUNT);
 	k_msgq_init(&dev_data->dma_rx.out_queue, (char *)dev_data->rx_out_msgs, sizeof(void *),
@@ -1044,7 +1091,7 @@ static int i2s_bee_init(const struct device *dev)
 
 	LOG_INF("Device %s initialized", dev->name);
 
-	return 0;
+	return ret;
 }
 
 static DEVICE_API(i2s, i2s_bee_driver_api) = {
