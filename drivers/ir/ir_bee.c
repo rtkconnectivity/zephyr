@@ -640,17 +640,50 @@ static void ir_bee_isr(const struct device *dev)
 	}
 }
 
+#if IR_HAS_TX_DMA || IR_HAS_RX_DMA
+/*
+ * Claim the devicetree-assigned channel through the DMA controller's allocation
+ * bitmap so a dma_request_channel(dev, NULL) caller on the same controller can
+ * never be handed it. A BIT(channel) filter forces exactly the DT channel and
+ * fails loudly if it is already in use.
+ */
+static int ir_bee_claim_dma_channel(const struct device *dma_dev, uint32_t channel)
+{
+	uint32_t filter = BIT(channel);
+	int ret = dma_request_channel(dma_dev, &filter);
+
+	return ret < 0 ? ret : 0;
+}
+#endif
+
+#if IR_HAS_RX_DMA
+static bool ir_rx_shares_tx_channel(const struct ir_bee_data *data)
+{
+#if IR_HAS_TX_DMA
+	return data->dma_rx.dma_dev == data->dma_tx.dma_dev &&
+	       data->dma_rx.dma_channel == data->dma_tx.dma_channel;
+#else
+	ARG_UNUSED(data);
+	return false;
+#endif
+}
+#endif
+
 static int ir_bee_init(const struct device *dev)
 {
 	const struct ir_bee_config *config = dev->config;
 	struct ir_bee_data *data = dev->data;
 	IR_TypeDef *ir = config->ir;
+	int ret = 0;
 
 	config->irq_config_func(dev);
 
 #if IR_HAS_TX_DMA
-	atomic_set_bit(((struct dma_context *)data->dma_tx.dma_dev->data)->atomic,
-		       data->dma_tx.dma_channel);
+	ret = ir_bee_claim_dma_channel(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+	if (ret < 0) {
+		LOG_ERR("IR TX DMA channel %u already in use", data->dma_tx.dma_channel);
+		return ret;
+	}
 
 	memset(&data->dma_tx.blk_cfg, 0, sizeof(data->dma_tx.blk_cfg));
 
@@ -665,8 +698,20 @@ static int ir_bee_init(const struct device *dev)
 #endif
 
 #if IR_HAS_RX_DMA
-	atomic_set_bit(((struct dma_context *)data->dma_rx.dma_dev->data)->atomic,
-		       data->dma_rx.dma_channel);
+	/*
+	 * Claim the RX channel too. IR is half-duplex and its board overlays
+	 * commonly place TX and RX on one shared DMA channel; that channel is
+	 * already reserved by the TX claim above, so only request RX when it is a
+	 * distinct channel to avoid a spurious -EINVAL from the double claim.
+	 */
+	if (!ir_rx_shares_tx_channel(data)) {
+		ret = ir_bee_claim_dma_channel(data->dma_rx.dma_dev,
+					       data->dma_rx.dma_channel);
+		if (ret < 0) {
+			LOG_ERR("IR RX DMA channel %u already in use", data->dma_rx.dma_channel);
+			return ret;
+		}
+	}
 
 	memset(&data->dma_rx.blk_cfg[0], 0, sizeof(data->dma_rx.blk_cfg[0]));
 	memset(&data->dma_rx.blk_cfg[1], 0, sizeof(data->dma_rx.blk_cfg[1]));
@@ -688,7 +733,7 @@ static int ir_bee_init(const struct device *dev)
 	data->dma_rx.dma_cfg.user_data = (void *)dev;
 #endif
 
-	return 0;
+	return ret;
 }
 
 static DEVICE_API(ir, ir_bee_driver_api) = {
