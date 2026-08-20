@@ -581,6 +581,14 @@
 			status = "disabled";
 			#io-channel-cells = <1>;
 		};
+
+		can: can@40016000 {
+			compatible = "realtek,bee-can";
+			reg = <0x40016000 0x3f4>;
+			interrupts = <50 0>;
+			clocks = <&cctl APB_CLK(CAN)>;
+			status = "disabled";
+		};
 	};
 };
 

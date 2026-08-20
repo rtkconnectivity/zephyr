@@ -38,4 +38,14 @@
 			wakeup-low;
 		};
 	};
+
+	can_default: can_default {
+		group1 {
+			psels = <BEE_PSEL(CAN_TX, P7_0)>,
+				<BEE_PSEL(CAN_RX, P7_1)>;
+			output-enable;
+			output-high;
+			bias-disable;
+		};
+	};
 };
