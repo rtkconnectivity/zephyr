@@ -1346,6 +1346,10 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 	int filter_id;
 	int ret;
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
+#endif
+
 	if (!can_dev) {
 		printf("CAN device not found\n");
 		return 0;
@@ -1388,14 +1392,29 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 		printf("CAN send failed: %d\n", ret);
 		return ret;
 	}
-	k_sem_take(&can_tx_sem, K_MSEC(200));
-	k_sem_take(&can_rx_sem, K_MSEC(200));
+	if (k_sem_take(&can_tx_sem, K_MSEC(200)) != 0) {
+		printf("tx timeout\n");
+	}
+	if (k_sem_take(&can_rx_sem, K_MSEC(200)) != 0) {
+		printf("rx timeout\n");
+	}
 
 	/* Verify RX data matches TX */
 	if (rx_count == 1 && memcmp(can_tx_data, can_rx_data, 8) == 0) {
 		printf("tx/rx match\n");
 	} else {
 		printf("tx/rx mismatch\n");
+		printf("  rx_count: %d\n", rx_count);
+		printf("  tx_data:");
+		for (int i = 0; i < 8; i++) {
+			printf(" %02x", can_tx_data[i]);
+		}
+		printf("\n");
+		printf("  rx_data:");
+		for (int i = 0; i < 8; i++) {
+			printf(" %02x", can_rx_data[i]);
+		}
+		printf("\n");
 	}
 
 	/* Test 2: Remove filter, TX, check no RX */
@@ -1423,13 +1442,28 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 	frame.data[0] = 0x55;
 	can_tx_data[0] = frame.data[0];
 	ret = can_send(can_dev, &frame, K_MSEC(100), can_tx_cb, NULL);
-	k_sem_take(&can_tx_sem, K_MSEC(200));
-	k_sem_take(&can_rx_sem, K_MSEC(200));
+	if (k_sem_take(&can_tx_sem, K_MSEC(200)) != 0) {
+		printf("tx timeout after DLPS\n");
+	}
+	if (k_sem_take(&can_rx_sem, K_MSEC(200)) != 0) {
+		printf("rx timeout after DLPS\n");
+	}
 
 	if (rx_count == 1 && memcmp(can_tx_data, can_rx_data, 8) == 0) {
 		printf("tx/rx match\n");
 	} else {
 		printf("tx/rx mismatch\n");
+		printf("  rx_count: %d\n", rx_count);
+		printf("  tx_data:");
+		for (int i = 0; i < 8; i++) {
+			printf(" %02x", can_tx_data[i]);
+		}
+		printf("\n");
+		printf("  rx_data:");
+		for (int i = 0; i < 8; i++) {
+			printf(" %02x", can_rx_data[i]);
+		}
+		printf("\n");
 	}
 
 	/* Test 4: Remove filter, TX, check no RX */
