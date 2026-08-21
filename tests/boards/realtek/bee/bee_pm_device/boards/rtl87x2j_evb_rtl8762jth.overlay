@@ -75,6 +75,7 @@
 		test-qenca = &phase_a;
 		test-qencb = &phase_b;
 		test-i2c = &i2c0;
+		test-can = &can;
 	};
 
 	encoder-emulate {
@@ -197,6 +198,13 @@
 	x-debounce-time-ms = <5>;
 	pinctrl-0 = <&qdec_default>;
 	pinctrl-names = "default";
+	status = "okay";
+};
+
+&can {
+	pinctrl-0 = <&can_default>;
+	pinctrl-1 = <&can_sleep>;
+	pinctrl-names = "default", "sleep";
 	status = "okay";
 };
 
