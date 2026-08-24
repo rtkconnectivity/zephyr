@@ -55,6 +55,9 @@ config HAL_REALTEK_BEE_QDEC
 config HAL_REALTEK_BEE_LPQDEC
 	bool "Realtek Bee Low-Power QDEC HAL"
 
+config HAL_REALTEK_BEE_RAP
+	bool "Realtek Bee RAP HAL"
+
 config HAL_REALTEK_BEE_RCC
 	bool "Realtek Bee RCC HAL"
 
