@@ -5,85 +5,85 @@ config ZEPHYR_HAL_REALTEK_BEE_MODULE
 	bool
 
 config HAL_REALTEK_BEE_ADC
-	bool
+	bool "Realtek Bee ADC HAL"
 
 config HAL_REALTEK_BEE_BT
-	bool
+	bool "Realtek Bee BT HAL"
 
 config HAL_REALTEK_BEE_CAN
-	bool
+	bool "Realtek Bee CAN HAL"
 
 config HAL_REALTEK_BEE_CODEC
-	bool
+	bool "Realtek Bee CODEC HAL"
 
 config HAL_REALTEK_BEE_DMA
-	bool
+	bool "Realtek Bee DMA HAL"
 
 config HAL_REALTEK_BEE_GPIO
-	bool
+	bool "Realtek Bee GPIO HAL"
 
 config HAL_REALTEK_BEE_GRTC
-	bool
+	bool "Realtek Bee GRTC HAL"
 
 config HAL_REALTEK_BEE_I2C
-	bool
+	bool "Realtek Bee I2C HAL"
 
 config HAL_REALTEK_BEE_I2S
-	bool
+	bool "Realtek Bee I2S HAL"
 
 config HAL_REALTEK_BEE_IR
-	bool
+	bool "Realtek Bee IR HAL"
 
 config HAL_REALTEK_BEE_KEYSCAN
-	bool
+	bool "Realtek Bee KeyScan HAL"
 
 config HAL_REALTEK_BEE_NVIC
-	bool
+	bool "Realtek Bee NVIC HAL"
 
 config HAL_REALTEK_BEE_PINMUX
-	bool
+	bool "Realtek Bee Pinmux HAL"
 
 config HAL_REALTEK_BEE_PWM
-	bool
+	bool "Realtek Bee PWM HAL"
 
 config HAL_REALTEK_BEE_AON_QDEC
-	bool
+	bool "Realtek Bee AON QDEC HAL"
 
 config HAL_REALTEK_BEE_QDEC
-	bool
+	bool "Realtek Bee QDEC HAL"
 
 config HAL_REALTEK_BEE_LPQDEC
-	bool
+	bool "Realtek Bee Low-Power QDEC HAL"
 
 config HAL_REALTEK_BEE_RCC
-	bool
+	bool "Realtek Bee RCC HAL"
 
 config HAL_REALTEK_BEE_RTC
-	bool
+	bool "Realtek Bee RTC HAL"
 
 config HAL_REALTEK_BEE_SDHC
-	bool
+	bool "Realtek Bee SDHC HAL"
 
 config HAL_REALTEK_BEE_SPI
-	bool
+	bool "Realtek Bee SPI HAL"
 
 config HAL_REALTEK_BEE_TIM
-	bool
+	bool "Realtek Bee Timer HAL"
 
 config HAL_REALTEK_BEE_ENHTIM
-	bool
+	bool "Realtek Bee Enhanced Timer HAL"
 
 config HAL_REALTEK_BEE_UART
-	bool
+	bool "Realtek Bee UART HAL"
 
 config HAL_REALTEK_BEE_USB
-	bool
+	bool "Realtek Bee USB HAL"
 
 config HAL_REALTEK_BEE_AON_WDT
-	bool
+	bool "Realtek Bee AON Watchdog HAL"
 
 config HAL_REALTEK_BEE_CORE_WDT
-	bool
+	bool "Realtek Bee Core Watchdog HAL"
 
 menuconfig USE_REALTEK_BEE_OS_INTERFACE
 	bool "Realtek Bee OS Interface (OSIF) Layer"
