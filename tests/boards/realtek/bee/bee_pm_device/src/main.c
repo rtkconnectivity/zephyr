@@ -112,6 +112,20 @@ extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
 #include <debug_port.h>
 #include <pck600.h>
 
+#if defined(CONFIG_HAL_REALTEK_BEE_RAP)
+/* Zephyr's <zephyr/drivers/gpio.h> defines GPIO_INT_MASK as a macro, which
+ * collides with a register field of the same name in the Bee HAL headers.
+ */
+#ifdef GPIO_INT_MASK
+#undef GPIO_INT_MASK
+#endif
+#include <rtl_rcc.h>
+#include <rtl_pinmux.h>
+#include <rtl_gpio.h>
+#include <rtl_rtc.h>
+#include <rtl_rap.h>
+#endif
+
 #endif /* SoC select */
 
 /* Device declarations */
@@ -836,7 +850,7 @@ static void test_rtc_alarm_cb(const struct device *dev, uint16_t id, void *user_
 
 #endif /* CONFIG_RTC */
 
-static int shell_pm_test_rtc(const struct shell *sh, size_t argc, char **argv)
+__maybe_unused static int shell_pm_test_rtc(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(sh);
 
@@ -881,6 +895,121 @@ static int shell_pm_test_rtc(const struct shell *sh, size_t argc, char **argv)
 #endif
 
 #endif /* CONFIG_RTC */
+
+	return 0;
+}
+
+/* RTC RAP GPIO toggle PM test */
+
+/*
+ * Reference: Realtek Bee RAP sample rtc_compare_trigger_gpio_toggle.
+ *
+ * Route an RTC compare event through the RAP (Realtek Action Peripheral) to a
+ * GPIO toggle action, so the pad keeps toggling in hardware (no CPU) even in
+ * DLPS. The test arms it, lets it run, then tears RAP mode down.
+ */
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2J) && defined(CONFIG_HAL_REALTEK_BEE_RAP)
+
+/* 32kHz / (PSC + 1) => 32kHz tick */
+#define RTC_RAP_PSC_VALUE    (1 - 1)
+/* Toggle every 16000 ticks (0.5s = 2Hz). RELOAD is the repeat interval, COMP the first fire. */
+#define RTC_RAP_COMP_VALUE   (16000)
+#define RTC_RAP_RELOAD_VALUE (16000)
+
+/* Pad toggled by the RTC compare -> RAP action */
+#define RTC_RAP_OUTPUT_PAD  P1_1
+
+static void rtc_rap_gpio_board_init(void)
+{
+	/* Configure the pad as a DWGPIO output, driven high on power-on */
+	Pad_Config(RTC_RAP_OUTPUT_PAD, PAD_PINMUX_MODE, PAD_IS_PWRON, PAD_PULL_UP,
+		   PAD_OUT_ENABLE, PAD_OUT_HIGH);
+	Pinmux_Config(RTC_RAP_OUTPUT_PAD, DWGPIO);
+
+	RCC_ClockCmd(GPIOA_CLOCK, ENABLE);
+
+	GPIO_InitTypeDef gpio_init;
+
+	GPIO_StructInit(&gpio_init);
+	gpio_init.GPIO_Pin = GPIO_GetPinBit(RTC_RAP_OUTPUT_PAD);
+	gpio_init.GPIO_Dir = GPIO_DIR_OUT;
+	gpio_init.GPIO_INTEventEn = DISABLE;
+	GPIO_Init(GPIO_GetPort(RTC_RAP_OUTPUT_PAD), &gpio_init);
+
+	Pad_ModeAutoSwitchCmd(RTC_RAP_OUTPUT_PAD, DISABLE);
+}
+
+static void rtc_rap_gpio_rtc_init(void)
+{
+	/* Counter node is disabled here, so this test owns the RTC via the HAL */
+	RCC_ClockCmd(RTC_CLOCK, ENABLE);
+	RTC_DeInit();
+
+	RTC_SetPrescaler(RTC_RAP_PSC_VALUE);
+	RTC_SetCompValue(RTC_COMP0, RTC_RAP_COMP_VALUE);
+	RTC_SetCompReloadValue(RTC_COMP0, RTC_RAP_RELOAD_VALUE);
+	RTC_ResetCounter();
+
+	/* Must start the counter before RAP mode; once in RAP mode the run-bit is task-driven */
+	RTC_Cmd(ENABLE);
+}
+
+#endif /* RTL87X2J && REALTEK_BEE_RAP */
+
+__maybe_unused static int shell_pm_test_rtc_rap_gpio(const struct shell *sh, size_t argc,
+						     char **argv)
+{
+	ARG_UNUSED(sh);
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2J) && defined(CONFIG_HAL_REALTEK_BEE_RAP)
+	uint8_t channel;
+
+	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
+	printf("[%lld] connect pad %d (gpio %d) to a logic analyzer to watch the toggle\n",
+	       k_uptime_get(), RTC_RAP_OUTPUT_PAD, GPIO_GetNum(RTC_RAP_OUTPUT_PAD));
+
+	rtc_rap_gpio_board_init();
+	rtc_rap_gpio_rtc_init();
+
+	/* Allocate a RAP channel and route RTC compare0 event -> GPIOA toggle action */
+	if (!RAP_ChannelAllocate(&channel)) {
+		printf("RAP channel allocate failed\n");
+		return 0;
+	}
+	RAP_EventRouteSet(RAP_EVENT_RTC_COMPARE(0), channel);
+	/* Action regs are one array indexed by global GPIO number at a 4-byte stride */
+	RAP_ActionBindSet(RAP_ACTION_GPIOA_DRTOGGLE(0) +
+			  GPIO_GetNum(RTC_RAP_OUTPUT_PAD) * sizeof(uint32_t), channel);
+
+	/* Auto-reload the comparator via the RTC shortcut so the toggle repeats without the CPU */
+	RTC_ShortcutCmd(RTC_ACTION_RELOAD_COMP0, RTC_EVENT_COMP0, ENABLE);
+
+	/* Switch the RTC and the GPIO pad into RAP mode, then start the RTC */
+	RTC_RAPModeCmd(ENABLE);
+	GPIO_RAPModeCmd(GPIO_GetPort(RTC_RAP_OUTPUT_PAD), GPIO_GetPinBit(RTC_RAP_OUTPUT_PAD),
+			ENABLE);
+	RTC_ActionTrigger(RTC_ACTION_START);
+
+	/* Let the hardware toggle on its own (across DLPS) for the run window */
+	k_sleep(K_MSEC(5 * 1000));
+
+	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
+
+	/* Tear down RAP mode and stop the RTC */
+	RTC_ActionTrigger(RTC_ACTION_STOP);
+	RTC_ShortcutCmd(RTC_ACTION_RELOAD_COMP0, RTC_EVENT_COMP0, DISABLE);
+	GPIO_RAPModeCmd(GPIO_GetPort(RTC_RAP_OUTPUT_PAD), GPIO_GetPinBit(RTC_RAP_OUTPUT_PAD),
+			DISABLE);
+	RTC_RAPModeCmd(DISABLE);
+	RAP_ChannelFree(channel);
+	RTC_Cmd(DISABLE);
+
+#else
+	printf("rtc_rap_gpio requires rtl87x2j with CONFIG_HAL_REALTEK_BEE_RAP\n");
+#endif
 
 	return 0;
 }
@@ -1535,16 +1664,31 @@ INPUT_CALLBACK_DEFINE(DEVICE_DT_GET(DT_NODELABEL(keyscan)), keyscan_input_cb, NU
 
 /* Shell commands */
 
+/*
+ * The RTC is shared: expose the zephyr-api rtc test when the counter node is
+ * enabled, otherwise the hal-api rtc_rap_gpio test (which owns the RTC itself).
+ */
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(rtc_counter), okay)
+#define BEE_RTC_SHELL_CMD                                                                          \
+	SHELL_CMD_ARG(rtc, NULL, "rtc pm test", shell_pm_test_rtc, 0, 0),
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J) && defined(CONFIG_HAL_REALTEK_BEE_RAP)
+#define BEE_RTC_SHELL_CMD                                                                          \
+	SHELL_CMD_ARG(rtc_rap_gpio, NULL, "rtc compare -> rap -> gpio toggle pm test (hal api)",   \
+		      shell_pm_test_rtc_rap_gpio, 0, 0),
+#else
+#define BEE_RTC_SHELL_CMD
+#endif
+
 #define SHELL_CMD_ARG_CREATE                                                                       \
 	SHELL_CMD_ARG(uart, NULL, "uart pm test", shell_pm_test_uart, 0, 0),                       \
 		SHELL_CMD_ARG(uartdma, NULL, "uart dma pm test", shell_pm_test_uart_dma, 0, 0),    \
 		SHELL_CMD_ARG(gpio, NULL, "gpio pm test [debounce_ms]", shell_pm_test_gpio, 0, 1), \
 		SHELL_CMD_ARG(pwm, NULL, "pwm pm test", shell_pm_test_pwm, 0, 0),                  \
-		SHELL_CMD_ARG(lppwm, NULL, "lppwm pm test", shell_pm_test_lppwm, 0, 0),     \
+		SHELL_CMD_ARG(lppwm, NULL, "lppwm pm test", shell_pm_test_lppwm, 0, 0),            \
 		SHELL_CMD_ARG(counter, NULL, "counter pm test (input time in ms)",                 \
 			      shell_pm_test_counter, 2, 0),                                        \
 		SHELL_CMD_ARG(spi, NULL, "spi pm test", shell_pm_test_spi, 0, 0),                  \
-		SHELL_CMD_ARG(rtc, NULL, "rtc pm test", shell_pm_test_rtc, 0, 0),                  \
+		BEE_RTC_SHELL_CMD                                                                  \
 		SHELL_CMD_ARG(qdec, NULL, "qdec pm test", shell_pm_test_qdec, 0, 0),               \
 		SHELL_CMD_ARG(waveform_gpio, NULL,                                                 \
 			      "generate gpio output waveform [debounce_ms [pulse_us]]",            \
