@@ -361,6 +361,56 @@ static void audio_cb_usb_status(struct usb_cfg_data *cfg,
 				      common);
 
 	switch (cb_status) {
+	case USB_DC_CONNECTED: {
+		/* Patch bInterval in the isochronous endpoint descriptor once
+		 * the bus speed is known, before the host reads the config
+		 * descriptor.
+		 *
+		 * bInterval=4 interpretation depends on bus speed:
+		 *   High-speed: 2^(4-1) = 8 micro-frames = 1 ms  → correct
+		 *   Full-speed: 4 frames = 4 ms → drain rate drops to 25%,
+		 *               causing ring buffer overflow and broken audio.
+		 *
+		 * Walk: std_ac_interface → cs_ac_interface (desc_hdr) →
+		 *       input_terminal → feature_unit → output_terminal →
+		 *       as_alt_0 → as_alt_1 → as_cs_interface → format → std_ep
+		 *
+		 * param points to the speed byte: 0 = High-speed, 1 = Full-speed
+		 * (from DSTS.ENUMSPD in usb_dw_handle_enum_done). */
+		if (param != NULL) {
+			bool is_full_speed = (*param != 0);
+			const struct cs_ac_if_descriptor *hdr =
+				audio_dev_data->desc_hdr;
+			const uint8_t *p = (const uint8_t *)hdr;
+
+			/* Walk one streaming interface chain (first IN ep). */
+			p += hdr->bLength;              /* → input_terminal */
+			p += p[0];                      /* → feature_unit */
+			p += p[0];                      /* → output_terminal (feature_unit is variable-length) */
+			p += OUTPUT_TERMINAL_DESC_SIZE; /* → as_alt_0 (passive, bNumEndpoints=0) */
+			p += USB_PASSIVE_IF_DESC_SIZE;  /* → as_alt_1 (active, bNumEndpoints=1) */
+			p += USB_PASSIVE_IF_DESC_SIZE;  /* → as_cs_interface */
+			p += p[0];                      /* → format */
+			p += p[0];                      /* → std_ep */
+			/* p now points at std_ep (std_as_ad_endpoint_descriptor) */
+			struct std_as_ad_endpoint_descriptor *ep =
+				(struct std_as_ad_endpoint_descriptor *)p;
+
+			/* Full-speed: bInterval = 1 → poll every frame (1 ms).
+			 * High-speed: bInterval = 4 → poll every 2^(4-1)=8 µf (1 ms). */
+			ep->bInterval = is_full_speed ? 1U : 4U;
+
+			/* NOTE: n==2 (bidirectional headset) has a different
+			 * descriptor layout (two extra terminal + feature_unit
+			 * blocks before the first streaming interface); it is not
+			 * handled here because the current UAC use-case is
+			 * Microphone-only (bInCollection == 1). */
+
+			LOG_INF("USB audio: %s-speed, bInterval patched to %u",
+				is_full_speed ? "Full" : "High", ep->bInterval);
+		}
+		break;
+	}
 	case USB_DC_SOF:
 		audio_dc_sof(cfg, audio_dev_data);
 		break;
