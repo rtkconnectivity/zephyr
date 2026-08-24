@@ -13,14 +13,14 @@
 
 /*
  *  P0_0
- *  P0_1 LPPWM
+ *  P0_1
  *  P0_2 PWM9
  *  P0_4 GPIO(TEST LPQDECX)
  *  P0_5 GPIO(TEST LPQDECX)
  *  P0_6 KSCAN_R0
  *  P0_7 KSCAN_R1
- *  P1_0 SWD
- *  P1_1 SWD
+ *  P1_0 LPPWM
+ *  P1_1 RAP_GPIO
  *  P1_6 QACTIVE
  *  P1_7 QACTIVE
  *  P2_0 KSCAN_C0
@@ -357,7 +357,7 @@
 
 	lppwm_default: lppwm_default {
 		group1 {
-			psels = <BEE_PSEL(LPPWM_CH0, P0_1)>;
+			psels = <BEE_PSEL(LPPWM_CH0, P1_0)>;
 			output-enable;
 			output-low;
 			bias-disable;
