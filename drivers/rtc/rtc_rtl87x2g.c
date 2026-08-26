@@ -80,7 +80,7 @@ struct rtc_rtl87x2g_config {
 static const uint32_t rtc_cmp_int_table[] = {RTC_INT_COMP0, RTC_INT_COMP1, RTC_INT_COMP2,
 					     RTC_INT_COMP3};
 #ifdef CONFIG_PM_DEVICE
-static const uint32_t rtc_cmp_wk_table[] = {RTC_WK_CMP0, RTC_WK_CMP1, RTC_WK_CMP2, RTC_WK_CMP3};
+static const uint32_t rtc_cmp_wk_table[] = {RTC_WK_COMP0, RTC_WK_COMP1, RTC_WK_COMP2, RTC_WK_COMP3};
 #endif
 #endif
 
