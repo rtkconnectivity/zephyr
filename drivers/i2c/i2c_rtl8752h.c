@@ -15,6 +15,7 @@
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/reset.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/gpio.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/pm/policy.h>
 
@@ -23,6 +24,10 @@
 LOG_MODULE_REGISTER(i2c_rtl8752h, CONFIG_I2C_LOG_LEVEL);
 
 #include "i2c-priv.h"
+
+#ifdef CONFIG_I2C_RTL8752H_BUS_RECOVERY
+#include "i2c_bitbang.h"
+#endif
 
 #include <rtl876x_i2c.h>
 #include <rtl876x_rcc.h>
@@ -33,6 +38,10 @@ struct i2c_rtl8752h_config {
 	uint16_t clkid;
 	const struct pinctrl_dev_config *pcfg;
 	void (*irq_cfg_func)(void);
+#ifdef CONFIG_I2C_RTL8752H_BUS_RECOVERY
+	struct gpio_dt_spec scl_gpio;
+	struct gpio_dt_spec sda_gpio;
+#endif
 };
 
 struct i2c_rtl8752h_data {
@@ -240,16 +249,13 @@ static int i2c_rtl8752h_transfer(const struct device *dev, struct i2c_msg *msgs,
 	return err;
 }
 
-static int i2c_rtl8752h_configure(const struct device *dev, uint32_t dev_config)
+static int i2c_rtl8752h_do_configure(const struct device *dev, uint32_t dev_config)
 {
 	LOG_DBG("[%s] line%d\n", __func__, __LINE__);
 	struct i2c_rtl8752h_data *data = dev->data;
 	const struct i2c_rtl8752h_config *cfg = dev->config;
 	uint32_t pclk;
 	I2C_TypeDef *i2c = (I2C_TypeDef *)cfg->reg;
-	int err = 0;
-
-	k_sem_take(&data->bus_mutex, K_FOREVER);
 
 	/* Disable I2C device */
 	I2C_Cmd(i2c, DISABLE);
@@ -283,8 +289,7 @@ static int i2c_rtl8752h_configure(const struct device *dev, uint32_t dev_config)
 		i2c_init_struct.I2C_ClockSpeed = I2C_BITRATE_FAST_PLUS;
 		break;
 	default:
-		err = -EINVAL;
-		goto error;
+		return -EINVAL;
 	}
 
 	data->dev_config = dev_config;
@@ -292,11 +297,96 @@ static int i2c_rtl8752h_configure(const struct device *dev, uint32_t dev_config)
 	I2C_Init(i2c, &i2c_init_struct);
 
 	I2C_Cmd(i2c, ENABLE);
-error:
+
+	return 0;
+}
+
+static int i2c_rtl8752h_configure(const struct device *dev, uint32_t dev_config)
+{
+	LOG_DBG("[%s] line%d\n", __func__, __LINE__);
+	struct i2c_rtl8752h_data *data = dev->data;
+	int err;
+
+	k_sem_take(&data->bus_mutex, K_FOREVER);
+
+	err = i2c_rtl8752h_do_configure(dev, dev_config);
+
 	k_sem_give(&data->bus_mutex);
 
 	return err;
 }
+
+#ifdef CONFIG_I2C_RTL8752H_BUS_RECOVERY
+/*
+ * RTL8752H has no hardware open-drain output mode, so open-drain is emulated by
+ * switching the pin direction on every edge: released == input with pull-up,
+ * driven low == output low.
+ */
+static void i2c_rtl8752h_bitbang_set_line(const struct gpio_dt_spec *gpio, int state)
+{
+	(void)gpio_pin_configure_dt(gpio, state ? (GPIO_INPUT | GPIO_PULL_UP) : GPIO_OUTPUT_LOW);
+}
+
+static void i2c_rtl8752h_bitbang_set_scl(void *io_context, int state)
+{
+	const struct i2c_rtl8752h_config *cfg = io_context;
+
+	i2c_rtl8752h_bitbang_set_line(&cfg->scl_gpio, state);
+}
+
+static void i2c_rtl8752h_bitbang_set_sda(void *io_context, int state)
+{
+	const struct i2c_rtl8752h_config *cfg = io_context;
+
+	i2c_rtl8752h_bitbang_set_line(&cfg->sda_gpio, state);
+}
+
+static int i2c_rtl8752h_bitbang_get_sda(void *io_context)
+{
+	const struct i2c_rtl8752h_config *cfg = io_context;
+
+	return gpio_pin_get_dt(&cfg->sda_gpio) != 0 ? 1 : 0;
+}
+
+static int i2c_rtl8752h_recover_bus(const struct device *dev)
+{
+	const struct i2c_rtl8752h_config *cfg = dev->config;
+	struct i2c_rtl8752h_data *data = dev->data;
+	const struct i2c_bitbang_io bitbang_io = {
+		.set_scl = i2c_rtl8752h_bitbang_set_scl,
+		.set_sda = i2c_rtl8752h_bitbang_set_sda,
+		.get_sda = i2c_rtl8752h_bitbang_get_sda,
+	};
+	struct i2c_bitbang bitbang;
+	uint32_t dev_config;
+	int ret;
+
+	if (!gpio_is_ready_dt(&cfg->scl_gpio) || !gpio_is_ready_dt(&cfg->sda_gpio)) {
+		LOG_ERR("SCL/SDA recovery GPIO not available");
+		return -ENOSYS;
+	}
+
+	k_sem_take(&data->bus_mutex, K_FOREVER);
+
+	dev_config = data->dev_config;
+
+	i2c_bitbang_init(&bitbang, &bitbang_io, (void *)cfg);
+
+	ret = i2c_bitbang_recover_bus(&bitbang);
+	if (ret < 0) {
+		LOG_ERR("failed to recover bus (%d)", ret);
+	}
+
+	/* Hand the pins back to the I2C controller and re-initialise it. */
+	(void)pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
+	(void)clock_control_on(RTL8752H_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+	(void)i2c_rtl8752h_do_configure(dev, dev_config);
+
+	k_sem_give(&data->bus_mutex);
+
+	return ret;
+}
+#endif /* CONFIG_I2C_RTL8752H_BUS_RECOVERY */
 
 #ifdef CONFIG_PM_DEVICE
 static int i2c_rtl8752h_pm_action(const struct device *dev, enum pm_device_action action)
@@ -342,6 +432,9 @@ static int i2c_rtl8752h_pm_action(const struct device *dev, enum pm_device_actio
 static struct i2c_driver_api i2c_rtl8752h_driver_api = {
 	.configure = i2c_rtl8752h_configure,
 	.transfer = i2c_rtl8752h_transfer,
+#ifdef CONFIG_I2C_RTL8752H_BUS_RECOVERY
+	.recover_bus = i2c_rtl8752h_recover_bus,
+#endif
 };
 
 static int i2c_rtl8752h_init(const struct device *dev)
@@ -375,6 +468,14 @@ static int i2c_rtl8752h_init(const struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_I2C_RTL8752H_BUS_RECOVERY
+#define I2C_RTL8752H_RECOVERY_INIT(index)                                                          \
+	.scl_gpio = GPIO_DT_SPEC_INST_GET_OR(index, scl_gpios, {0}),                                \
+	.sda_gpio = GPIO_DT_SPEC_INST_GET_OR(index, sda_gpios, {0}),
+#else
+#define I2C_RTL8752H_RECOVERY_INIT(index)
+#endif
+
 #define I2C_RTL8752H_INIT(index)                                                                   \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
 	static void i2c_rtl8752h_irq_cfg_func_##index(void)                                        \
@@ -390,6 +491,7 @@ static int i2c_rtl8752h_init(const struct device *dev)
 		.clkid = DT_INST_CLOCKS_CELL(index, id),                                           \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
 		.irq_cfg_func = i2c_rtl8752h_irq_cfg_func_##index,                                 \
+		I2C_RTL8752H_RECOVERY_INIT(index)                                                  \
 	};                                                                                         \
 	PM_DEVICE_DT_INST_DEFINE(index, i2c_rtl8752h_pm_action);                                   \
 	I2C_DEVICE_DT_INST_DEFINE(index, i2c_rtl8752h_init, PM_DEVICE_DT_INST_GET(index),          \

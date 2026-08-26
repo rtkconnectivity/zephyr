@@ -133,7 +133,11 @@ static int gpio_rtl87x2g_pin_configure(const struct device *port, gpio_pin_t pin
 
 	__ASSERT(pad_pin >= 0, "gpio port or pin error");
 
-	if (flags & GPIO_OPEN_SOURCE) {
+	/* open-source is not supported; open-drain is (see GPIO_OutPutMode below).
+	 * GPIO_OPEN_SOURCE aliases GPIO_SINGLE_ENDED, so test the line bit too to
+	 * avoid rejecting open-drain configurations.
+	 */
+	if ((flags & GPIO_SINGLE_ENDED) != 0 && (flags & GPIO_LINE_OPEN_DRAIN) == 0) {
 		ret = -ENOTSUP;
 		return ret;
 	}
