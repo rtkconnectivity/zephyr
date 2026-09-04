@@ -1,6 +1,0 @@
-board:
-  name: rtl8777g_evb
-  full_name: RTL8777G Dongle Evaluation Board
-  vendor: realtek
-  socs:
-    - name: rtl8777gkf_va5

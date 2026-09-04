@@ -1,9 +1,9 @@
 # Copyright (c) 2026, Realtek Semiconductor Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-if BOARD_RTL8777G_EVB
+if BOARD_RTL8777G_DONGLE
 
 config HW_STACK_PROTECTION
 	default ARCH_HAS_STACK_PROTECTION
 
-endif # BOARD_RTL8777G_EVB
+endif # BOARD_RTL8777G_DONGLE

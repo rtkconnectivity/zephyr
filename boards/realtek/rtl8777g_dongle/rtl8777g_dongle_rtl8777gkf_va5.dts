@@ -7,49 +7,18 @@
 /dts-v1/;
 #include <realtek/bee/rtl8777gkf_va5.dtsi>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
-#include "rtl8777g_evb-pinctrl.dtsi"
+#include "rtl8777g_dongle_common.dtsi"
+#include "rtl8777g_dongle-pinctrl.dtsi"
 
 / {
-	model = "Realtek RTL8777G Dongle Evaluation Board";
-	compatible = "realtek,rtl8777g_evb";
-
-	chosen {
-		zephyr,sram = &tcm0;
-		zephyr,flash = &flash;
-		zephyr,code-partition = &app_partition;
-		zephyr,itcm = &tcm1;
-		zephyr,console = &uart2;
-		zephyr,shell-uart = &uart2;
-		zephyr,bt-hci = &bee_bt_hci;
-	};
+	model = "Realtek RTL8777G Dongle Board";
 
 	aliases {
-		led0 = &led0;
 		sw0 = &button0;
 		sw1 = &button1;
 		sw2 = &button2;
 		sw3 = &button3;
 	};
-
-	leds {
-		compatible = "gpio-leds";
-
-		led0: led0 {
-			gpios = <&gpioa 21 GPIO_ACTIVE_HIGH>;
-			label = "LED D1 Blue";
-		};
-
-		led1: led1 {
-			gpios = <&gpioa 18 GPIO_ACTIVE_HIGH>;
-			label = "LED D2 Red";
-		};
-
-		led2: led2 {
-			gpios = <&gpioa 17 GPIO_ACTIVE_HIGH>;
-			label = "LED D3 Green";
-		};
-	};
-
 
 	buttons {
 		compatible = "gpio-keys";
@@ -79,13 +48,6 @@
 			zephyr,code = <INPUT_KEY_3>;
 		};
 	};
-
-};
-
-&gpioa {
-	pinctrl-0 = <&gpioa_default>;
-	pinctrl-names = "default";
-	status = "okay";
 };
 
 &gpiob {
@@ -94,35 +56,15 @@
 	status = "okay";
 };
 
-&uart2 {
-	pinctrl-0 = <&uart2_default>;
-	pinctrl-names = "default";
-	status = "okay";
-	current-speed = <115200>;
-	parity = "none";
-	stop-bits = "1";
-	data-bits = <8>;
-};
-
-&cpu {
-	clock-frequency = <40000000>;
-};
-
-&bee_bt_hci {
-	status = "okay";
-};
-
 &flash {
 	partitions {
 		/* 0x402d000-0x4400000: Free space for Zephyr */
 		app_partition: partition@2d000 {
-			compatible = "zephyr,mapped-partition";
 			label = "app-image";
 			reg = <0x2d000 DT_SIZE_K(3900)>;
 		};
 
 		storage_partition: partition@3fc000 {
-			compatible = "zephyr,mapped-partition";
 			label = "storage";
 			reg = <0x3fc000 DT_SIZE_K(16)>;
 		};

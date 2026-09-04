@@ -1,5 +1,5 @@
-identifier: rtl8777g_evb
-name: RTL8777G Dongle Evaluation Board
+identifier: rtl8777g_dongle/rtl8777gkf_va5
+name: RTL8777G Dongle Board (RTL8777GKF VA5)
 type: mcu
 arch: arm
 ram: 100
