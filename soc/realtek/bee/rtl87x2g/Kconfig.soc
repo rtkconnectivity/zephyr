@@ -47,6 +47,14 @@ config SOC_RTL8772GWP
 	bool
 	select SOC_SERIES_RTL87X2G
 
+config SOC_RTL8777GKF_VA4
+	bool
+	select SOC_SERIES_RTL87X2G
+
+config SOC_RTL8777GKF_VA5
+	bool
+	select SOC_SERIES_RTL87X2G
+
 config SOC_SERIES
 	default "rtl87x2g" if SOC_SERIES_RTL87X2G
 
@@ -61,3 +69,5 @@ config SOC
 	default "rtl8762gtu" if SOC_RTL8762GTU
 	default "rtl8772gwf" if SOC_RTL8772GWF
 	default "rtl8772gwp" if SOC_RTL8772GWP
+	default "rtl8777gkf_va4" if SOC_RTL8777GKF_VA4
+	default "rtl8777gkf_va5" if SOC_RTL8777GKF_VA5
