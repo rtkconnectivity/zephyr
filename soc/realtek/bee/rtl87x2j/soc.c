@@ -5,23 +5,20 @@
  */
 
 #include <zephyr/kernel.h>
-#include <zephyr/arch/common/init.h>
 #include <zephyr/drivers/entropy.h>
-#include <zephyr/linker/linker-defs.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sw_isr_table.h>
 #include <soc.h>
 #include <cmsis_core.h>
 
-#include "osif_zephyr.h"
-#include "system_init.h"
-#include "mem_config.h"
-#include "utils.h"
-#include "sys_reset.h"
-#include "clock_manager.h"
+#include <osif_zephyr.h>
+#include <system_init.h>
+#include <sys_reset.h>
 #ifdef CONFIG_BT
-#include "image_info.h"
+#include <image_info.h>
 #endif
+
+#include <rtl87x2j_platform_init.h>
 
 LOG_MODULE_REGISTER(soc, CONFIG_SOC_LOG_LEVEL);
 
@@ -54,32 +51,6 @@ static bool zephyr_ram_vector_table_update(int irqn, IRQ_Fun isr_handler, bool *
 	return true;
 }
 
-/*
- * Migrate RAM vector table handlers to Zephyr ISR table.
- * This is needed because some IRQs are configured before Zephyr takes over,
- * and we need to register those handlers in Zephyr's ISR table.
- */
-static void migrate_ram_vector_table_to_zephyr(void)
-{
-	/* Skip first 16 system exception vectors */
-	uint32_t *ram_vector_table = (uint32_t *)(DATA_RAM_ROM_GLOBAL_ADDR + 16 * 4);
-
-	for (int irq = 0; irq < CONFIG_NUM_IRQS; irq++) {
-		if (ram_vector_table[irq] != (uint32_t)default_handler) {
-			LOG_DBG("IRQ %d has a non-default handler at address 0x%08X, "
-				"registering in Zephyr ISR table\n",
-				irq, ram_vector_table[irq]);
-			if (NVIC_GetEnableIRQ(irq) == 1) {
-				NVIC_DisableIRQ(irq);
-				z_isr_install(irq, (void *)ram_vector_table[irq], NULL);
-				NVIC_EnableIRQ(irq);
-			} else {
-				z_isr_install(irq, (void *)ram_vector_table[irq], NULL);
-			}
-		}
-	}
-}
-
 #ifdef CONFIG_BT
 static void bt_controller_init(void)
 {
@@ -91,38 +62,22 @@ static void bt_controller_init(void)
 
 void soc_early_init_hook(void)
 {
-	migrate_ram_vector_table_to_zephyr();
+	os_zephyr_patch_init();//both mcuboot and Zephyr need OSIF
 
 	/* Assign Zephyr version of ram_vector_table_update to patch variable */
+	//may only place at mcuboot side to save code size??
 	patch_ram_vector_table_update = zephyr_ram_vector_table_update;
 
-	os_zephyr_patch_init();
+#if !defined(CONFIG_BOOTLOADER_MCUBOOT)
+	rtl87x2j_platform_early_init();
+#endif
 }
 
 void soc_late_init_hook(void)
 {
-	set_active_mode_clk_src();
-
-	wakeup_init();
-
-	power_manager_init();
-
-	platform_pm_init();
-
-	thermal_meter_init();
-
-	phy_hw_control_init(false);
-	phy_init(false);
-
-	thermal_tracking_init();
-
-	amu_script_init();
-
-	amu_init();
-
-	/* Switch log UART clock to auto mode for better power saving */
-	extern void log_uart_switch_clock_auto_mode(bool enable);
-	log_uart_switch_clock_auto_mode(true);
+#if defined(CONFIG_BOOTLOADER_MCUBOOT)
+	rtl87x2j_platform_late_init();
+#endif
 
 #ifdef CONFIG_BT
 	/*

@@ -14,29 +14,11 @@
 	chosen {
 		zephyr,sram = &sram;
 		zephyr,flash = &eflash;
-		zephyr,code-partition = &app_partition;
+		zephyr,flash-controller = &fmc;
+		zephyr,code-partition = &slot0_partition;
 		zephyr,console = &uart2;
 		zephyr,shell-uart = &uart2;
 		zephyr,bt-hci = &bee_bt_hci;
-	};
-};
-
-&eflash {
-	partitions {
-		/* 0x2019000-0x3000000: Free space for Zephyr
-		 * bt_controller is Realtek's internal Bluetooth controller firmware image.
-		 * Different versions may be used based on features (default: 217K).
-		 * Flash layout may need adjustment when bt_controller size changes.
-		 */
-		bt_controller: partition@19000 {
-			label = "bt-controller";
-			reg = <0x19000 DT_SIZE_K(217)>;
-		};
-
-		app_partition: partition@4f400 {
-			label = "application";
-			reg = <0x4f400 DT_SIZE_K(403)>;
-		};
 	};
 };
 
