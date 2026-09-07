@@ -627,6 +627,16 @@
 			ghwcfg4 = <0xd600aa20>;
 			status = "disabled";
 		};
+
+		sdhc0: sdhc@40150000 {
+			compatible = "realtek,bee-sdhc";
+			reg = <0x40150000 0x200>;
+			interrupts = <61 0>;
+			clocks = <&cctl APB_CLK(SDHC)>;
+			max-bus-freq = <50000000>;
+			min-bus-freq = <40000>;
+			status = "disabled";
+		};
 	};
 };
 

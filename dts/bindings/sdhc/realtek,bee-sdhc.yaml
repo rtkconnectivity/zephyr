@@ -1,0 +1,54 @@
+# Copyright(c) 2026, Realtek Semiconductor Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Bee SDHC controller.
+
+compatible: "realtek,bee-sdhc"
+
+include: [sdhc.yaml, base.yaml, pinctrl-device.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+  bus-width:
+    type: int
+    enum:
+      - 1
+      - 4
+    default: 4
+    description: SD bus width in bits
+
+  pin-group:
+    type: int
+    enum:
+      - 0
+      - 1
+    required: true
+    description: pin group for sdhc
+
+  pwr-gpios:
+    type: phandle-array
+    description: |
+      Power pin
+      This is a configurable pin to deliver power supply to the SD card.
+      It is configured as a GPIO in order to execute power toggles and
+      reinitialize the SD slave when necessary.
+
+  int-gpios:
+    type: phandle-array
+    description: |
+      Interrupt pin
+      This gpio is used generate interrupt with sdio card in 4bit mode.
+      It's not necessary in 1bit mode.
+      This gpio should be configured to the same pin as D1 line.
