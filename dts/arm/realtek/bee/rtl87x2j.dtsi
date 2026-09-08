@@ -44,15 +44,9 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		/* 0x20000000 ~ 0x2001a000 */
-		sram_internal: memory@20000000 {
-			device_type = "internal sram region";
-			reg = <0x20000000 DT_SIZE_K(28)>;
-		};
-
-		sram: memory@20007000 {
+		sram: memory@20000000 {
 			device_type = "sram region";
-			reg = <0x20007000 DT_SIZE_K(55)>;
+			reg = <0x20000000 DT_SIZE_K(83)>;
 		};
 
 		heap_sram: memory@20014c00 {
@@ -132,7 +126,7 @@
 
 					slot1_partition: partition@64000 {
 						label = "image-1";
-						reg = <0x64000 DT_SIZE_K(310)>;
+						reg = <0x64000 DT_SIZE_K(311)>;
 					};
 				};
 			};
