@@ -1,0 +1,67 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	compatible = "realtek,rtl8777g_dongle";
+
+	chosen {
+		zephyr,sram = &tcm0;
+		zephyr,flash = &flash;
+		zephyr,flash-controller = &fmc;
+		zephyr,code-partition = &app_partition;
+		zephyr,itcm = &tcm1;
+		zephyr,console = &uart2;
+		zephyr,shell-uart = &uart2;
+		zephyr,bt-hci = &bee_bt_hci;
+	};
+
+	aliases {
+		led0 = &led0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led0: led0 {
+			gpios = <&gpioa 21 GPIO_ACTIVE_HIGH>;
+			label = "LED D1 Blue";
+		};
+
+		led1: led1 {
+			gpios = <&gpioa 18 GPIO_ACTIVE_HIGH>;
+			label = "LED D2 Red";
+		};
+
+		led2: led2 {
+			gpios = <&gpioa 17 GPIO_ACTIVE_HIGH>;
+			label = "LED D3 Green";
+		};
+	};
+};
+
+&gpioa {
+	pinctrl-0 = <&gpioa_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&uart2 {
+	pinctrl-0 = <&uart2_default>;
+	pinctrl-names = "default";
+	status = "okay";
+	current-speed = <115200>;
+	parity = "none";
+	stop-bits = "1";
+	data-bits = <8>;
+};
+
+&cpu {
+	clock-frequency = <40000000>;
+};
+
+&bee_bt_hci {
+	status = "okay";
+};

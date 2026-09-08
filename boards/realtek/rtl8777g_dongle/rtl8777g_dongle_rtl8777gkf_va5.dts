@@ -1,0 +1,72 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <realtek/bee/rtl8777gkf_va5.dtsi>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include "rtl8777g_dongle_common.dtsi"
+#include "rtl8777g_dongle-pinctrl.dtsi"
+
+/ {
+	model = "Realtek RTL8777G Dongle Board";
+
+	aliases {
+		sw0 = &button0;
+		sw1 = &button1;
+		sw2 = &button2;
+		sw3 = &button3;
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		status = "okay";
+
+		button0: button_0 {
+			gpios = <&gpiob 22 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "SW1";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+
+		button1: button_1 {
+			gpios = <&gpiob 21 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "SW2";
+			zephyr,code = <INPUT_KEY_1>;
+		};
+
+		button2: button_2 {
+			gpios = <&gpiob 8 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "SW3";
+			zephyr,code = <INPUT_KEY_2>;
+		};
+
+		button3: button_3 {
+			gpios = <&gpiob 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "SW4";
+			zephyr,code = <INPUT_KEY_3>;
+		};
+	};
+};
+
+&gpiob {
+	pinctrl-0 = <&gpiob_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&flash {
+	partitions {
+		/* 0x402d000-0x4400000: Free space for Zephyr */
+		app_partition: partition@2d000 {
+			label = "app-image";
+			reg = <0x2d000 DT_SIZE_K(3900)>;
+		};
+
+		storage_partition: partition@3fc000 {
+			label = "storage";
+			reg = <0x3fc000 DT_SIZE_K(16)>;
+		};
+	};
+};
