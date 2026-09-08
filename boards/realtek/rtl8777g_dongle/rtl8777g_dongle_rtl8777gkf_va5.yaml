@@ -2,7 +2,7 @@ identifier: rtl8777g_dongle/rtl8777gkf_va5
 name: RTL8777G Dongle Board (RTL8777GKF VA5)
 type: mcu
 arch: arm
-ram: 100
+ram: 176
 flash: 3900
 toolchain:
   - zephyr
