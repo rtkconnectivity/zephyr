@@ -1,0 +1,45 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&sdhc0 {
+	pin-group = <0>;
+	bus-width = <4>;
+	max-bus-freq = <50000000>;
+	power-delay-ms = <0>;
+	pinctrl-0 = <&sdhc0_default>;
+	pinctrl-names = "default";
+	status = "okay";
+
+	sdcard_disk0: sdcard_disk0 {
+		compatible = "zephyr,sdmmc-disk";
+		disk-name = "SD";
+		status = "okay";
+	};
+
+	sdcard_disk1: sdcard_disk1 {
+		compatible = "zephyr,mmc-disk";
+		disk-name = "SD2";
+		bus-width = <4>;
+		status = "okay";
+	};
+};
+
+&pinctrl {
+	sdhc0_default: sdhc0_default {
+		group1 {
+			psels = <BEE_PSEL(SDHC0_CLK_P9_4, P9_4)>,
+				<BEE_PSEL(SDHC0_CMD_P9_3, P9_3)>,
+				<BEE_PSEL(SDHC0_D0_P10_0, P10_0)>,
+				<BEE_PSEL(SDHC0_D1_P9_7, P9_7)>,
+				<BEE_PSEL(SDHC0_D2_P9_6, P9_6)>,
+				<BEE_PSEL(SDHC0_D3_P9_5, P9_5)>;
+			output-disable;
+			bias-pull-up;
+			bias-pull-strong;
+			current-level = <1>;
+		};
+	};
+};
