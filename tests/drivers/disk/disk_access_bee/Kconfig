@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2022 NXP
+
+mainmenu "Disk driver access test"
+
+# The suite setup() (card probe + full SD/MMC init) runs on the main thread. The
+# MMC path (eMMC EXT_CSD read + mmc_init call depth) overflows the default main
+# stack, so give MMC-enabled builds more room.
+config MAIN_STACK_SIZE
+	default 1280 if (MMC_STACK && IMX_USDHC)
+	default 2048 if MMC_STACK
+
+# The FatFs mkfs path (f_mkfs -> disk_initialize -> full SD/MMC card init) runs
+# in the ztest thread and is stack-heavy; the default ztest stack overflows it.
+config ZTEST_STACK_SIZE
+	default 4096 if DISK_ACCESS_TEST_FS_FORMAT
+
+config DISK_ACCESS_STRESS
+	bool "Endless read/write stress test"
+	help
+	  Add a non-terminating read/write/verify stress test item that keeps
+	  running on errors instead of aborting, to continuously exercise the
+	  disk driver (and its error-recovery path) on real hardware.
+
+config DISK_ACCESS_TEST_ERASE
+	bool "Erase test items (test_erase / test_erase_full)"
+	help
+	  Add the Realtek-specific erase test items that verify a physical erase
+	  actually happened. Destructive and hardware-specific, so off by default:
+	  a plain "west build" then runs only the native Zephyr test items.
+
+config DISK_ACCESS_TEST_POWER_CYCLE
+	bool "Power-cycle test item (test_power_cycle)"
+	help
+	  Add the Realtek-specific power-cycle test item that toggles the disk
+	  through CTRL_DEINIT/CTRL_INIT many times. Hardware-specific, so off by
+	  default: a plain "west build" then runs only the native Zephyr test
+	  items.
+
+config DISK_ACCESS_TEST_FS_FORMAT
+	bool "FatFs format test item (test_fs_format)"
+	select FILE_SYSTEM
+	select FAT_FILESYSTEM_ELM
+	select FILE_SYSTEM_MKFS
+	select FS_FATFS_USE_TRIM
+	help
+	  Add the Realtek-specific FatFs format test item that formats the card
+	  with fs_mkfs(), mounts it, writes and reads back a file, then unmounts.
+	  Destructive and hardware-specific, so off by default: a plain
+	  "west build" then runs only the native Zephyr test items.
+
+source "Kconfig.zephyr"

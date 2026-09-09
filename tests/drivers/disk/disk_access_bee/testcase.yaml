@@ -1,0 +1,16 @@
+common:
+  harness: ztest
+  tags: disk
+  depends_on: sdhc
+tests:
+  drivers.disk.rtl87x2g.stress:
+    build_only: true
+    extra_args:
+      - DTC_OVERLAY_FILE=boards/rtl87x2g_evb_a_rtl8762gku.overlay
+    extra_configs:
+      - CONFIG_DISK_ACCESS_TEST_ERASE=y
+      - CONFIG_DISK_ACCESS_TEST_POWER_CYCLE=y
+      - CONFIG_DISK_ACCESS_TEST_FS_FORMAT=y
+      - CONFIG_DISK_ACCESS_STRESS=y
+    platform_allow:
+      - rtl87x2g_evb_a/rtl8762gku
