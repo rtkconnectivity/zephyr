@@ -11,18 +11,29 @@
  * Realtek Bee vendor quirk for the DWC2 controller: runs the Realtek USB PHY
  * bring-up and advertises the core's High-Speed capability.
  */
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
 extern void hal_usb_phy_power_on(void);
 extern void usb_rtk_disable_power_seq(void);
 extern void hal_rtk_usb_init(void);
 extern int hal_usb_suspend_enter(void);
 extern int32_t usb_rtk_resume_sequence(void);
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+extern void hal_usb_phy_power_on(void);
+extern void hal_usb_phy_power_down(void);
+extern int hal_usb_suspend_enter(void);
+extern int32_t usb_rtk_resume_sequence(void);
+#endif
 
 static int realtek_bee_udc_init(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
 	hal_usb_phy_power_on();
 	hal_rtk_usb_init();
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+	hal_usb_phy_power_on();
+#endif
 
 	return 0;
 }
@@ -31,7 +42,11 @@ static int realtek_bee_udc_hibernation_entry(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
 	hal_usb_suspend_enter();
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+	hal_usb_suspend_enter();
+#endif
 
 	return 0;
 }
@@ -40,7 +55,11 @@ static int realtek_bee_udc_hibernation_exit(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
 	usb_rtk_resume_sequence();
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+	usb_rtk_resume_sequence();
+#endif
 
 	return 0;
 }
@@ -49,7 +68,11 @@ static int realtek_bee_udc_shutdown(const struct device *dev)
 {
 	ARG_UNUSED(dev);
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
 	usb_rtk_disable_power_seq();
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+	hal_usb_phy_power_down();
+#endif
 
 	return 0;
 }
