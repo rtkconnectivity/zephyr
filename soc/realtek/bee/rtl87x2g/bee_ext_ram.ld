@@ -11,6 +11,7 @@ SECTION_DATA_PROLOGUE(EXTRAM_DATA,,)
 	. = ALIGN(4);
 	__extram_data_start = .;
 	*(.ext.datasram.data)
+	*(.app.ext.datasram.data)
 	__extram_data_end = ALIGN(4);
 } GROUP_DATA_LINK_IN(EXTRAM, ROMABLE_REGION)
 
@@ -19,6 +20,7 @@ SECTION_DATA_PROLOGUE(EXTRAM_BSS,(NOLOAD),)
 	. = ALIGN(4);
 	__extram_bss_start = .;
 	*(.ext.datasram.bss)
+	*(.app.ext.datasram.bss)
 	__extram_bss_end = ALIGN(4);
 } GROUP_DATA_LINK_IN(EXTRAM, EXTRAM)
 
