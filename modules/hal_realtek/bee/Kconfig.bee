@@ -37,6 +37,9 @@ config HAL_REALTEK_BEE_IR
 config HAL_REALTEK_BEE_KEYSCAN
 	bool "Realtek Bee KeyScan HAL"
 
+config HAL_REALTEK_BEE_LPC
+	bool "Realtek Bee LPC HAL"
+
 config HAL_REALTEK_BEE_NVIC
 	bool "Realtek Bee NVIC HAL"
 
@@ -69,6 +72,9 @@ config HAL_REALTEK_BEE_SDHC
 
 config HAL_REALTEK_BEE_SPI
 	bool "Realtek Bee SPI HAL"
+
+config HAL_REALTEK_BEE_SPI3W
+	bool "Realtek Bee SPI3W HAL"
 
 config HAL_REALTEK_BEE_TIM
 	bool "Realtek Bee Timer HAL"
