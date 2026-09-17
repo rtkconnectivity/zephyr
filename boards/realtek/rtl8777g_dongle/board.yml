@@ -1,0 +1,5 @@
+board:
+  name: rtl8777g_dongle
+  vendor: realtek
+  socs:
+    - name: rtl8777g
