@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Realtek Semiconductor Corp.
+# SPDX-License-Identifier: Apache-2.0
+
+config SDHC_BEE
+	bool "SDHC driver for Realtek Bee series SoC"
+	default y
+	depends on DT_HAS_REALTEK_BEE_SDHC_ENABLED
+	select HAL_REALTEK_BEE_SDHC
+	select PINCTRL
+	select SDHC_SUPPORTS_NATIVE_MODE
+	help
+	  This option enables the SDHC driver for Realtek Bee SoCs.
+
+if SDHC_BEE
+config SDHC_BUFFER_ALIGNMENT
+	default 4
+
+config SDHC_BEE_ISR_TRACE
+	bool "Trace SDHC interrupts for debugging"
+	help
+	  Record every SDHC interrupt (opcode, RINTSTS, IDSTS) in a small RAM
+	  ring buffer and, when an interrupt carries an error bit, dump the whole
+	  ring. This exposes the exact status sequence leading up to a transfer
+	  error. Intended for driver bring-up/debugging only; leave disabled in
+	  production.
+endif
