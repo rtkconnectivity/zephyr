@@ -157,10 +157,10 @@ static bool wrapper_os_msg_peek_intern(void *handle, void *msg, uint32_t wait_ms
 	return os_msg_peek_intern_zephyr(handle, msg, wait_ms, __func__, __LINE__);
 }
 
-static uint32_t wrapper_os_timer_max_num_get_zephyr(uint32_t *p_result)
+static uint32_t wrapper_os_timer_max_num_get_zephyr(void)
 {
 	uint32_t max_num;
-	*p_result = os_timer_max_num_get_zephyr(&max_num);
+	os_timer_max_num_get_zephyr(&max_num);
 	return max_num;
 }
 
@@ -223,7 +223,7 @@ void os_interface_update(T_OS_INTERFACE_INFO *os_interface)
 	os_interface->os_timer_handle_get = os_timer_handle_get_zephyr;
 	os_interface->os_timer_dump = os_timer_dump_zephyr;
 	os_interface->os_timer_init = os_timer_init_zephyr;
-	patch_os_timer_max_num_get = wrapper_os_timer_max_num_get_zephyr;
+	os_interface->os_timer_max_num_get = wrapper_os_timer_max_num_get_zephyr;
 
 	os_interface->os_lock = os_lock_zephyr;
 	os_interface->os_unlock = os_unlock_zephyr;
