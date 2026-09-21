@@ -8,5 +8,7 @@ zephyr_library_sources_ifdef(CONFIG_SOC_FAMILY_REALTEK_BEE_IMAGE_HEADER bee_imag
 
 zephyr_linker_sources(ROM_START SORT_KEY 0x0header bee_image_header.ld)
 zephyr_linker_sources(SECTIONS bee_ext_ram.ld)
+zephyr_linker_sources(RAMFUNC_SECTION bee_app_ram_func.ld)
+zephyr_linker_sources(RWDATA bee_app_ram_data.ld)
 
 set(SOC_LINKER_SCRIPT ${ZEPHYR_BASE}/include/zephyr/arch/arm/cortex_m/scripts/linker.ld CACHE INTERNAL "")

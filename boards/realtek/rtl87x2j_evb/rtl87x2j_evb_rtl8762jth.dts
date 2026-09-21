@@ -6,6 +6,7 @@
 #include <realtek/bee/rtl87x2j.dtsi>
 #include <dt-bindings/pinctrl/rtl87x2j-pinctrl.h>
 #include "rtl87x2j_evb_rtl8762jth-pinctrl.dtsi"
+#include <zephyr/dt-bindings/input/input-event-codes.h>
 
 / {
 	model = "Realtek rtl87x2j evaluation board";
@@ -19,6 +20,22 @@
 		zephyr,shell-uart = &uart2;
 		zephyr,bt-hci = &bee_bt_hci;
 		zephyr,canbus = &can;
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+
+		key4: key4 {
+			gpios = <&gpioa 13 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "KEY4";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+
+		key5: key5 {
+			gpios = <&gpioa 17 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "KEY5";
+			zephyr,code = <INPUT_KEY_1>;
+		};
 	};
 };
 
@@ -55,6 +72,12 @@
 	clock-frequency = <40000000>;
 };
 
+&gpioa {
+	pinctrl-0 = <&gpioa_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
 &uart2 {
 	pinctrl-0 = <&uart2_default>;
 	pinctrl-1 = <&uart2_sleep>;
@@ -73,5 +96,9 @@
 };
 
 &bee_bt_hci {
+	status = "okay";
+};
+
+zephyr_udc0: &udc {
 	status = "okay";
 };

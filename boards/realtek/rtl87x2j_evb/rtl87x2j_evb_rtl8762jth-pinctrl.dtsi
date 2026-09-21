@@ -6,6 +6,13 @@
 #include <dt-bindings/pinctrl/rtl87x2j-pinctrl.h>
 
 &pinctrl {
+	gpioa_default: gpioa_default {
+		group1 {
+			psels = <BEE_PSEL_GPIOA_13_P2_1>,
+				<BEE_PSEL_GPIOA_17_P2_5>;
+		};
+	};
+
 	uart2_default: uart2_default {
 		group1 {
 			psels = <BEE_PSEL(UART2_TX, P3_0)>;
