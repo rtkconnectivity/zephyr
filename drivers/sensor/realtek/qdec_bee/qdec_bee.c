@@ -33,9 +33,29 @@ LOG_MODULE_REGISTER(qdec_bee, CONFIG_SENSOR_LOG_LEVEL);
 #error "No enabled QDEC node found in Device Tree"
 #endif
 
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600) && defined(USE_BASIC_QDEC)
+#define BEE_QDEC_PM_STORE 1
+#endif
+
+#if defined(BEE_QDEC_PM_STORE)
+#include <zephyr/pm/device.h>
+
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+typedef QDECStoreReg_TypeDef qdec_bee_store_reg_t;
+#endif
+
+#define BEE_QDEC_STORE_IDX_INT_MASK 4
+
+extern void QDEC_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void QDEC_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif /* BEE_QDEC_PM_STORE */
+
 struct qdec_bee_axis_data {
 	int32_t acc;
 	int32_t round;
+#if defined(BEE_QDEC_PM_STORE)
+	int32_t pm_acc;
+#endif
 	sensor_trigger_handler_t data_ready_handler;
 	const struct sensor_trigger *data_ready_trigger;
 };
@@ -43,6 +63,9 @@ struct qdec_bee_axis_data {
 struct qdec_bee_data {
 	struct qdec_bee_axis_data axes[QDEC_AXIS_COUNT];
 	const struct bee_qdec_ops *ops;
+#if defined(BEE_QDEC_PM_STORE)
+	qdec_bee_store_reg_t store_buf;
+#endif
 };
 
 struct qdec_bee_config {
@@ -54,6 +77,23 @@ struct qdec_bee_config {
 	uint16_t clkid;
 #endif
 };
+
+#if defined(BEE_QDEC_PM_STORE)
+#define BEE_QDEC_STORE_ALL(reg, buf)   QDEC_DLPSEnter(reg, buf)
+#define BEE_QDEC_RESTORE_ALL(reg, buf) QDEC_DLPSExit(reg, buf)
+#define BEE_QDEC_STORE_INT_MASK(reg, buf)                                                          \
+	((buf)->qdec_reg[BEE_QDEC_STORE_IDX_INT_MASK] = (reg)->INT_MASK)
+
+static inline int32_t qdec_bee_pm_acc(const struct qdec_bee_data *data, int axis_idx)
+{
+	return data->axes[axis_idx].pm_acc;
+}
+#else
+#define BEE_QDEC_STORE_ALL(reg, buf)
+#define BEE_QDEC_RESTORE_ALL(reg, buf)
+#define BEE_QDEC_STORE_INT_MASK(reg, buf)
+#define qdec_bee_pm_acc(data, axis_idx) 0
+#endif /* BEE_QDEC_PM_STORE */
 
 static int qdec_bee_get_axis_idx(const struct qdec_bee_config *config, enum sensor_channel chan)
 {
@@ -94,7 +134,8 @@ static int qdec_bee_sample_fetch(const struct device *dev, enum sensor_channel c
 			if (config->axis_cfgs[i].enable) {
 
 				data->axes[i].acc = (int32_t)data->axes[i].round * 65536 +
-						    (int32_t)ops->get_count(config->reg, i);
+						    (int32_t)ops->get_count(config->reg, i) +
+						    qdec_bee_pm_acc(data, i);
 			}
 		}
 	} else {
@@ -105,7 +146,8 @@ static int qdec_bee_sample_fetch(const struct device *dev, enum sensor_channel c
 		}
 
 		data->axes[i].acc = (int32_t)data->axes[i].round * 65536 +
-				    (int32_t)ops->get_count(config->reg, i);
+				    (int32_t)ops->get_count(config->reg, i) +
+				    qdec_bee_pm_acc(data, i);
 	}
 
 	irq_unlock(key);
@@ -162,6 +204,8 @@ static int qdec_bee_trigger_set(const struct device *dev, const struct sensor_tr
 		ops->int_disable(config->reg, axis_idx, BEE_QDEC_EVENT_NEW_DATA);
 		ops->int_disable(config->reg, axis_idx, BEE_QDEC_EVENT_ILLEGAL);
 	}
+
+	BEE_QDEC_STORE_INT_MASK((QDEC_TypeDef *)config->reg, &data->store_buf);
 
 	irq_unlock(key);
 
@@ -250,10 +294,66 @@ static int qdec_bee_init(const struct device *dev)
 		}
 	}
 
+	BEE_QDEC_STORE_ALL((QDEC_TypeDef *)config->reg, &data->store_buf);
+
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
+	}
+#endif
+
 	config->irq_connect();
 
 	return 0;
 }
+
+#if defined(BEE_QDEC_PM_STORE)
+static int qdec_bee_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct qdec_bee_config *config = dev->config;
+	struct qdec_bee_data *data = dev->data;
+	const struct bee_qdec_ops *ops = data->ops;
+	int err;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		for (int i = 0; i < QDEC_AXIS_COUNT; i++) {
+			if (!config->axis_cfgs[i].enable) {
+				continue;
+			}
+
+			data->axes[i].pm_acc += (int32_t)data->axes[i].round * 65536 +
+						(int32_t)ops->get_count(config->reg, i);
+			data->axes[i].round = 0;
+		}
+
+		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
+					(clock_control_subsys_t)&config->clkid);
+
+		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+		if ((err < 0) && (err != -ENOENT)) {
+			return err;
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+		if (err < 0) {
+			return err;
+		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
+
+		BEE_QDEC_RESTORE_ALL((QDEC_TypeDef *)config->reg, &data->store_buf);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_QDEC_PM_STORE */
 
 static DEVICE_API(sensor, qdec_bee_driver_api) = {
 	.sample_fetch = qdec_bee_sample_fetch,
@@ -309,6 +409,14 @@ static DEVICE_API(sensor, qdec_bee_driver_api) = {
 #define AON_QDEC_BEE_ASSERT(inst)
 #endif
 
+#if defined(BEE_QDEC_PM_STORE)
+#define QDEC_BEE_PM_DEFINE(inst) PM_DEVICE_DT_INST_DEFINE(inst, qdec_bee_pm_action);
+#define QDEC_BEE_PM_GET(inst)    PM_DEVICE_DT_INST_GET(inst)
+#else
+#define QDEC_BEE_PM_DEFINE(inst)
+#define QDEC_BEE_PM_GET(inst) NULL
+#endif
+
 #define QDEC_BEE_DEFINE(inst)                                                                      \
 	BUILD_ASSERT((DT_INST_PROP_OR(inst, x_enable, 0) | DT_INST_PROP_OR(inst, y_enable, 0) |    \
 		      DT_INST_PROP_OR(inst, z_enable, 0)) != 0,                                    \
@@ -333,8 +441,9 @@ static DEVICE_API(sensor, qdec_bee_driver_api) = {
                                                                                                    \
 	static struct qdec_bee_data qdec_bee_data_##inst;                                          \
                                                                                                    \
-	SENSOR_DEVICE_DT_INST_DEFINE(inst, qdec_bee_init, NULL, &qdec_bee_data_##inst,             \
-				     &qdec_bee_config_##inst, POST_KERNEL,                         \
+	QDEC_BEE_PM_DEFINE(inst)                                                                   \
+	SENSOR_DEVICE_DT_INST_DEFINE(inst, qdec_bee_init, QDEC_BEE_PM_GET(inst),                   \
+				     &qdec_bee_data_##inst, &qdec_bee_config_##inst, POST_KERNEL,  \
 				     CONFIG_SENSOR_INIT_PRIORITY, &qdec_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(QDEC_BEE_DEFINE)

@@ -50,11 +50,9 @@ struct pinctrl_soc_pin {
 
 	/* Word 1 (Partial) */
 	uint32_t current_level: 2; /**< Drive current level (bit[32:33]) */
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uint32_t sleep_hardware_state: 1; /**< Sleep hardware state (bit[34]) */
 	uint32_t wakeup_high: 1;          /**< High level wakeup (bit[35]) */
 	uint32_t wakeup_low: 1;           /**< Low level wakeup (bit[36]) */
-#endif
 };
 
 /**
@@ -69,14 +67,10 @@ typedef struct pinctrl_soc_pin pinctrl_soc_pin_t;
  * @param prop The property name (usually 'pinctrl-N').
  * @param idx The index in the property array.
  */
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
 #define PINCTRL_SLEEP_MODE_CONFIG(node_id)                                                         \
 	.sleep_hardware_state = DT_PROP_OR(node_id, sleep_hardware_state, 0),                      \
 	.wakeup_high = DT_PROP_OR(node_id, wakeup_high, 0),                                        \
 	.wakeup_low = DT_PROP_OR(node_id, wakeup_low, 0),
-#else
-#define PINCTRL_SLEEP_MODE_CONFIG(node_id)
-#endif
 
 #define Z_PINCTRL_STATE_PIN_INIT(node_id, prop, idx)                                               \
 	{.pin = BEE_GET_PIN(DT_PROP_BY_IDX(node_id, prop, idx)),                                   \

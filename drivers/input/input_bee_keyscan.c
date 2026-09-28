@@ -34,12 +34,58 @@ LOG_MODULE_REGISTER(bee_keyscan, CONFIG_INPUT_LOG_LEVEL);
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
 #include "rtl_keyscan.h"
 #include "rtl_pinmux.h"
-#if defined(CONFIG_PM)
-#include <zephyr/dt-bindings/pinctrl/rtl87x2j-pinctrl.h>
-#endif
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
+
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_KEYSCAN_PM_STORE 1
+#define BEE_KEYSCAN_PM_CHECK 1
+#if !defined(CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE)
+#define BEE_KEYSCAN_PM_PRESS_WAKEUP 1
+#endif
+#endif
+
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP) || defined(BEE_KEYSCAN_PM_PRESS_WAKEUP)
+#define BEE_KEYSCAN_WAKEUP_CTX 1
+#endif
+
+#if defined(BEE_KEYSCAN_PM_STORE)
+#include <zephyr/pm/device.h>
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+typedef KEYSCANStoreReg_Typedef keyscan_bee_store_reg_t;
+#define BEE_KEYSCAN_REG_CR                   KEYSCAN_CONFIG2
+#define BEE_KEYSCAN_REG_INT_MASK             KEYSCAN_INT_MASK
+#define BEE_KEYSCAN_PAD_PULL_MODE(pad, pull) Pad_SetPullMode(pad, pull)
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+typedef KEYSCANStoreReg_TypeDef keyscan_bee_store_reg_t;
+#define BEE_KEYSCAN_REG_CR                   CR
+#define BEE_KEYSCAN_REG_INT_MASK             INTMASK
+#define BEE_KEYSCAN_PAD_PULL_MODE(pad, pull) Pad_PullUpOrDownValue(pad, pull)
+#endif
+
+#define BEE_KEYSCAN_STORE_IDX_CR       2
+#define BEE_KEYSCAN_STORE_IDX_INT_MASK 6
+
+extern void KEYSCAN_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void KEYSCAN_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif /* BEE_KEYSCAN_PM_STORE */
+
+#if defined(BEE_KEYSCAN_PM_CHECK)
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#include <pm.h>
+#include "power_manager_unit_platform.h"
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#include <dlps.h>
+extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
+								PlatformPMStage pf_pm_stage,
+								int8_t priority);
+#endif
+#define BEE_PM_CHECK_PASS PM_CHECK_PASS
+#define BEE_PM_CHECK_FAIL PM_CHECK_FAIL
+#define BEE_PM_CHECK_RET  PMCheckResult
+#endif /* BEE_KEYSCAN_PM_CHECK */
 
 #define BEE_KEYSCAN_SRC_CLK       5000000
 #define BEE_KEYSCAN_MAX_SCAN_DIV  2047
@@ -210,9 +256,64 @@ struct bee_keyscan_data {
 
 #if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
 	bool wakeup_configured;
+#endif
+
+#if defined(BEE_KEYSCAN_WAKEUP_CTX)
 	struct bee_keyscan_wakeup_ctx *wakeup_ctx;
 #endif
+
+#if defined(BEE_KEYSCAN_PM_PRESS_WAKEUP)
+	kbd_row_t press_rows;
+	bool timer_started;
+#endif
+
+#if defined(BEE_KEYSCAN_PM_STORE)
+	keyscan_bee_store_reg_t store_buf;
+#endif
 };
+
+#if defined(BEE_KEYSCAN_PM_STORE)
+#define BEE_KEYSCAN_STORE_ALL(reg, buf)   KEYSCAN_DLPSEnter(reg, buf)
+#define BEE_KEYSCAN_RESTORE_ALL(reg, buf) KEYSCAN_DLPSExit(reg, buf)
+#define BEE_KEYSCAN_STORE_CR(reg, buf)                                                             \
+	((buf)->keyscan_reg[BEE_KEYSCAN_STORE_IDX_CR] = (reg)->BEE_KEYSCAN_REG_CR)
+#define BEE_KEYSCAN_STORE_INT_MASK(reg, buf)                                                       \
+	((buf)->keyscan_reg[BEE_KEYSCAN_STORE_IDX_INT_MASK] = (reg)->BEE_KEYSCAN_REG_INT_MASK)
+#else
+#define BEE_KEYSCAN_STORE_ALL(reg, buf)
+#define BEE_KEYSCAN_RESTORE_ALL(reg, buf)
+#define BEE_KEYSCAN_STORE_CR(reg, buf)
+#define BEE_KEYSCAN_STORE_INT_MASK(reg, buf)
+#endif /* BEE_KEYSCAN_PM_STORE */
+
+#if defined(BEE_KEYSCAN_PM_CHECK)
+static BEE_PM_CHECK_RET bee_keyscan_pm_check_state = BEE_PM_CHECK_PASS;
+
+static BEE_PM_CHECK_RET bee_keyscan_pm_check(void)
+{
+	return bee_keyscan_pm_check_state;
+}
+
+static void bee_keyscan_register_pm_check_cb(void)
+{
+	platform_pm_register_callback_func_with_priority((void *)bee_keyscan_pm_check,
+							PLATFORM_PM_CHECK, 1);
+}
+
+static inline void bee_keyscan_pm_check_pass(void)
+{
+	bee_keyscan_pm_check_state = BEE_PM_CHECK_PASS;
+}
+
+static inline void bee_keyscan_pm_check_fail(void)
+{
+	bee_keyscan_pm_check_state = BEE_PM_CHECK_FAIL;
+}
+#else
+#define bee_keyscan_register_pm_check_cb()
+#define bee_keyscan_pm_check_pass()
+#define bee_keyscan_pm_check_fail()
+#endif /* BEE_KEYSCAN_PM_CHECK */
 
 static void bee_keyscan_set_pre_guard(KEYSCAN_TypeDef *keyscan, uint8_t cnt)
 {
@@ -224,6 +325,7 @@ static void bee_keyscan_set_pre_guard(KEYSCAN_TypeDef *keyscan, uint8_t cnt)
 static int bee_keyscan_init_driver(const struct device *dev, uint32_t scanmode, uint32_t manual_sel)
 {
 	const struct bee_keyscan_config *config = dev->config;
+	__maybe_unused struct bee_keyscan_data *data = dev->data;
 	KEYSCAN_TypeDef *keyscan = config->reg;
 	KEYSCAN_InitTypeDef keyscan_init_struct;
 
@@ -265,6 +367,8 @@ static int bee_keyscan_init_driver(const struct device *dev, uint32_t scanmode, 
 
 	BEE_KEYSCAN_CMD(keyscan, ENABLE);
 
+	BEE_KEYSCAN_STORE_ALL(keyscan, &data->store_buf);
+
 	return 0;
 }
 
@@ -294,6 +398,7 @@ static void manual_keyscan_timer_cb(struct k_timer *timer)
 
 	BEE_KEYSCAN_CMD(keyscan, ENABLE);
 #else
+	bee_keyscan_pm_check_fail();
 	bee_keyscan_init_driver(dev, BEE_KEYSCAN_MANUAL_SCAN_MODE, BEE_KEYSCAN_MANUAL_SEL_BIT);
 #endif
 }
@@ -321,6 +426,16 @@ static void bee_keyscan_process_matrix(const struct device *dev, uint8_t new_pre
 	__maybe_unused struct bee_keyscan_data *data = dev->data;
 	__maybe_unused KEYSCAN_TypeDef *keyscan = config->reg;
 
+#if CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
+	if (new_press_num == 0) {
+		bee_keyscan_pm_check_pass();
+	} else {
+		bee_keyscan_pm_check_fail();
+	}
+#else
+	bee_keyscan_pm_check_pass();
+#endif
+
 	for (int c = 0; c < cfg_common->col_size; c++) {
 		matrix_new_state[c] = 0;
 	}
@@ -339,6 +454,15 @@ static void bee_keyscan_process_matrix(const struct device *dev, uint8_t new_pre
 	if (cfg_common->ghostkey_check && input_kbd_matrix_ghosting(dev)) {
 		goto restart_manual;
 	}
+
+#if defined(BEE_KEYSCAN_PM_PRESS_WAKEUP)
+	data->press_rows = 0;
+	for (uint8_t i = 0; i < new_press_num; i++) {
+		if (new_keys[i].row < cfg_common->row_size) {
+			data->press_rows |= BIT(new_keys[i].row);
+		}
+	}
+#endif
 
 #if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
 	for (uint8_t r = 0; r < cfg_common->row_size; r++) {
@@ -371,7 +495,7 @@ static void bee_keyscan_process_matrix(const struct device *dev, uint8_t new_pre
 #ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
 	if (new_press_num == 0 && bee_keyscan_all_released_and_debounced(cfg_common)) {
 		k_timer_stop(&manual_keyscan_timer);
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 #if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
 		for (uint8_t r = 0; r < cfg_common->row_size; r++) {
 			bool wakeup_detected = data->wakeup_ctx[r].wakeup_detected;
@@ -386,6 +510,10 @@ static void bee_keyscan_process_matrix(const struct device *dev, uint8_t new_pre
 
 		KEYSCAN_SetManualSelect(keyscan, BEE_KEYSCAN_MANUAL_SEL_KEY);
 #else
+#if defined(BEE_KEYSCAN_PM_PRESS_WAKEUP)
+		data->press_rows = 0;
+		data->timer_started = false;
+#endif
 		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
 					(clock_control_subsys_t)&config->clkid);
 		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
@@ -399,6 +527,9 @@ static void bee_keyscan_process_matrix(const struct device *dev, uint8_t new_pre
 
 restart_manual:
 #ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
+#if defined(BEE_KEYSCAN_PM_PRESS_WAKEUP)
+	data->timer_started = true;
+#endif
 	k_timer_start(&manual_keyscan_timer, K_USEC(config->common.poll_period_us), K_NO_WAIT);
 #endif
 }
@@ -414,6 +545,7 @@ static void bee_keyscan_work_handler(struct k_work *work)
 	bee_keyscan_process_matrix(dev, data->new_press_num, data->new_keys);
 
 	BEE_KEYSCAN_INT_MASK(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+	BEE_KEYSCAN_STORE_INT_MASK(keyscan, &data->store_buf);
 }
 #endif
 
@@ -425,13 +557,14 @@ static void bee_keyscan_isr(const struct device *dev)
 	uint8_t new_press_num = BEE_KEYSCAN_GET_FIFO_DATA_NUM(keyscan);
 
 #ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	KEYSCAN_SetManualSelect(keyscan, BEE_KEYSCAN_MANUAL_SEL_BIT);
 #if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
 	data->wakeup_configured = false;
 #endif
 #else
 	BEE_KEYSCAN_CMD(keyscan, DISABLE);
+	BEE_KEYSCAN_STORE_CR(keyscan, &data->store_buf);
 #endif
 #endif
 
@@ -443,6 +576,7 @@ static void bee_keyscan_isr(const struct device *dev)
 
 	if (BEE_KEYSCAN_GET_FLAG_STATE(keyscan, KEYSCAN_INT_FLAG_SCAN_END) == SET) {
 		BEE_KEYSCAN_INT_MASK(keyscan, KEYSCAN_INT_SCAN_END, ENABLE);
+		BEE_KEYSCAN_STORE_INT_MASK(keyscan, &data->store_buf);
 
 		if (BEE_KEYSCAN_GET_FLAG_STATE(keyscan, KEYSCAN_FLAG_EMPTY) != SET) {
 			BEE_KEYSCAN_READ(keyscan, (uint16_t *)data->new_keys, new_press_num);
@@ -454,6 +588,7 @@ static void bee_keyscan_isr(const struct device *dev)
 #if CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
 		bee_keyscan_process_matrix(dev, data->new_press_num, data->new_keys);
 		BEE_KEYSCAN_INT_MASK(keyscan, KEYSCAN_INT_SCAN_END, DISABLE);
+		BEE_KEYSCAN_STORE_INT_MASK(keyscan, &data->store_buf);
 #else
 		k_work_submit(&data->work);
 #endif
@@ -496,6 +631,138 @@ void keyscan_bee_process_pad_wakeup_cb(void *user_data)
 }
 #endif
 
+#if defined(BEE_KEYSCAN_PM_STORE)
+static void bee_keyscan_pm_arm_wakeup(const struct device *dev)
+{
+	const struct bee_keyscan_config *config = dev->config;
+	__maybe_unused struct bee_keyscan_data *data = dev->data;
+	const struct pinctrl_state *state;
+	int ret;
+
+	ret = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
+	if (ret < 0) {
+		return;
+	}
+
+	for (uint8_t i = 0; i < state->pin_cnt; i++) {
+		uint8_t pad = (uint8_t)state->pins[i].pin;
+		uint8_t polarity;
+
+		if (state->pins[i].wakeup_high) {
+			polarity = 1;
+		} else if (state->pins[i].wakeup_low) {
+			polarity = 0;
+		} else {
+			continue;
+		}
+
+#if defined(BEE_KEYSCAN_PM_PRESS_WAKEUP)
+		for (uint8_t r = 0; r < config->common.row_size; r++) {
+			if (data->wakeup_ctx[r].row_pad != pad) {
+				continue;
+			}
+
+			if (data->press_rows & BIT(r)) {
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_RELEASE_WAKEUP)
+				polarity = !polarity;
+#else
+				BEE_KEYSCAN_PAD_PULL_MODE(pad, polarity ? PAD_PULL_UP
+									: PAD_PULL_DOWN);
+				polarity = UINT8_MAX;
+#endif
+			}
+			break;
+		}
+
+		if (polarity == UINT8_MAX) {
+			continue;
+		}
+#endif
+
+		pinctrl_bee_wakeup_config(pad, polarity, PINCTRL_BEE_WAKEUP_SYS, true);
+	}
+}
+
+static bool bee_keyscan_pm_check_wakeup(const struct device *dev)
+{
+	const struct bee_keyscan_config *config = dev->config;
+	const struct pinctrl_state *state;
+	bool is_pad_wakeup = false;
+	int ret;
+
+	ret = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
+	if (ret < 0) {
+		return false;
+	}
+
+	for (uint8_t i = 0; i < state->pin_cnt; i++) {
+		uint8_t pad = (uint8_t)state->pins[i].pin;
+
+		if (!state->pins[i].wakeup_high && !state->pins[i].wakeup_low) {
+			continue;
+		}
+
+		System_WakeUpPinDisable(pad);
+
+		if (System_WakeUpInterruptValue(pad) == SET) {
+			is_pad_wakeup = true;
+			Pad_ClearWakeupINTPendingBit(pad);
+		}
+	}
+
+	return is_pad_wakeup;
+}
+
+static int bee_keyscan_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct bee_keyscan_config *config = dev->config;
+	__maybe_unused struct bee_keyscan_data *data = dev->data;
+	bool is_pad_wakeup;
+	int ret;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
+					(clock_control_subsys_t)&config->clkid);
+
+		ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			return ret;
+		}
+
+		bee_keyscan_pm_arm_wakeup(dev);
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+		if (ret < 0) {
+			return ret;
+		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
+
+		is_pad_wakeup = bee_keyscan_pm_check_wakeup(dev);
+		if (is_pad_wakeup) {
+			bee_keyscan_pm_check_fail();
+		}
+
+		BEE_KEYSCAN_RESTORE_ALL(config->reg, &data->store_buf);
+
+#if defined(BEE_KEYSCAN_PM_PRESS_WAKEUP)
+		if (is_pad_wakeup && !data->timer_started) {
+			bee_keyscan_init_driver(dev, BEE_KEYSCAN_MANUAL_SCAN_MODE,
+						BEE_KEYSCAN_MANUAL_SEL_BIT);
+		}
+#endif
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_KEYSCAN_PM_STORE */
+
 static int bee_keyscan_init(const struct device *dev)
 {
 	const struct bee_keyscan_config *config = dev->config;
@@ -510,7 +777,7 @@ static int bee_keyscan_init(const struct device *dev)
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM_DEVICE)
 	const struct pinctrl_state *state;
 
 	pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
@@ -521,21 +788,31 @@ static int bee_keyscan_init(const struct device *dev)
 		    fun < (uint16_t)(BEE_KEY_ROW_0 + config->common.row_size)) {
 			uint8_t pad = (uint8_t)state->pins[i].pin;
 
-#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+#if defined(BEE_KEYSCAN_WAKEUP_CTX)
 			uint8_t r = fun - BEE_KEY_ROW_0;
 
 			data->wakeup_ctx[r].dev = dev;
 			data->wakeup_ctx[r].row_pad = pad;
+#endif
+
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
 			System_RegisterPadWakeupCallback(
 				pad, (P_PAD_CBACK)keyscan_bee_process_pad_wakeup_cb,
 				(uint32_t)&data->wakeup_ctx[r]);
 			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_SYS, true);
-#else
+#elif defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_PPU, true);
 #endif
 		}
 	}
+
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
+	}
 #endif
+#endif /* CONFIG_PM_DEVICE */
 
 	bee_keyscan_init_driver(dev,
 				IS_ENABLED(CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE)
@@ -549,6 +826,8 @@ static int bee_keyscan_init(const struct device *dev)
 #endif
 
 	config->irq_config_func();
+
+	bee_keyscan_register_pm_check_cb();
 
 	return 0;
 }
@@ -577,6 +856,14 @@ static int bee_keyscan_init(const struct device *dev)
 		NVIC_InitStruct.NVIC_IRQChannelCmd = ENABLE;                                       \
 		NVIC_Init(&NVIC_InitStruct);                                                       \
 	}
+#endif
+
+#if defined(BEE_KEYSCAN_PM_STORE)
+#define BEE_KEYSCAN_PM_DEFINE(index) PM_DEVICE_DT_INST_DEFINE(index, bee_keyscan_pm_action);
+#define BEE_KEYSCAN_PM_GET(index)    PM_DEVICE_DT_INST_GET(index)
+#else
+#define BEE_KEYSCAN_PM_DEFINE(index)
+#define BEE_KEYSCAN_PM_GET(index) NULL
 #endif
 
 #define BEE_KEYSCAN_GET_TOTAL_DIV(index)                                                           \
@@ -633,19 +920,20 @@ static int bee_keyscan_init(const struct device *dev)
 		.irq_config_func = bee_keyscan_irq_config_func_##index,                            \
 	};                                                                                         \
                                                                                                    \
-	IF_ENABLED(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP,                                         \
+	IF_ENABLED(BEE_KEYSCAN_WAKEUP_CTX,                                                         \
 		(static struct bee_keyscan_wakeup_ctx                                              \
 			bee_keyscan_wakeup_ctx_##index[DT_INST_PROP(index, row_size)];)            \
 		);                                                    \
                                                                                                    \
 	static struct bee_keyscan_data bee_keyscan_data_##index = {                                \
-		IF_ENABLED(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP,                                 \
+		IF_ENABLED(BEE_KEYSCAN_WAKEUP_CTX,                                                 \
 			   (.wakeup_ctx = bee_keyscan_wakeup_ctx_##index,)                         \
 			) };                       \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(index, &bee_keyscan_init, NULL, &bee_keyscan_data_##index,           \
-			      &bee_keyscan_cfg_##index, POST_KERNEL, CONFIG_INPUT_INIT_PRIORITY,   \
-			      NULL);                                                               \
+	BEE_KEYSCAN_PM_DEFINE(index)                                                               \
+	DEVICE_DT_INST_DEFINE(index, &bee_keyscan_init, BEE_KEYSCAN_PM_GET(index),                 \
+			      &bee_keyscan_data_##index, &bee_keyscan_cfg_##index, POST_KERNEL,    \
+			      CONFIG_INPUT_INIT_PRIORITY, NULL);                                   \
                                                                                                    \
 	BEE_KEYSCAN_IRQ_HANDLER(index)
 

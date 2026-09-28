@@ -16,10 +16,16 @@ config UART_BEE
 	  This option enables the UART driver for Realtek Bee SoCs.
 
 config UART_BEE_KEEP_ACTIVE_TIMEOUT_MSEC
-	int "Milliseconds to keep active after UART RX wakeup"
-	depends on SOC_SERIES_RTL87X2J
+	int "Milliseconds to keep the UART active after it woke the system up"
+	depends on PM_DEVICE
 	default 5000
 	help
-	  Time to keep active after rx wakeup in milliseconds.
+	  Keep a UART powered for this long after its RX pad woke the system
+	  up, so that the incoming frame is received instead of dropped. Set
+	  to 0 to let the UART suspend again right away.
+
+	  This needs a devicetree node that is a wakeup-source and whose sleep
+	  pinctrl state configures a pin for wakeup.
+
 	  Note: This does not mean that the system will sleep immediately
 	  after timeout, it depends on other check status.

@@ -20,7 +20,7 @@
  *  P0_6 KSCAN_R0
  *  P0_7 KSCAN_R1
  *  P1_0 LPPWM
- *  P1_1 RAP_GPIO
+ *  P1_1
  *  P1_6 QACTIVE
  *  P1_7 QACTIVE
  *  P2_0 KSCAN_C0
@@ -101,6 +101,8 @@
 	parity = "none";
 	stop-bits = "1";
 	data-bits = <8>;
+	wakeup-source;
+	zephyr,pm-device-runtime-auto;
 	status = "okay";
 };
 
@@ -114,6 +116,8 @@
 	data-bits = <8>;
 	dmas = <&dma0 3 0 0x10021>, <&dma0 2 1 0xa>;
 	dma-names = "tx", "rx";
+	wakeup-source;
+	zephyr,pm-device-runtime-auto;
 	status = "disabled";
 };
 

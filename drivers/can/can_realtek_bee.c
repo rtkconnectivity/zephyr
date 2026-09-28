@@ -27,6 +27,14 @@ LOG_MODULE_REGISTER(can_bee, CONFIG_CAN_LOG_LEVEL);
 
 #define CAN_SRC_CLOCK_HZ 40000000U
 
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_CAN_PM_RESTORE 1
+#endif
+
+#if defined(BEE_CAN_PM_RESTORE)
+#include <zephyr/pm/device.h>
+#endif
+
 /*
  * The CAN HAL API differs across Bee SoC series:
  * - RTL87X2G: legacy single-instance API (no CAN_TypeDef* arg).
@@ -122,6 +130,10 @@ struct can_bee_data {
 	struct can_bee_mb_tx_data tx_mb_list[CONFIG_CAN_REALTEK_BEE_TX_MSG_BUF_NUM];
 	struct can_bee_mb_rx_data rx_mb_list[CONFIG_CAN_REALTEK_BEE_RX_MSG_BUF_NUM];
 	enum can_state state;
+#if defined(BEE_CAN_PM_RESTORE)
+	const struct device *dev;
+	struct k_work pm_restore_work;
+#endif
 };
 
 struct can_bee_config {
@@ -296,13 +308,7 @@ static int can_bee_start(const struct device *dev)
 		}
 	}
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	/* Deep sleep power-gates the stopped controller and clears its
-	 * registers, so re-initialize from the retained init_struct on every
-	 * start to avoid a spurious bus-off.
-	 */
 	BEE_CAN_INIT(can, &data->init_struct);
-#endif
 
 	BEE_CAN_CMD(can, ENABLE);
 
@@ -934,6 +940,87 @@ static inline void can_bee_isr(const struct device *dev)
 	}
 }
 
+#if defined(BEE_CAN_PM_RESTORE)
+static void can_bee_pm_restore_work(struct k_work *work)
+{
+	struct can_bee_data *data = CONTAINER_OF(work, struct can_bee_data, pm_restore_work);
+	const struct device *dev = data->dev;
+	const struct can_bee_config *cfg = dev->config;
+	CAN_TypeDef *can = cfg->can;
+	int ret;
+
+	k_mutex_lock(&data->inst_mutex, K_FOREVER);
+
+	ret = can_bee_check_bus_on(can, 10000);
+	if (ret < 0) {
+		LOG_ERR("CAN bus off");
+		BEE_CAN_CMD(can, DISABLE);
+
+		if (cfg->common.phy != NULL) {
+			(void)can_transceiver_disable(cfg->common.phy);
+		}
+
+		goto unlock;
+	}
+
+	for (uint8_t i = 0; i < CONFIG_CAN_REALTEK_BEE_RX_MSG_BUF_NUM; i++) {
+		if (!data->rx_mb_list[i].is_busy) {
+			continue;
+		}
+
+		BEE_CAN_SET_MSG_BUF_RX_MODE(can, &data->rx_mb_list[i].rx_frame_type);
+		can_bee_wait_ram_state(can);
+
+		BEE_CAN_MB_RX_INT_CONFIG(can,
+					 data->rx_mb_list[i].rx_frame_type.msg_buf_id, ENABLE);
+	}
+
+unlock:
+	k_mutex_unlock(&data->inst_mutex);
+}
+
+static int can_bee_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct can_bee_config *cfg = dev->config;
+	struct can_bee_data *data = dev->data;
+	__maybe_unused CAN_TypeDef *can = cfg->can;
+	int err;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+		if ((err < 0) && (err != -ENOENT)) {
+			return err;
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
+		if (err < 0) {
+			return err;
+		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+		if (data->common.started) {
+			BEE_CAN_INIT(can, &data->init_struct);
+			BEE_CAN_CMD(can, ENABLE);
+			BEE_CAN_INT_CONFIG(can,
+					   (CAN_BUS_OFF_INT | CAN_ERROR_INT | CAN_RX_INT |
+					    CAN_TX_INT),
+					   ENABLE);
+			k_work_submit(&data->pm_restore_work);
+		}
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_CAN_PM_RESTORE */
+
 static int can_bee_init(const struct device *dev)
 {
 	const struct can_bee_config *cfg = dev->config;
@@ -958,6 +1045,11 @@ static int can_bee_init(const struct device *dev)
 	data->common.mode = CAN_MODE_NORMAL;
 	data->state = CAN_STATE_STOPPED;
 
+#if defined(BEE_CAN_PM_RESTORE)
+	data->dev = dev;
+	k_work_init(&data->pm_restore_work, can_bee_pm_restore_work);
+#endif
+
 	if (cfg->common.phy != NULL && !device_is_ready(cfg->common.phy)) {
 		LOG_ERR("CAN transceiver not ready");
 		return -ENODEV;
@@ -968,17 +1060,10 @@ static int can_bee_init(const struct device *dev)
 		return ret;
 	}
 
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
-	{
-		const struct pinctrl_state *state;
-
-		ret = pinctrl_lookup_state(cfg->pcfg, PINCTRL_STATE_SLEEP, &state);
-		if (ret == 0) {
-			ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
-			if (ret < 0 && ret != -ENOENT) {
-				return ret;
-			}
-		}
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
 	}
 #endif
 
@@ -1009,8 +1094,7 @@ static int can_bee_init(const struct device *dev)
 
 	BEE_CAN_INIT(can, init_struct);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	/* Enable CAN automatic clock gating on RTL87X2J */
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	CAN_ClockAutoModeCmd(can, ENABLE);
 #endif
 
@@ -1072,15 +1156,24 @@ static DEVICE_API(can, can_bee_driver_api) = {
 
 #define CAN_BEE_DATA_INST(index) static struct can_bee_data can_bee_dev_data_##index;
 
+#if defined(BEE_CAN_PM_RESTORE)
+#define BEE_CAN_PM_DEFINE(index) PM_DEVICE_DT_INST_DEFINE(index, can_bee_pm_action);
+#define BEE_CAN_PM_GET(index)    PM_DEVICE_DT_INST_GET(index)
+#else
+#define BEE_CAN_PM_DEFINE(index)
+#define BEE_CAN_PM_GET(index) NULL
+#endif
+
 #define CAN_BEE_DEFINE_INST(index)                                                                 \
-	CAN_DEVICE_DT_INST_DEFINE(index, can_bee_init, NULL, &can_bee_dev_data_##index,            \
-				  &can_bee_cfg_##index, POST_KERNEL, CONFIG_CAN_INIT_PRIORITY,     \
-				  &can_bee_driver_api);
+	CAN_DEVICE_DT_INST_DEFINE(index, can_bee_init, BEE_CAN_PM_GET(index),                      \
+				  &can_bee_dev_data_##index, &can_bee_cfg_##index, POST_KERNEL,    \
+				  CONFIG_CAN_INIT_PRIORITY, &can_bee_driver_api);
 
 #define BEE_CAN_DEFINE_INSTANCE(index)                                                             \
 	CAN_BEE_IRQ_INST(index)                                                                    \
 	CAN_BEE_CONFIG_INST(index)                                                                 \
 	CAN_BEE_DATA_INST(index)                                                                   \
+	BEE_CAN_PM_DEFINE(index)                                                                   \
 	CAN_BEE_DEFINE_INST(index)
 
 DT_INST_FOREACH_STATUS_OKAY(BEE_CAN_DEFINE_INSTANCE)

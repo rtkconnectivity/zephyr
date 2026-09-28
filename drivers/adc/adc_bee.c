@@ -47,6 +47,33 @@ LOG_MODULE_REGISTER(adc_bee, CONFIG_ADC_LOG_LEVEL);
 #define BEE_ADC_DATA_AVE ADC_DataAverageEn
 #endif
 
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_ADC_PM_STORE 1
+#endif
+
+#if defined(BEE_ADC_PM_STORE)
+#include <zephyr/pm/device.h>
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+typedef ADCStoreReg_TypeDef adc_bee_store_reg_t;
+#define BEE_ADC_REG_DIG_CTRL   ADC_DIG_CTRL
+#define BEE_ADC_REG_SCHED_CTRL ADC_SCHED_CTRL
+#define BEE_ADC_REG_CTRL_INT   ADC_CTRL_INT
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+typedef ADCStoreReg_TypeDef adc_bee_store_reg_t;
+#define BEE_ADC_REG_DIG_CTRL   CR
+#define BEE_ADC_REG_SCHED_CTRL SCHCR
+#define BEE_ADC_REG_CTRL_INT   INTCR
+#endif
+
+#define BEE_ADC_STORE_IDX_DIG_CTRL   0
+#define BEE_ADC_STORE_IDX_SCHED_CTRL 1
+#define BEE_ADC_STORE_IDX_CTRL_INT   2
+
+extern void ADC_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void ADC_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif /* BEE_ADC_PM_STORE */
+
 struct adc_bee_config {
 	mm_reg_t reg;
 	uint16_t clkid;
@@ -63,7 +90,27 @@ struct adc_bee_data {
 	uint32_t active_channels;
 	uint16_t *buffer;
 	uint16_t *repeat_buffer;
+#if defined(BEE_ADC_PM_STORE)
+	adc_bee_store_reg_t store_buf;
+#endif
 };
+
+#if defined(BEE_ADC_PM_STORE)
+#define BEE_ADC_STORE_ALL(reg, buf)   ADC_DLPSEnter(reg, buf)
+#define BEE_ADC_RESTORE_ALL(reg, buf) ADC_DLPSExit(reg, buf)
+#define BEE_ADC_STORE_SCHED(reg, buf)                                                              \
+	((buf)->adc_reg[BEE_ADC_STORE_IDX_SCHED_CTRL] = (reg)->BEE_ADC_REG_SCHED_CTRL)
+#define BEE_ADC_STORE_CTRL(reg, buf)                                                               \
+	do {                                                                                       \
+		(buf)->adc_reg[BEE_ADC_STORE_IDX_CTRL_INT] = (reg)->BEE_ADC_REG_CTRL_INT;          \
+		(buf)->adc_reg[BEE_ADC_STORE_IDX_DIG_CTRL] = (reg)->BEE_ADC_REG_DIG_CTRL;          \
+	} while (0)
+#else
+#define BEE_ADC_STORE_ALL(reg, buf)
+#define BEE_ADC_RESTORE_ALL(reg, buf)
+#define BEE_ADC_STORE_SCHED(reg, buf)
+#define BEE_ADC_STORE_CTRL(reg, buf)
+#endif /* BEE_ADC_PM_STORE */
 
 static int adc_bee_validate_buffer_size(const struct adc_sequence *sequence)
 {
@@ -149,6 +196,7 @@ static int adc_bee_start_read(const struct device *dev, const struct adc_sequenc
 	}
 
 	ADC_BitMapConfig(adc, sequence->channels);
+	BEE_ADC_STORE_SCHED(adc, &data->store_buf);
 
 	data->buffer = sequence->buffer;
 	adc_context_start_read(&data->ctx, sequence);
@@ -236,6 +284,7 @@ static void adc_context_start_sampling(struct adc_context *ctx)
 
 	ADC_INTConfig(adc, ADC_INT_ONE_SHOT_DONE, ENABLE);
 	ADC_Cmd(adc, ADC_ONE_SHOT_MODE, ENABLE);
+	BEE_ADC_STORE_CTRL(adc, &data->store_buf);
 }
 
 static void adc_context_update_buffer_pointer(struct adc_context *ctx, bool repeat_sampling)
@@ -305,9 +354,44 @@ static void adc_bee_isr(const struct device *dev)
 	ADC_Cmd(adc, ADC_ONE_SHOT_MODE, DISABLE);
 	ADC_INTConfig(adc, ADC_INT_ONE_SHOT_DONE, DISABLE);
 	ADC_ClearINTPendingBit(adc, ADC_INT_ONE_SHOT_DONE);
+	BEE_ADC_STORE_CTRL(adc, &data->store_buf);
 
 	adc_context_on_sampling_done(&data->ctx, dev);
 }
+
+#if defined(BEE_ADC_PM_STORE)
+static int adc_bee_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct adc_bee_config *cfg = dev->config;
+	struct adc_bee_data *data = dev->data;
+	int err;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+		if ((err < 0) && (err != -ENOENT)) {
+			return err;
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
+		if (err < 0) {
+			return err;
+		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+		BEE_ADC_RESTORE_ALL((ADC_TypeDef *)cfg->reg, &data->store_buf);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_ADC_PM_STORE */
 
 static DEVICE_API(adc, adc_bee_driver_api) = {
 	.channel_setup = adc_bee_channel_setup,
@@ -344,7 +428,7 @@ static int adc_bee_init(const struct device *dev)
 	ADC_StructInit(&adc_init_struct);
 	adc_init_struct.BEE_ADC_DATA_AVE = DISABLE;
 
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM_DEVICE) && defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	/* Disable power always on, or it will keep the  ADC Qactive on. */
 	adc_init_struct.ADC_PowerAlwaysOnEn = DISABLE;
 #else
@@ -364,12 +448,29 @@ static int adc_bee_init(const struct device *dev)
 
 	ADC_Init(adc, &adc_init_struct);
 
+	BEE_ADC_STORE_ALL(adc, &data->store_buf);
+
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
+	}
+#endif
+
 	cfg->irq_config_func(dev);
 
 	adc_context_unlock_unconditionally(&data->ctx);
 
 	return 0;
 }
+
+#if defined(BEE_ADC_PM_STORE)
+#define BEE_ADC_PM_DEFINE(index) PM_DEVICE_DT_INST_DEFINE(index, adc_bee_pm_action);
+#define BEE_ADC_PM_GET(index)    PM_DEVICE_DT_INST_GET(index)
+#else
+#define BEE_ADC_PM_DEFINE(index)
+#define BEE_ADC_PM_GET(index) NULL
+#endif
 
 #define BEE_ADC_INIT(index)                                                                        \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
@@ -392,7 +493,8 @@ static int adc_bee_init(const struct device *dev)
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
 		.irq_config_func = adc_bee_irq_config_func,                                        \
 	};                                                                                         \
-	DEVICE_DT_INST_DEFINE(index, adc_bee_init, NULL, &adc_bee_data_##index,                    \
+	BEE_ADC_PM_DEFINE(index)                                                                   \
+	DEVICE_DT_INST_DEFINE(index, adc_bee_init, BEE_ADC_PM_GET(index), &adc_bee_data_##index,   \
 			      &adc_bee_config_##index, POST_KERNEL, CONFIG_ADC_INIT_PRIORITY,      \
 			      &adc_bee_driver_api);
 

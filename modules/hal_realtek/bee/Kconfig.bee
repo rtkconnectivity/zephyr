@@ -4,6 +4,22 @@
 config ZEPHYR_HAL_REALTEK_BEE_MODULE
 	bool
 
+config REALTEK_BEE_HAS_PCK600
+	bool
+	help
+	  Selected by SoCs whose HAL drives the Arm PCK-600 power control kit.
+
+	  With PCK-600 every peripheral owns its power and clock control and
+	  raises its own active request, its registers are retained across a
+	  low power state and its pads switch to their sleep configuration in
+	  hardware. Devices therefore only have to release their active
+	  request to let the system enter a low power state.
+
+	  Without PCK-600 the platform power manager takes the whole SoC down
+	  at once, peripheral registers lose their content and pads have to be
+	  switched by software, so devices have to save and restore their
+	  context around a low power state.
+
 config HAL_REALTEK_BEE_ADC
 	bool "Realtek Bee ADC HAL"
 
