@@ -1,0 +1,18 @@
+common:
+  tags:
+    - driver
+  harness: pytest
+  harness_config:
+    pytest_dut_scope: session
+    pytest_args:
+      - "--shell-port=COM10"
+      - "--dma-port=COM21"
+  platform_allow:
+    - rtl87x2g_evb
+    - rtl8752h_evb_rtl8752htv
+
+tests:
+  driver.pm.bee_evb_all_test:
+    harness_config:
+      pytest_root:
+        - "pm_device_pytest/test_pm_all.py"
