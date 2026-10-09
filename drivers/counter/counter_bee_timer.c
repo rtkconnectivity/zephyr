@@ -16,6 +16,10 @@
 
 #include "bee_timer_common.h"
 
+#if defined(BEE_TIMER_PM_STORE)
+#include <zephyr/pm/device.h>
+#endif
+
 LOG_MODULE_REGISTER(counter_bee_timer, CONFIG_COUNTER_LOG_LEVEL);
 
 #if defined(CONFIG_SOC_SERIES_RTL8752H)
@@ -38,6 +42,9 @@ struct counter_bee_data {
 	struct counter_bee_alarm_data alarm;
 	uint32_t freq;
 	const struct bee_timer_ops *ops;
+#if defined(BEE_TIMER_PM_STORE)
+	union bee_timer_store_reg store_buf;
+#endif
 };
 
 struct counter_bee_config {
@@ -250,8 +257,32 @@ static int counter_bee_timer_init(const struct device *dev)
 	data->ops->init(cfg->reg, cfg->clock_div, cfg->counter_info.max_top_value,
 			BEE_TIMER_MODE_COUNTER);
 
+#if defined(BEE_TIMER_PM_STORE)
+	data->ops->pm_store(cfg->reg, &data->store_buf);
+#endif
+
 	return 0;
 }
+
+#if defined(BEE_TIMER_PM_STORE)
+static int counter_bee_timer_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct counter_bee_config *cfg = dev->config;
+	struct counter_bee_data *data = dev->data;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		data->ops->pm_restore(cfg->reg, &data->store_buf);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_TIMER_PM_STORE */
 
 static void irq_handler(const struct device *dev)
 {
@@ -364,6 +395,15 @@ static DEVICE_API(counter, counter_bee_timer_driver_api) = {
 #define TIMER_IRQ_CONFIG(index) .irq_config = irq_config_##index
 #endif
 
+#if defined(BEE_TIMER_PM_STORE)
+#define COUNTER_BEE_TIMER_PM_DEFINE(index)                                                         \
+	PM_DEVICE_DT_INST_DEFINE(index, counter_bee_timer_pm_action);
+#define COUNTER_BEE_TIMER_PM_GET(index) PM_DEVICE_DT_INST_GET(index)
+#else
+#define COUNTER_BEE_TIMER_PM_DEFINE(index)
+#define COUNTER_BEE_TIMER_PM_GET(index) NULL
+#endif
+
 #define BEE_COUNTER_TIMER_INIT(index)                                                              \
 	TIMER_IRQ_CONFIG_FUNC(index);                                                              \
 	static struct timer_data_##index {                                                         \
@@ -387,8 +427,10 @@ static DEVICE_API(counter, counter_bee_timer_driver_api) = {
 		.get_irq_pending = get_irq_pending_##index,                                        \
 	};                                                                                         \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(index, counter_bee_timer_init, NULL, &counter_bee_data_##index,      \
-			      &counter_bee_config_##index, PRE_KERNEL_1,                           \
-			      CONFIG_COUNTER_INIT_PRIORITY, &counter_bee_timer_driver_api);
+	COUNTER_BEE_TIMER_PM_DEFINE(index)                                                         \
+	DEVICE_DT_INST_DEFINE(index, counter_bee_timer_init, COUNTER_BEE_TIMER_PM_GET(index),      \
+			      &counter_bee_data_##index, &counter_bee_config_##index,              \
+			      PRE_KERNEL_1, CONFIG_COUNTER_INIT_PRIORITY,                          \
+			      &counter_bee_timer_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BEE_COUNTER_TIMER_INIT);

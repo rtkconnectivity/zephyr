@@ -42,6 +42,39 @@
  * @{
  */
 
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_TIMER_PM_STORE 1
+#endif
+
+#if defined(BEE_TIMER_PM_STORE)
+/**
+ * @brief Shadow copy of the timer registers, kept by the drivers.
+ *
+ * Both flavours share one buffer because a timer instance is driven either as a
+ * basic or as an enhanced timer, never as both. On RTL8752H the enable and the
+ * interrupt bits live in a block shared by all instances, so that block is part
+ * of the copy as well.
+ */
+union bee_timer_store_reg {
+	struct {
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+		TIMStoreReg_Typedef regs;
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+		TIMStoreReg_TypeDef regs;
+		TIMSHAREStoreReg_TypeDef share;
+#endif
+	} tim;
+	struct {
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+		ENHTIMStoreReg_Typedef regs;
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+		ENHTIMStoreReg_TypeDef regs;
+		ENHTIMShareStoreReg_TypeDef share;
+#endif
+	} enhtim;
+};
+#endif /* BEE_TIMER_PM_STORE */
+
 /**
  * @brief Bee Timer Operation Modes.
  */
@@ -150,6 +183,22 @@ struct bee_timer_ops {
 	 * @return true if interrupt is pending, false otherwise.
 	 */
 	bool (*int_status)(uint32_t reg);
+
+#if defined(BEE_TIMER_PM_STORE)
+	/**
+	 * @brief Take the shadow copy the registers are restored from on resume.
+	 * @param reg Base address of the timer register.
+	 * @param buf Shadow copy to fill in.
+	 */
+	void (*pm_store)(uint32_t reg, union bee_timer_store_reg *buf);
+
+	/**
+	 * @brief Restore the registers from their shadow copy.
+	 * @param reg Base address of the timer register.
+	 * @param buf Shadow copy taken by pm_store().
+	 */
+	void (*pm_restore)(uint32_t reg, union bee_timer_store_reg *buf);
+#endif
 };
 
 /**

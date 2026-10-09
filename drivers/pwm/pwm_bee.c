@@ -16,6 +16,10 @@
 
 #include "bee_timer_common.h"
 
+#if defined(BEE_TIMER_PM_STORE)
+#include <zephyr/pm/device.h>
+#endif
+
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(pwm_bee, CONFIG_PWM_LOG_LEVEL);
@@ -24,6 +28,10 @@ LOG_MODULE_REGISTER(pwm_bee, CONFIG_PWM_LOG_LEVEL);
 
 struct pwm_bee_data {
 	const struct bee_timer_ops *ops;
+#if defined(BEE_TIMER_PM_STORE)
+	union bee_timer_store_reg store_buf;
+	bool is_high_duty;
+#endif
 };
 
 struct pwm_bee_config {
@@ -60,11 +68,23 @@ static int pwm_bee_set_cycles(const struct device *dev, uint32_t channel, uint32
 	output_mode = data->ops->set_pwm_duty(config->reg, period_cycles, pulse_cycles,
 					      (flags & PWM_POLARITY_INVERTED));
 
+#if defined(BEE_TIMER_PM_STORE)
+	data->is_high_duty = (pulse_cycles > (period_cycles >> 1));
+	if (flags & PWM_POLARITY_INVERTED) {
+		data->is_high_duty = !data->is_high_duty;
+	}
+#endif
+
 	if (output_mode != BEE_PWM_OUTPUT_MODE_TIMER) {
 		Pad_Config(state->pins[0].pin, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_NONE,
 			   PAD_OUT_ENABLE,
 			   output_mode == BEE_PWM_OUTPUT_MODE_HIGH ? PAD_OUT_HIGH : PAD_OUT_LOW);
 		data->ops->stop(config->reg);
+
+#if defined(BEE_TIMER_PM_STORE)
+		data->ops->pm_store(config->reg, &data->store_buf);
+#endif
+
 		return 0;
 	}
 
@@ -72,6 +92,10 @@ static int pwm_bee_set_cycles(const struct device *dev, uint32_t channel, uint32
 		   PAD_OUT_DISABLE, PAD_OUT_LOW);
 	data->ops->stop(config->reg);
 	data->ops->start(config->reg);
+
+#if defined(BEE_TIMER_PM_STORE)
+	data->ops->pm_store(config->reg, &data->store_buf);
+#endif
 
 	return 0;
 }
@@ -86,6 +110,52 @@ static int pwm_bee_get_cycles_per_sec(const struct device *dev, uint32_t channel
 
 	return 0;
 }
+
+#if defined(BEE_TIMER_PM_STORE)
+static int pwm_bee_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct pwm_bee_config *config = dev->config;
+	struct pwm_bee_data *data = dev->data;
+	const struct pinctrl_state *state;
+	int err;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+		if (err == -ENOENT) {
+			/* No sleep state configured, so hold the pad at the level
+			 * the output spends most of its period at.
+			 */
+			err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
+			if (err < 0) {
+				return err;
+			}
+
+			Pad_Config(state->pins[0].pin, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_NONE,
+				   PAD_OUT_ENABLE,
+				   data->is_high_duty ? PAD_OUT_HIGH : PAD_OUT_LOW);
+		} else if (err < 0) {
+			return err;
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+		if (err < 0) {
+			return err;
+		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER,
+				       (clock_control_subsys_t)&config->clkid);
+
+		data->ops->pm_restore(config->reg, &data->store_buf);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_TIMER_PM_STORE */
 
 static int pwm_bee_init(const struct device *dev)
 {
@@ -108,6 +178,13 @@ static int pwm_bee_init(const struct device *dev)
 
 	data->ops->init(config->reg, config->clock_div, UINT32_MAX, BEE_TIMER_MODE_PWM);
 
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
+	}
+#endif
+
 	return 0;
 }
 
@@ -129,6 +206,14 @@ static DEVICE_API(pwm, pwm_bee_driver_api) = {
 	.clock_div = CONCAT(TIMER_CLOCK_DIV_, DT_PROP(PWM_BEE_PARENT_NODE(index), prescaler))
 #endif
 
+#if defined(BEE_TIMER_PM_STORE)
+#define PWM_BEE_PM_DEFINE(index) PM_DEVICE_DT_INST_DEFINE(index, pwm_bee_pm_action);
+#define PWM_BEE_PM_GET(index)    PM_DEVICE_DT_INST_GET(index)
+#else
+#define PWM_BEE_PM_DEFINE(index)
+#define PWM_BEE_PM_GET(index) NULL
+#endif
+
 #define PWM_BEE_INIT(index)                                                                        \
 	static struct pwm_bee_data pwm_bee_data_##index;                                           \
                                                                                                    \
@@ -144,7 +229,8 @@ static DEVICE_API(pwm, pwm_bee_driver_api) = {
 		TIMER_DIV_CONFIG(index),                                                           \
 	};                                                                                         \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(index, &pwm_bee_init, NULL, &pwm_bee_data_##index,                   \
+	PWM_BEE_PM_DEFINE(index)                                                                   \
+	DEVICE_DT_INST_DEFINE(index, &pwm_bee_init, PWM_BEE_PM_GET(index), &pwm_bee_data_##index,  \
 			      &pwm_bee_config_##index, POST_KERNEL, CONFIG_PWM_INIT_PRIORITY,      \
 			      &pwm_bee_driver_api);
 

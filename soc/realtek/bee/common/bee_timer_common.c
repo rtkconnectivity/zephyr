@@ -7,6 +7,20 @@
 #include "bee_timer_common.h"
 #include <soc.h>
 
+#if defined(BEE_TIMER_PM_STORE)
+/* Not declared by the HAL headers */
+extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+extern void TIMSHARE_DLPSEnter(void *StoreBuf);
+extern void TIMSHARE_DLPSExit(void *StoreBuf);
+extern void ENHTIMSHARE_DLPSEnter(void *StoreBuf);
+extern void ENHTIMSHARE_DLPSExit(void *StoreBuf);
+#endif
+#endif
+
 #if defined(CONFIG_HAL_REALTEK_BEE_TIM)
 
 /* Basic Timer Implementations */
@@ -237,6 +251,24 @@ static enum bee_pwm_output_mode basic_tim_set_pwm_duty(uint32_t reg, uint32_t pe
 }
 #endif
 
+#if defined(BEE_TIMER_PM_STORE)
+static void basic_tim_pm_store(uint32_t reg, union bee_timer_store_reg *buf)
+{
+	TIM_DLPSEnter((void *)reg, &buf->tim.regs);
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+	TIMSHARE_DLPSEnter(&buf->tim.share);
+#endif
+}
+
+static void basic_tim_pm_restore(uint32_t reg, union bee_timer_store_reg *buf)
+{
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+	TIMSHARE_DLPSExit(&buf->tim.share);
+#endif
+	TIM_DLPSExit((void *)reg, &buf->tim.regs);
+}
+#endif
+
 static const struct bee_timer_ops bee_basic_ops = {
 	.init = basic_tim_init,
 	.start = basic_tim_start,
@@ -249,6 +281,10 @@ static const struct bee_timer_ops bee_basic_ops = {
 	.int_disable = basic_tim_int_disable,
 	.int_clear = basic_tim_int_clear,
 	.int_status = basic_tim_int_status,
+#if defined(BEE_TIMER_PM_STORE)
+	.pm_store = basic_tim_pm_store,
+	.pm_restore = basic_tim_pm_restore,
+#endif
 };
 #endif /* CONFIG_HAL_REALTEK_BEE_TIM */
 
@@ -375,6 +411,24 @@ static enum bee_pwm_output_mode enh_tim_set_pwm_duty(uint32_t reg, uint32_t peri
 	return output_mode;
 }
 
+#if defined(BEE_TIMER_PM_STORE)
+static void enh_tim_pm_store(uint32_t reg, union bee_timer_store_reg *buf)
+{
+	ENHTIM_DLPSEnter((void *)reg, &buf->enhtim.regs);
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+	ENHTIMSHARE_DLPSEnter(&buf->enhtim.share);
+#endif
+}
+
+static void enh_tim_pm_restore(uint32_t reg, union bee_timer_store_reg *buf)
+{
+#if defined(CONFIG_SOC_SERIES_RTL8752H)
+	ENHTIMSHARE_DLPSExit(&buf->enhtim.share);
+#endif
+	ENHTIM_DLPSExit((void *)reg, &buf->enhtim.regs);
+}
+#endif
+
 static const struct bee_timer_ops bee_enh_ops = {
 	.init = enh_tim_init,
 	.start = enh_tim_start,
@@ -387,6 +441,10 @@ static const struct bee_timer_ops bee_enh_ops = {
 	.int_disable = enh_tim_int_disable,
 	.int_clear = enh_tim_int_clear,
 	.int_status = enh_tim_int_status,
+#if defined(BEE_TIMER_PM_STORE)
+	.pm_store = enh_tim_pm_store,
+	.pm_restore = enh_tim_pm_restore,
+#endif
 };
 #endif /* CONFIG_HAL_REALTEK_BEE_ENHTIM */
 

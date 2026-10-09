@@ -63,6 +63,27 @@ LOG_MODULE_REGISTER(i2c_bee, CONFIG_I2C_LOG_LEVEL);
 extern I2C_Status I2C_CheckAbortStatus(I2C_TypeDef *I2Cx);
 #endif
 
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_I2C_PM_STORE 1
+#endif
+
+#if defined(BEE_I2C_PM_STORE)
+#include <zephyr/pm/device.h>
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+typedef I2CStoreReg_Typedef i2c_bee_store_reg_t;
+#define BEE_I2C_STORE_IDX_INTR_MASK 8
+#define BEE_I2C_STORE_IDX_ENABLE    11
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+typedef I2CStoreReg_TypeDef i2c_bee_store_reg_t;
+#define BEE_I2C_STORE_IDX_INTR_MASK 7
+#define BEE_I2C_STORE_IDX_ENABLE    10
+#endif
+
+extern void I2C_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void I2C_DLPSExit(void *PeriReg, void *StoreBuf);
+#endif /* BEE_I2C_PM_STORE */
+
 struct i2c_bee_context {
 	struct i2c_msg *msgs;
 	uint8_t num_msgs;
@@ -84,7 +105,23 @@ struct i2c_bee_data {
 	struct k_sem sync_sem;
 	struct i2c_bee_context ctx;
 	uint8_t errs;
+#if defined(BEE_I2C_PM_STORE)
+	i2c_bee_store_reg_t store_buf;
+#endif
 };
+
+#if defined(BEE_I2C_PM_STORE)
+#define BEE_I2C_STORE_ALL(reg, buf)   I2C_DLPSEnter(reg, buf)
+#define BEE_I2C_RESTORE_ALL(reg, buf) I2C_DLPSExit(reg, buf)
+#define BEE_I2C_STORE_INT(reg, buf)                                                                \
+	((buf)->i2c_reg[BEE_I2C_STORE_IDX_INTR_MASK] = (reg)->IC_INTR_MASK)
+#define BEE_I2C_STORE_ENABLE(reg, buf) ((buf)->i2c_reg[BEE_I2C_STORE_IDX_ENABLE] = (reg)->IC_ENABLE)
+#else
+#define BEE_I2C_STORE_ALL(reg, buf)
+#define BEE_I2C_RESTORE_ALL(reg, buf)
+#define BEE_I2C_STORE_INT(reg, buf)
+#define BEE_I2C_STORE_ENABLE(reg, buf)
+#endif /* BEE_I2C_PM_STORE */
 
 static inline bool i2c_bee_next_msg_available(struct i2c_bee_context *ctx)
 {
@@ -246,6 +283,7 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 	I2C_SetSlaveAddress(i2c, addr);
 
 	I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, ENABLE);
+	BEE_I2C_STORE_INT(i2c, &data->store_buf);
 
 	i2c_bee_do_tx(dev);
 
@@ -254,6 +292,7 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 	ret = (data->errs == BEE_I2C_SUCCESS) ? 0 : -EIO;
 
 	I2C_Cmd(i2c, DISABLE);
+	BEE_I2C_STORE_ENABLE(i2c, &data->store_buf);
 
 	k_mutex_unlock(&data->bus_mutex);
 
@@ -310,6 +349,8 @@ static int i2c_bee_configure(const struct device *dev, uint32_t dev_config)
 
 	I2C_Cmd(i2c, ENABLE);
 
+	BEE_I2C_STORE_ALL(i2c, &data->store_buf);
+
 error:
 	k_mutex_unlock(&data->bus_mutex);
 
@@ -325,6 +366,7 @@ static void i2c_bee_isr(const struct device *dev)
 	if (I2C_GetINTStatus(i2c, I2C_INT_TX_ABRT)) {
 		data->errs = I2C_CheckAbortStatus(i2c);
 		I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, DISABLE);
+		BEE_I2C_STORE_INT(i2c, &data->store_buf);
 		I2C_ClearINTPendingBit(i2c, I2C_INT_TX_ABRT);
 		I2C_ClearINTPendingBit(i2c, I2C_INT_RX_FULL);
 		I2C_ClearINTPendingBit(i2c, I2C_INT_TX_EMPTY);
@@ -343,11 +385,47 @@ static void i2c_bee_isr(const struct device *dev)
 
 	if (!i2c_bee_next_msg_available(&data->ctx) && !I2C_GetFlagState(i2c, I2C_FLAG_ACTIVITY)) {
 		I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, DISABLE);
+		BEE_I2C_STORE_INT(i2c, &data->store_buf);
 		I2C_Cmd(i2c, DISABLE);
+		BEE_I2C_STORE_ENABLE(i2c, &data->store_buf);
 
 		k_sem_give(&data->sync_sem);
 	}
 }
+
+#if defined(BEE_I2C_PM_STORE)
+static int i2c_bee_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct i2c_bee_config *cfg = dev->config;
+	struct i2c_bee_data *data = dev->data;
+	int err;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+		if ((err < 0) && (err != -ENOENT)) {
+			return err;
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
+		if (err < 0) {
+			return err;
+		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+		BEE_I2C_RESTORE_ALL(cfg->reg, &data->store_buf);
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_I2C_PM_STORE */
 
 static int i2c_bee_init(const struct device *dev)
 {
@@ -361,15 +439,10 @@ static int i2c_bee_init(const struct device *dev)
 		return err;
 	}
 
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
-	const struct pinctrl_state *state;
-
-	err = pinctrl_lookup_state(cfg->pcfg, PINCTRL_STATE_SLEEP, &state);
-	if (err == 0) {
-		err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
-		if (err < 0 && err != -ENOENT) {
-			return err;
-		}
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+	if ((err < 0) && (err != -ENOENT)) {
+		return err;
 	}
 #endif
 
@@ -400,6 +473,14 @@ static DEVICE_API(i2c, i2c_bee_driver_api) = {
 		irq_enable(DT_INST_IRQN(index));                                                   \
 	}
 
+#if defined(BEE_I2C_PM_STORE)
+#define I2C_BEE_PM_DEFINE(index) PM_DEVICE_DT_INST_DEFINE(index, i2c_bee_pm_action);
+#define I2C_BEE_PM_GET(index)    PM_DEVICE_DT_INST_GET(index)
+#else
+#define I2C_BEE_PM_DEFINE(index)
+#define I2C_BEE_PM_GET(index) NULL
+#endif
+
 #define I2C_BEE_INIT(index)                                                                        \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
 	I2C_IRQ_FUNC_DEFINE(index);                                                                \
@@ -411,8 +492,9 @@ static DEVICE_API(i2c, i2c_bee_driver_api) = {
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
 		.irq_cfg_func = i2c_bee_irq_cfg_func_##index,                                      \
 	};                                                                                         \
-	I2C_DEVICE_DT_INST_DEFINE(index, i2c_bee_init, NULL, &i2c_bee_data_##index,                \
-				  &i2c_bee_cfg_##index, POST_KERNEL, CONFIG_I2C_INIT_PRIORITY,     \
-				  &i2c_bee_driver_api);
+	I2C_BEE_PM_DEFINE(index)                                                                   \
+	I2C_DEVICE_DT_INST_DEFINE(index, i2c_bee_init, I2C_BEE_PM_GET(index),                      \
+				  &i2c_bee_data_##index, &i2c_bee_cfg_##index, POST_KERNEL,        \
+				  CONFIG_I2C_INIT_PRIORITY, &i2c_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(I2C_BEE_INIT)

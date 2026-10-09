@@ -5,6 +5,7 @@
  */
 
 #include <stdio.h>
+#include <zephyr/pm/device_runtime.h>
 #include <zephyr/shell/shell.h>
 
 #ifdef CONFIG_GPIO
@@ -61,36 +62,28 @@
 #include <zephyr/drivers/can.h>
 #endif
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-#if defined(CONFIG_PM_DEVICE)
+/* Without PCK-600 the platform power manager takes the whole SoC into DLPS at
+ * once, but only once every registered check callback agrees, and it calls the
+ * store and restore callbacks around it. With PCK-600 the kernel idle enters
+ * the low power state on its own, so a test only has to stop running and has
+ * nothing to register.
+ */
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_PM_TEST_DLPS_CB 1
+#endif
+
+#if defined(BEE_PM_TEST_DLPS_CB)
 
 #include "trace.h"
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #include <pm.h>
 #include "power_manager_unit_platform.h"
-
-#define PM_TEST_CHECK_PASS PM_CHECK_PASS
-#define PM_TEST_CHECK_FAIL PM_CHECK_FAIL
-#define PM_TEST_CHECK_RET  PMCheckResult
-
-#define pm_test_register_check_cb(app_check)                                                       \
-	platform_pm_register_callback_func_with_priority((void *)app_check, PLATFORM_PM_CHECK, 1)
-
-#define pm_test_register_store_cb(app_store)                                                       \
-	platform_pm_register_callback_func_with_priority((void *)app_store, PLATFORM_PM_STORE, 1)
-
-#define pm_test_register_restore_cb(app_restore)                                                   \
-	platform_pm_register_callback_func_with_priority((void *)app_restore, PLATFORM_PM_RESTORE, \
-							 1)
-#endif
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#if defined(CONFIG_PM_DEVICE)
-
-#include "trace.h"
 #include <dlps.h>
-
 extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
 								PlatformPMStage pf_pm_stage,
 								int8_t priority);
+#endif
 
 #define PM_TEST_CHECK_PASS PM_CHECK_PASS
 #define PM_TEST_CHECK_FAIL PM_CHECK_FAIL
@@ -105,28 +98,23 @@ extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
 #define pm_test_register_restore_cb(app_restore)                                                   \
 	platform_pm_register_callback_func_with_priority((void *)app_restore, PLATFORM_PM_RESTORE, \
 							 1)
-#endif
-#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#endif /* BEE_PM_TEST_DLPS_CB */
+
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 
 #include "log_core.h"
 #include <debug_port.h>
 #include <pck600.h>
 
-#if defined(CONFIG_HAL_REALTEK_BEE_RAP)
-/* Zephyr's <zephyr/drivers/gpio.h> defines GPIO_INT_MASK as a macro, which
- * collides with a register field of the same name in the Bee HAL headers.
- */
-#ifdef GPIO_INT_MASK
-#undef GPIO_INT_MASK
-#endif
-#include <rtl_rcc.h>
-#include <rtl_pinmux.h>
-#include <rtl_gpio.h>
-#include <rtl_rtc.h>
-#include <rtl_rap.h>
 #endif
 
-#endif /* SoC select */
+/* Print the number of times the system came out of a low power state */
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define pm_test_print_wakeup_count()                                                               \
+	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL))
+#else
+#define pm_test_print_wakeup_count()
+#endif
 
 /* Device declarations */
 
@@ -204,7 +192,7 @@ static const struct device *can_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_can));
 
 /* PM state */
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 
 struct k_sem pm_app_sem;
 
@@ -225,6 +213,13 @@ static void app_restore(void)
 {
 	DBG_DIRECT("[%s] %d line %d", __func__, pm_counter, __LINE__);
 	k_sem_give(&pm_app_sem);
+}
+
+static void pm_test_register_dlps_cb(void)
+{
+	pm_test_register_check_cb(app_check);
+	pm_test_register_store_cb(app_store);
+	pm_test_register_restore_cb(app_restore);
 }
 
 static void pm_test_enter_dlps_forever(void)
@@ -252,25 +247,23 @@ static void pm_test_enter_dlps_timeout(k_timeout_t timeout)
 	printf("[%lld] after exit dlps\n", k_uptime_get());
 }
 
-#endif /* CONFIG_PM_DEVICE */
+#endif /* BEE_PM_TEST_DLPS_CB */
 
 int main(void)
 {
 	printf("[%lld] Hello World! %s\n", k_uptime_get(), CONFIG_BOARD_TARGET);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	debug_port_aon_output(DEBUG_PCK600_OUTPUT_TO_VPON_PPU, ENABLE);
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
 #endif
+	pm_test_print_wakeup_count();
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	k_sem_init(&pm_app_sem, 0, 1);
 
 	pm_dlps_check_flag = PM_TEST_CHECK_FAIL;
 
-	pm_test_register_check_cb(app_check);
-	pm_test_register_store_cb(app_store);
-	pm_test_register_restore_cb(app_restore);
+	pm_test_register_dlps_cb();
 #endif
 
 #ifdef CONFIG_GPIO
@@ -287,6 +280,56 @@ int main(void)
 
 /* UART PM test */
 
+#if defined(CONFIG_PM_DEVICE_RUNTIME) && defined(CONFIG_SHELL_BACKEND_SERIAL)
+
+/* The serial shell backend holds a runtime PM reference on its UART for as long
+ * as it is initialized, because a driver is not expected to resume itself on a
+ * polling or an interrupt driven API call. The Bee driver does take its own
+ * reference around every transfer and arms a pad wakeup in between, so that
+ * reference is what keeps the UART, and with it the whole system, out of a low
+ * power state. Hand it back to let the system sleep. The shell keeps working,
+ * because the pad wakeup resumes the UART on the first incoming frame.
+ */
+static int shell_pm_test_shell_uart_put(const struct shell *sh, size_t argc, char **argv)
+{
+	static bool put_done;
+	const struct device *dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_shell_uart));
+	int ret;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	if (put_done) {
+		shell_print(sh, "%s: already handed back", dev->name);
+		return 0;
+	}
+
+	ret = pm_device_runtime_put(dev);
+	if (ret < 0) {
+		shell_error(sh, "%s: failed to hand back (%d)", dev->name, ret);
+		return ret;
+	}
+
+	put_done = true;
+	shell_print(sh, "%s: handed back, type on shell to wake up", dev->name);
+
+	return 0;
+}
+
+#else
+
+static int shell_pm_test_shell_uart_put(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	shell_error(sh, "needs CONFIG_PM_DEVICE_RUNTIME and the serial shell backend");
+
+	return -ENOTSUP;
+}
+
+#endif /* CONFIG_PM_DEVICE_RUNTIME && CONFIG_SHELL_BACKEND_SERIAL */
+
 static int shell_pm_test_uart(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(sh);
@@ -294,7 +337,7 @@ static int shell_pm_test_uart(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 #ifdef CONFIG_SERIAL
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
 #endif
 #endif
@@ -334,6 +377,7 @@ static void uart_async_console_cb(const struct device *dev, struct uart_event *e
 	}
 }
 
+#if defined(BEE_PM_TEST_DLPS_CB)
 static void uart_dma_enter_cb(void)
 {
 }
@@ -344,6 +388,7 @@ static void uart_dma_exit_cb(void)
 		/* Re-enable DMA RX after wakeup if needed (left intentionally empty) */
 	}
 }
+#endif
 
 static void pm_uart_dma_do_rx_tx_cycle(const struct device *dev)
 {
@@ -372,7 +417,7 @@ static int shell_pm_test_uart_dma(const struct shell *sh, size_t argc, char **ar
 	ARG_UNUSED(argv);
 
 #ifdef CONFIG_UART_ASYNC_API
-#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL8752H)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	static bool pm_uart_dma_cb_registered;
 
 	if (!pm_uart_dma_cb_registered) {
@@ -389,7 +434,7 @@ static int shell_pm_test_uart_dma(const struct shell *sh, size_t argc, char **ar
 	pm_uart_dma_do_rx_tx_cycle(uart_dma_dev);
 
 	/* Enter DLPS */
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
 #endif
 
@@ -423,12 +468,10 @@ static void counter_top_cb(const struct device *dev, void *user_data)
 	uint64_t now_ms = k_uptime_get();
 
 	printf("top_handler\n");
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 	printf("[%lld] trigger handler after %lldms\n", now_ms, now_ms - *pre_sys_time_ms);
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	k_sem_give(&pm_app_sem);
 #else
 	k_sem_give(&pm_counter_sem);
@@ -441,9 +484,7 @@ static int shell_pm_test_counter(const struct shell *sh, size_t argc, char **arg
 {
 	ARG_UNUSED(sh);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #ifdef CONFIG_COUNTER
 	struct counter_top_cfg top_cfg;
@@ -471,8 +512,10 @@ static int shell_pm_test_counter(const struct shell *sh, size_t argc, char **arg
 
 	counter_set_top_value(counter_dev, &top_cfg);
 
-#if defined(CONFIG_PM_DEVICE)
-	pm_test_enter_dlps_forever();
+#if defined(BEE_PM_TEST_DLPS_CB)
+	pm_dlps_check_flag = PM_TEST_CHECK_FAIL;
+	k_sem_init(&pm_app_sem, 0, 1);
+	k_sem_take(&pm_app_sem, K_FOREVER);
 #else
 	k_sem_take(&pm_counter_sem, K_FOREVER);
 #endif
@@ -498,22 +541,20 @@ static void pm_gpio_irq_cb(const struct device *dev_in, struct gpio_callback *cb
 
 	static uint8_t irq_count;
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_dlps_check_flag = PM_TEST_CHECK_FAIL;
 #endif
 
 	k_sem_give(&pm_gpio_sem);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 	printf("[%lld] enter gpio callback cnt %d\n", k_uptime_get(), irq_count);
 	irq_count++;
 }
 
 static void pm_gpio_do_one_round(const char *hint)
 {
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	printf("[%lld] before enter dlps\n", k_uptime_get());
 	printf("[%lld] %s\n", k_uptime_get(), hint);
 
@@ -537,9 +578,7 @@ static int shell_pm_test_gpio(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(sh);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 	int debounce_ms = argc > 1 ? (int)strtoul(argv[1], NULL, 10) : 8;
 
@@ -550,26 +589,22 @@ static int shell_pm_test_gpio(const struct shell *sh, size_t argc, char **argv)
 
 #if defined(CONFIG_GPIO_BEE)
 	gpio_pin_configure(dev_in, PIN_IN,
-			   GPIO_INPUT | GPIO_PULL_UP | BEE_GPIO_INPUT_DEBOUNCE_MS(debounce_ms)
-#if defined(CONFIG_PM_DEVICE)
-				   | BEE_GPIO_INPUT_PM_WAKEUP
-#endif
-	);
+			   GPIO_INPUT | GPIO_PULL_UP | BEE_GPIO_INPUT_DEBOUNCE_MS(debounce_ms));
 #endif
 
 	gpio_init_callback(&pm_gpio_cb, pm_gpio_irq_cb, BIT(PIN_IN));
 	gpio_add_callback(dev_in, &pm_gpio_cb);
 
 	/* Falling edge */
-	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_FALLING);
+	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_FALLING | GPIO_INT_WAKEUP);
 	pm_gpio_do_one_round("connect input pin to output pin to wakeup");
 
 	/* Rising edge */
-	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_RISING);
+	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_RISING | GPIO_INT_WAKEUP);
 	pm_gpio_do_one_round("disconnect input pin to output pin to wakeup");
 
 	/* Both edges */
-	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_BOTH);
+	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_BOTH | GPIO_INT_WAKEUP);
 	pm_gpio_do_one_round("connect input pin to output pin to wakeup");
 	pm_gpio_do_one_round("disconnect input pin to output pin to wakeup");
 
@@ -578,11 +613,7 @@ static int shell_pm_test_gpio(const struct shell *sh, size_t argc, char **argv)
 
 #if defined(CONFIG_GPIO_BEE)
 	gpio_pin_configure(dev_in, PIN_IN,
-			   (GPIO_INPUT | GPIO_PULL_UP | PIN_IN_FLAGS)
-#if defined(CONFIG_PM_DEVICE)
-				   & (~BEE_GPIO_INPUT_PM_WAKEUP)
-#endif
-	);
+			   (GPIO_INPUT | GPIO_PULL_UP | PIN_IN_FLAGS));
 #endif
 
 #endif /* CONFIG_GPIO */
@@ -598,9 +629,7 @@ static int shell_pm_test_pwm(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #ifdef CONFIG_PWM
 	uint32_t period;
@@ -616,7 +645,7 @@ static int shell_pm_test_pwm(const struct shell *sh, size_t argc, char **argv)
 	pwm_set_cycles(pwm_dev, 0, period, pulse, 0);
 	k_busy_wait(500000);
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	/* Enter DLPS in the middle of PWM test */
 	pm_test_enter_dlps_timeout(K_MSEC(500));
 	k_busy_wait(500000);
@@ -630,7 +659,7 @@ static int shell_pm_test_pwm(const struct shell *sh, size_t argc, char **argv)
 	pwm_set_cycles(pwm_dev, 0, period, pulse, 0);
 	k_sleep(K_MSEC(500));
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	k_sleep(K_MSEC(10));
 #endif
 
@@ -642,7 +671,7 @@ static int shell_pm_test_pwm(const struct shell *sh, size_t argc, char **argv)
 	pwm_set_cycles(pwm_dev, 0, period, pulse, 0);
 	k_busy_wait(500000);
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_timeout(K_MSEC(500));
 	k_busy_wait(500000);
 #endif
@@ -667,9 +696,7 @@ static int shell_pm_test_lppwm(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #ifdef CONFIG_PWM
 	uint32_t period;
@@ -685,7 +712,7 @@ static int shell_pm_test_lppwm(const struct shell *sh, size_t argc, char **argv)
 	pwm_set_cycles(lppwm_dev, 0, period, pulse, 0);
 	k_sleep(K_MSEC(500));
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	/* Enter DLPS in the middle of PWM test */
 	pm_test_enter_dlps_timeout(K_MSEC(500));
 	k_busy_wait(500000);
@@ -699,7 +726,7 @@ static int shell_pm_test_lppwm(const struct shell *sh, size_t argc, char **argv)
 	pwm_set_cycles(lppwm_dev, 0, period, pulse, 0);
 	k_sleep(K_MSEC(500));
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	k_sleep(K_MSEC(10));
 #endif
 
@@ -711,7 +738,7 @@ static int shell_pm_test_lppwm(const struct shell *sh, size_t argc, char **argv)
 	pwm_set_cycles(lppwm_dev, 0, period, pulse, 0);
 	k_sleep(K_MSEC(500));
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_timeout(K_MSEC(500));
 	k_busy_wait(500000);
 #endif
@@ -786,9 +813,7 @@ static int shell_pm_test_spi(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #ifdef CONFIG_SPI
 	printf("[%lld] connect MOSI pin to the MISO of the SPI\n", k_uptime_get());
@@ -798,7 +823,7 @@ static int shell_pm_test_spi(const struct shell *sh, size_t argc, char **argv)
 		return 0;
 	}
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
 #endif
 
@@ -837,13 +862,11 @@ static void test_rtc_alarm_cb(const struct device *dev, uint16_t id, void *user_
 	uint64_t *pre_sys_time_ms = (uint64_t *)user_data;
 	uint64_t now_ms = k_uptime_get();
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 	printf("[%lld] trigger handler after %lldms\n", now_ms,
 	       now_ms - (*(uint64_t *)pre_sys_time_ms));
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	k_sem_give(&pm_app_sem);
 #endif
 }
@@ -854,9 +877,7 @@ __maybe_unused static int shell_pm_test_rtc(const struct shell *sh, size_t argc,
 {
 	ARG_UNUSED(sh);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #ifdef CONFIG_RTC
 	uint32_t timeout_ms = 2000; /* default 2000 ms */
@@ -890,126 +911,11 @@ __maybe_unused static int shell_pm_test_rtc(const struct shell *sh, size_t argc,
 
 	printf("[%lld] wait %ums to trigger handler\n", current_sys_time_ms, timeout_ms);
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
 #endif
 
 #endif /* CONFIG_RTC */
-
-	return 0;
-}
-
-/* RTC RAP GPIO toggle PM test */
-
-/*
- * Reference: Realtek Bee RAP sample rtc_compare_trigger_gpio_toggle.
- *
- * Route an RTC compare event through the RAP (Realtek Action Peripheral) to a
- * GPIO toggle action, so the pad keeps toggling in hardware (no CPU) even in
- * DLPS. The test arms it, lets it run, then tears RAP mode down.
- */
-
-#if defined(CONFIG_SOC_SERIES_RTL87X2J) && defined(CONFIG_HAL_REALTEK_BEE_RAP)
-
-/* 32kHz / (PSC + 1) => 32kHz tick */
-#define RTC_RAP_PSC_VALUE    (1 - 1)
-/* Toggle every 16000 ticks (0.5s = 2Hz). RELOAD is the repeat interval, COMP the first fire. */
-#define RTC_RAP_COMP_VALUE   (16000)
-#define RTC_RAP_RELOAD_VALUE (16000)
-
-/* Pad toggled by the RTC compare -> RAP action */
-#define RTC_RAP_OUTPUT_PAD  P1_1
-
-static void rtc_rap_gpio_board_init(void)
-{
-	/* Configure the pad as a DWGPIO output, driven high on power-on */
-	Pad_Config(RTC_RAP_OUTPUT_PAD, PAD_PINMUX_MODE, PAD_IS_PWRON, PAD_PULL_UP,
-		   PAD_OUT_ENABLE, PAD_OUT_HIGH);
-	Pinmux_Config(RTC_RAP_OUTPUT_PAD, DWGPIO);
-
-	RCC_ClockCmd(GPIOA_CLOCK, ENABLE);
-
-	GPIO_InitTypeDef gpio_init;
-
-	GPIO_StructInit(&gpio_init);
-	gpio_init.GPIO_Pin = GPIO_GetPinBit(RTC_RAP_OUTPUT_PAD);
-	gpio_init.GPIO_Dir = GPIO_DIR_OUT;
-	gpio_init.GPIO_INTEventEn = DISABLE;
-	GPIO_Init(GPIO_GetPort(RTC_RAP_OUTPUT_PAD), &gpio_init);
-
-	Pad_ModeAutoSwitchCmd(RTC_RAP_OUTPUT_PAD, DISABLE);
-}
-
-static void rtc_rap_gpio_rtc_init(void)
-{
-	/* Counter node is disabled here, so this test owns the RTC via the HAL */
-	RCC_ClockCmd(RTC_CLOCK, ENABLE);
-	RTC_DeInit();
-
-	RTC_SetPrescaler(RTC_RAP_PSC_VALUE);
-	RTC_SetCompValue(RTC_COMP0, RTC_RAP_COMP_VALUE);
-	RTC_SetCompReloadValue(RTC_COMP0, RTC_RAP_RELOAD_VALUE);
-	RTC_ResetCounter();
-
-	/* Must start the counter before RAP mode; once in RAP mode the run-bit is task-driven */
-	RTC_Cmd(ENABLE);
-}
-
-#endif /* RTL87X2J && REALTEK_BEE_RAP */
-
-__maybe_unused static int shell_pm_test_rtc_rap_gpio(const struct shell *sh, size_t argc,
-						     char **argv)
-{
-	ARG_UNUSED(sh);
-	ARG_UNUSED(argc);
-	ARG_UNUSED(argv);
-
-#if defined(CONFIG_SOC_SERIES_RTL87X2J) && defined(CONFIG_HAL_REALTEK_BEE_RAP)
-	uint8_t channel;
-
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-	printf("[%lld] connect pad %d (gpio %d) to a logic analyzer to watch the toggle\n",
-	       k_uptime_get(), RTC_RAP_OUTPUT_PAD, GPIO_GetNum(RTC_RAP_OUTPUT_PAD));
-
-	rtc_rap_gpio_board_init();
-	rtc_rap_gpio_rtc_init();
-
-	/* Allocate a RAP channel and route RTC compare0 event -> GPIOA toggle action */
-	if (!RAP_ChannelAllocate(&channel)) {
-		printf("RAP channel allocate failed\n");
-		return 0;
-	}
-	RAP_EventRouteSet(RAP_EVENT_RTC_COMPARE(0), channel);
-	/* Action regs are one array indexed by global GPIO number at a 4-byte stride */
-	RAP_ActionBindSet(RAP_ACTION_GPIOA_DRTOGGLE(0) +
-			  GPIO_GetNum(RTC_RAP_OUTPUT_PAD) * sizeof(uint32_t), channel);
-
-	/* Auto-reload the comparator via the RTC shortcut so the toggle repeats without the CPU */
-	RTC_ShortcutCmd(RTC_ACTION_RELOAD_COMP0, RTC_EVENT_COMP0, ENABLE);
-
-	/* Switch the RTC and the GPIO pad into RAP mode, then start the RTC */
-	RTC_RAPModeCmd(ENABLE);
-	GPIO_RAPModeCmd(GPIO_GetPort(RTC_RAP_OUTPUT_PAD), GPIO_GetPinBit(RTC_RAP_OUTPUT_PAD),
-			ENABLE);
-	RTC_ActionTrigger(RTC_ACTION_START);
-
-	/* Let the hardware toggle on its own (across DLPS) for the run window */
-	k_sleep(K_MSEC(5 * 1000));
-
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-
-	/* Tear down RAP mode and stop the RTC */
-	RTC_ActionTrigger(RTC_ACTION_STOP);
-	RTC_ShortcutCmd(RTC_ACTION_RELOAD_COMP0, RTC_EVENT_COMP0, DISABLE);
-	GPIO_RAPModeCmd(GPIO_GetPort(RTC_RAP_OUTPUT_PAD), GPIO_GetPinBit(RTC_RAP_OUTPUT_PAD),
-			DISABLE);
-	RTC_RAPModeCmd(DISABLE);
-	RAP_ChannelFree(channel);
-	RTC_Cmd(DISABLE);
-
-#else
-	printf("rtc_rap_gpio requires rtl87x2j with CONFIG_HAL_REALTEK_BEE_RAP\n");
-#endif
 
 	return 0;
 }
@@ -1025,9 +931,7 @@ static void qdec_data_ready_cb(const struct device *dev, const struct sensor_tri
 	sensor_sample_fetch(dev);
 	sensor_channel_get(dev, SENSOR_CHAN_QDEC_X_COUNT, &val);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 	printf("Position[%d] = %d degrees\n", qdec_cb_count++, val.val1);
 }
 #endif
@@ -1040,13 +944,11 @@ static int shell_pm_test_qdec(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #if defined(CONFIG_SENSOR) && defined(CONFIG_QDEC_BEE)
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	static bool toggle_a;
 
 	struct sensor_value val;
@@ -1072,9 +974,7 @@ static int shell_pm_test_qdec(const struct shell *sh, size_t argc, char **argv)
 		printf("Position[%d] = %d degrees\n", i, val.val1);
 	}
 
-#if defined(CONFIG_PM_DEVICE)
 	pm_test_enter_dlps_forever();
-#endif
 
 	/* Additional rotations (logic kept identical to original) */
 	for (int round = 0; round < 3; round++) {
@@ -1092,9 +992,7 @@ static int shell_pm_test_qdec(const struct shell *sh, size_t argc, char **argv)
 			printf("Position[%d] = %d degrees\n", i, val.val1);
 		}
 
-#if defined(CONFIG_PM_DEVICE)
 		pm_test_enter_dlps_forever();
-#endif
 	}
 #else
 #if defined(CONFIG_QDEC_BEE)
@@ -1155,9 +1053,7 @@ static int shell_pm_test_generate_waveform_qdec(const struct shell *sh, size_t a
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #if defined(CONFIG_SENSOR) && defined(CONFIG_QDEC_BEE)
 	/* false = forward (A first), true = reverse (B first) */
@@ -1193,9 +1089,7 @@ static int shell_pm_test_i2c(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #ifdef CONFIG_I2C
 	uint8_t icm20618_addr = 0x68;
@@ -1216,7 +1110,7 @@ static int shell_pm_test_i2c(const struct shell *sh, size_t argc, char **argv)
 
 	printf("icm20618 addr:0x%x reg:0x%x = 0x%x\n", icm20618_addr, write_buf[0], read_buf[0]);
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
 #endif
 
@@ -1296,9 +1190,7 @@ static int shell_pm_test_adc(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 #ifdef CONFIG_ADC
 	if (adc_channels_count < 1) {
@@ -1325,7 +1217,7 @@ static int shell_pm_test_adc(const struct shell *sh, size_t argc, char **argv)
 		printf("ADC sample before dlps failed: %d\n", ret);
 	}
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
 #endif
 
@@ -1391,7 +1283,7 @@ static int shell_pm_test_sdhc(const struct shell *sh, size_t argc, char **argv)
 		printf("before dlps sdio card %s initialization success\n", sdhc_dev_sdio->name);
 	}
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
 #endif
 
@@ -1475,9 +1367,7 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 	int filter_id;
 	int ret;
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 
 	if (!can_dev) {
 		printf("CAN device not found\n");
@@ -1564,7 +1454,7 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 	filter_id = can_add_rx_filter(can_dev, can_rx_cb, NULL, &filter);
 	rx_count = 0;
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
 #endif
 
@@ -1644,13 +1534,11 @@ static void keyscan_input_cb(struct input_event *evt, void *user_data)
 	}
 
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	printf("[%lld] wakeup_count=%d\n", k_uptime_get(), pck600_system_get_wakeup_count(NULL));
-#endif
+	pm_test_print_wakeup_count();
 	printf("[%lld] key [row=%d, col=%d] %s\n", k_uptime_get(), row, col,
 	       evt->value ? "pressed" : "released");
 
-#if defined(CONFIG_PM_DEVICE)
+#if defined(BEE_PM_TEST_DLPS_CB)
 	if (evt->value == 0) {
 		pm_dlps_check_flag = PM_TEST_CHECK_FAIL;
 		k_sem_give(&pm_app_sem);
@@ -1663,24 +1551,11 @@ INPUT_CALLBACK_DEFINE(DEVICE_DT_GET(DT_NODELABEL(keyscan)), keyscan_input_cb, NU
 #endif /* CONFIG_INPUT */
 
 /* Shell commands */
-
-/*
- * The RTC is shared: expose the zephyr-api rtc test when the counter node is
- * enabled, otherwise the hal-api rtc_rap_gpio test (which owns the RTC itself).
- */
-#if DT_NODE_HAS_STATUS(DT_NODELABEL(rtc_counter), okay)
-#define BEE_RTC_SHELL_CMD                                                                          \
-	SHELL_CMD_ARG(rtc, NULL, "rtc pm test", shell_pm_test_rtc, 0, 0),
-#elif defined(CONFIG_SOC_SERIES_RTL87X2J) && defined(CONFIG_HAL_REALTEK_BEE_RAP)
-#define BEE_RTC_SHELL_CMD                                                                          \
-	SHELL_CMD_ARG(rtc_rap_gpio, NULL, "rtc compare -> rap -> gpio toggle pm test (hal api)",   \
-		      shell_pm_test_rtc_rap_gpio, 0, 0),
-#else
-#define BEE_RTC_SHELL_CMD
-#endif
-
 #define SHELL_CMD_ARG_CREATE                                                                       \
 	SHELL_CMD_ARG(uart, NULL, "uart pm test", shell_pm_test_uart, 0, 0),                       \
+		SHELL_CMD_ARG(shell_uart_put, NULL,                                                \
+			      "hand back the runtime pm reference the shell backend holds",        \
+			      shell_pm_test_shell_uart_put, 0, 0),                                 \
 		SHELL_CMD_ARG(uartdma, NULL, "uart dma pm test", shell_pm_test_uart_dma, 0, 0),    \
 		SHELL_CMD_ARG(gpio, NULL, "gpio pm test [debounce_ms]", shell_pm_test_gpio, 0, 1), \
 		SHELL_CMD_ARG(pwm, NULL, "pwm pm test", shell_pm_test_pwm, 0, 0),                  \
@@ -1688,7 +1563,7 @@ INPUT_CALLBACK_DEFINE(DEVICE_DT_GET(DT_NODELABEL(keyscan)), keyscan_input_cb, NU
 		SHELL_CMD_ARG(counter, NULL, "counter pm test (input time in ms)",                 \
 			      shell_pm_test_counter, 2, 0),                                        \
 		SHELL_CMD_ARG(spi, NULL, "spi pm test", shell_pm_test_spi, 0, 0),                  \
-		BEE_RTC_SHELL_CMD                                                                  \
+		SHELL_CMD_ARG(rtc, NULL, "rtc pm test", shell_pm_test_rtc, 0, 0),                  \
 		SHELL_CMD_ARG(qdec, NULL, "qdec pm test", shell_pm_test_qdec, 0, 0),               \
 		SHELL_CMD_ARG(waveform_gpio, NULL,                                                 \
 			      "generate gpio output waveform [debounce_ms [pulse_us]]",            \
