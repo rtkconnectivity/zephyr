@@ -8,12 +8,11 @@ zephyr_library_sources(soc.c)
 zephyr_library_sources_ifdef(CONFIG_SOC_FAMILY_REALTEK_BEE_IMAGE_HEADER bee_image_header.c)
 
 zephyr_link_libraries(
-  ${CMAKE_CURRENT_SOURCE_DIR}/libbtcontroller.a
+  ${CMAKE_CURRENT_SOURCE_DIR}/libbtcontroller_no_lto.a
 )
 zephyr_link_libraries(
-  /home/zhiyuan/upstream/realtek-zephyr-project/build/rtl87x2j_platform_lib/lib/librtl87x2j_platform_lib.a
+  ${CMAKE_CURRENT_SOURCE_DIR}/librtl87x2j_platform_lib.a
 )
-zephyr_include_directories(/home/zhiyuan/upstream/realtek-zephyr-project/lib/rtl87x2j_platform_lib_sample/platform_lib/include)
 
 zephyr_linker_sources(SECTIONS trace_section.ld)
 zephyr_linker_sources(RAMFUNC_SECTION rtk_ramfunc.ld)
