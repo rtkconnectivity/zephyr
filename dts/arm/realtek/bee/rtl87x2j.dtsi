@@ -44,20 +44,14 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		/* 0x20000000 ~ 0x2001a000 */
-		sram_internal: memory@20000000 {
-			device_type = "internal sram region";
-			reg = <0x20000000 DT_SIZE_K(28)>;
-		};
-
-		sram: memory@20007000 {
+		sram: memory@20000000 {
 			device_type = "sram region";
-			reg = <0x20007000 DT_SIZE_K(45)>;
+			reg = <0x20000000 DT_SIZE_K(70)>;
 		};
 
-		heap_sram: memory@20012400 {
+		heap_sram: memory@20011800 {
 			device_type = "sram heap region";
-			reg = <0x20012400 DT_SIZE_K(23)>;
+			reg = <0x20011800 DT_SIZE_K(26)>;
 		};
 
 		sram_non_retention: memory@20018000 {
@@ -120,22 +114,14 @@
 					#address-cells = <1>;
 					#size-cells = <1>;
 
-					/* 0x2000000-0x2017c00 is reserved for Realtek firmwares.
-					 * Do not use.
-					 */
-					boot_patch: partition@0 {
+					boot_partition: partition@0 {
 						label = "boot-patch";
-						reg = <0x0 DT_SIZE_K(75)>;
+						reg = <0x0 DT_SIZE_K(100)>;
 					};
 
-					ota_header: partition@12c00 {
-						label = "ota-header";
-						reg = <0x12c00 DT_SIZE_K(1)>;
-					};
-
-					sys_patch: partition@13000 {
-						label = "system-patch";
-						reg = <0x13000 DT_SIZE_K(24)>;
+					slot0_partition: partition@19000 {
+						label = "image-0";
+						reg = <0x19000 DT_SIZE_K(620)>;
 					};
 				};
 			};
@@ -169,6 +155,12 @@
 					};
 				};
 			};
+		};
+
+		trace: memory@e0640000 {
+			compatible = "zephyr,memory-region";
+			reg = <0xE0640000 0x400000>;
+			zephyr,memory-region = "TRACE";
 		};
 
 		cctl: clock-controller@400003c4 {
