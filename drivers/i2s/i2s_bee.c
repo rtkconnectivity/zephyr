@@ -128,6 +128,26 @@ LOG_MODULE_REGISTER(i2s_bee, CONFIG_I2S_LOG_LEVEL);
 
 #define I2S_SRC_CLK 40000000
 
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_I2S_PM_RESTORE 1
+#endif
+
+#if defined(BEE_I2S_PM_RESTORE)
+#include <zephyr/pm/device.h>
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#include <pm.h>
+#include "power_manager_unit_platform.h"
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#include <dlps.h>
+extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
+								PlatformPMStage pf_pm_stage,
+								int8_t priority);
+#endif
+#define BEE_PM_CHECK_PASS PM_CHECK_PASS
+#define BEE_PM_CHECK_FAIL PM_CHECK_FAIL
+#define BEE_PM_CHECK_RET  PMCheckResult
+#endif
+
 #if !defined(CONFIG_I2S_BEE_RX) && !defined(CONFIG_I2S_BEE_TX)
 BUILD_ASSERT(false, "I2S RX or TX should be enabled!");
 #endif
@@ -165,6 +185,9 @@ struct stream {
 	struct k_msgq out_queue;
 	uint8_t *ping_pong_buf[2];
 	uint8_t ping_pong_index;
+#if defined(BEE_I2S_PM_RESTORE)
+	bool pm_active;
+#endif
 };
 
 struct i2s_bee_config {
@@ -189,7 +212,57 @@ struct i2s_bee_data {
 	void *rx_out_msgs[CONFIG_I2S_BEE_RX_BLOCK_COUNT];
 	uint8_t rx_ping_pong[2][CONFIG_I2S_BEE_RX_BLOCK_SIZE_MAX] __aligned(4);
 #endif
+#if defined(BEE_I2S_PM_RESTORE)
+	atomic_t pm_streams;
+	BEE_PM_CHECK_RET pm_check_state_idle;
+#endif
 };
+
+#if defined(BEE_I2S_PM_RESTORE)
+#define BEE_I2S_DEVICE_AND_COMMA(node_id) DEVICE_DT_GET(node_id),
+static const struct device *const i2s_bee_devices[] = {
+	DT_FOREACH_STATUS_OKAY(DT_DRV_COMPAT, BEE_I2S_DEVICE_AND_COMMA)};
+
+/* A running stream must hold off DLPS. Streams are refcounted because TX and RX
+ * can be active at the same time.
+ */
+static inline void i2s_bee_pm_busy_get(struct i2s_bee_data *dev_data)
+{
+	if (atomic_inc(&dev_data->pm_streams) == 0) {
+		dev_data->pm_check_state_idle = BEE_PM_CHECK_FAIL;
+	}
+}
+
+static inline void i2s_bee_pm_busy_put(struct i2s_bee_data *dev_data)
+{
+	if (atomic_dec(&dev_data->pm_streams) == 1) {
+		dev_data->pm_check_state_idle = BEE_PM_CHECK_PASS;
+	}
+}
+
+/* Keeps the system out of DLPS while any instance has a running stream. */
+static BEE_PM_CHECK_RET i2s_bee_pm_check(void)
+{
+	BEE_PM_CHECK_RET ret = BEE_PM_CHECK_FAIL;
+	struct i2s_bee_data *dev_data;
+
+	for (int i = 0; i < ARRAY_SIZE(i2s_bee_devices); i++) {
+		dev_data = (struct i2s_bee_data *)(i2s_bee_devices[i]->data);
+		if (dev_data->pm_check_state_idle == BEE_PM_CHECK_FAIL) {
+			goto check_ret;
+		}
+	}
+	ret = BEE_PM_CHECK_PASS;
+check_ret:
+	return ret;
+}
+
+static void i2s_bee_register_pm_check_cb(void)
+{
+	platform_pm_register_callback_func_with_priority((void *)i2s_bee_pm_check,
+							PLATFORM_PM_CHECK, 1);
+}
+#endif /* BEE_I2S_PM_RESTORE */
 
 #if defined(CONFIG_I2S_BEE_TX)
 static void i2s_bee_dma_tx_cb(const struct device *, void *, uint32_t, int);
@@ -244,6 +317,13 @@ static void i2s_tx_stream_disable(const struct device *dev, bool drop)
 
 	dma_stop(dma_dev, strm->dma_channel);
 	I2S_Cmd(base, I2S_MODE_TX, DISABLE);
+
+#if defined(BEE_I2S_PM_RESTORE)
+	if (strm->pm_active) {
+		strm->pm_active = false;
+		i2s_bee_pm_busy_put(dev_data);
+	}
+#endif
 
 	/* purge buffers queued in the stream */
 	if (drop) {
@@ -422,6 +502,13 @@ static void i2s_rx_stream_disable(const struct device *dev, bool in_drop, bool o
 	I2S_Cmd(base, I2S_MODE_RX, DISABLE);
 
 	dma_stop(dma_dev, strm->dma_channel);
+
+#if defined(BEE_I2S_PM_RESTORE)
+	if (strm->pm_active) {
+		strm->pm_active = false;
+		i2s_bee_pm_busy_put(dev_data);
+	}
+#endif
 
 	/* purge buffers queued in the stream */
 	if (in_drop || out_drop) {
@@ -888,6 +975,10 @@ static int i2s_bee_trigger(const struct device *dev, enum i2s_dir dir, enum i2s_
 
 		strm->state = I2S_STATE_RUNNING;
 		strm->last_block = false;
+#if defined(BEE_I2S_PM_RESTORE)
+		strm->pm_active = true;
+		i2s_bee_pm_busy_get(dev_data);
+#endif
 		break;
 
 	case I2S_TRIGGER_STOP:
@@ -1089,10 +1180,71 @@ static int i2s_bee_init(const struct device *dev)
 	/* register ISR */
 	dev_cfg->irq_config_func(dev);
 
+#if defined(BEE_I2S_PM_RESTORE)
+	dev_data->pm_check_state_idle = BEE_PM_CHECK_PASS;
+	i2s_bee_register_pm_check_cb();
+#endif
+
 	LOG_INF("Device %s initialized", dev->name);
 
 	return ret;
 }
+
+#if defined(BEE_I2S_PM_RESTORE)
+/* A stream is only replayable once configure() has stored its i2s_config, which
+ * it does exactly when the stream reaches I2S_STATE_READY. The config is copied
+ * out first because configure() memcpy()s its argument back into strm->cfg.
+ */
+static int i2s_bee_pm_restore_stream(const struct device *dev, enum i2s_dir dir,
+				     const struct stream *strm)
+{
+	struct i2s_config cfg = strm->cfg;
+
+	if (strm->state != I2S_STATE_READY) {
+		return 0;
+	}
+
+	return i2s_bee_configure(dev, dir, &cfg);
+}
+
+static int i2s_bee_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct i2s_bee_config *dev_cfg = dev->config;
+	__maybe_unused struct i2s_bee_data *dev_data = dev->data;
+	int ret;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
+					(clock_control_subsys_t)&dev_cfg->clkid);
+
+		ret = pinctrl_apply_state(dev_cfg->pinctrl, PINCTRL_STATE_SLEEP);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			return ret;
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		/* configure() reapplies the pinctrl and the clock itself */
+#if defined(CONFIG_I2S_BEE_TX)
+		ret = i2s_bee_pm_restore_stream(dev, I2S_DIR_TX, &dev_data->dma_tx);
+		if (ret < 0) {
+			return ret;
+		}
+#endif
+#if defined(CONFIG_I2S_BEE_RX)
+		ret = i2s_bee_pm_restore_stream(dev, I2S_DIR_RX, &dev_data->dma_rx);
+		if (ret < 0) {
+			return ret;
+		}
+#endif
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_I2S_PM_RESTORE */
 
 static DEVICE_API(i2s, i2s_bee_driver_api) = {
 	.configure = i2s_bee_configure,
@@ -1105,6 +1257,14 @@ static DEVICE_API(i2s, i2s_bee_driver_api) = {
 	.config_get = i2s_bee_config_get,
 	.trigger = i2s_bee_trigger,
 };
+
+#if defined(BEE_I2S_PM_RESTORE)
+#define BEE_I2S_PM_DEFINE(index) PM_DEVICE_DT_INST_DEFINE(index, i2s_bee_pm_action);
+#define BEE_I2S_PM_GET(index)    PM_DEVICE_DT_INST_GET(index)
+#else
+#define BEE_I2S_PM_DEFINE(index)
+#define BEE_I2S_PM_GET(index) NULL
+#endif
 
 #define I2S_DMA_CHANNEL_INIT(index, dir)                                                           \
 	.dma_dev = DEVICE_DT_GET(BEE_DMA_CTLR(index, dir)),                                        \
@@ -1161,7 +1321,8 @@ static DEVICE_API(i2s, i2s_bee_driver_api) = {
 	                                                                                           \
 	static struct i2s_bee_data i2s_bee_data_##index = {I2S_DMA_INIT(index)};                   \
 	                                                                                           \
-	DEVICE_DT_INST_DEFINE(index, &i2s_bee_init, NULL, &i2s_bee_data_##index,                   \
+	BEE_I2S_PM_DEFINE(index)                                                                   \
+	DEVICE_DT_INST_DEFINE(index, &i2s_bee_init, BEE_I2S_PM_GET(index), &i2s_bee_data_##index,  \
 			      &i2s_bee_cfg_##index, POST_KERNEL, CONFIG_I2S_INIT_PRIORITY,         \
 			      &i2s_bee_driver_api);                                                \
 	                                                                                           \
