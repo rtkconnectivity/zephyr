@@ -7,6 +7,18 @@
 #include "bee_timer_common.h"
 #include <soc.h>
 
+#if defined(BEE_TIMER_PM_STORE)
+/* Not declared by the HAL headers */
+extern void TIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void TIM_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void ENHTIM_DLPSEnter(void *PeriReg, void *StoreBuf);
+extern void ENHTIM_DLPSExit(void *PeriReg, void *StoreBuf);
+extern void TIMSHARE_DLPSEnter(void *StoreBuf);
+extern void TIMSHARE_DLPSExit(void *StoreBuf);
+extern void ENHTIMSHARE_DLPSEnter(void *StoreBuf);
+extern void ENHTIMSHARE_DLPSExit(void *StoreBuf);
+#endif
+
 #if defined(CONFIG_HAL_REALTEK_BEE_TIM)
 
 /* Basic Timer Implementations */
@@ -237,6 +249,44 @@ static enum bee_pwm_output_mode basic_tim_set_pwm_duty(uint32_t reg, uint32_t pe
 }
 #endif
 
+#if defined(BEE_TIMER_PM_STORE)
+static void basic_tim_pm_store(uint32_t reg, union bee_timer_store_reg *buf)
+{
+	TIM_DLPSEnter((void *)reg, &buf->tim);
+}
+
+static void basic_tim_pm_restore(uint32_t reg, union bee_timer_store_reg *buf)
+{
+	TIM_DLPSExit((void *)reg, &buf->tim);
+}
+
+/* One copy for the whole IP, taken by the first device that suspends and put
+ * back by the first device that resumes.
+ */
+static TIMShareStoreReg_TypeDef basic_tim_share_buf;
+static bool basic_tim_share_stored;
+
+static void basic_tim_pm_share_store(void)
+{
+	if (basic_tim_share_stored) {
+		return;
+	}
+
+	TIMSHARE_DLPSEnter(&basic_tim_share_buf);
+	basic_tim_share_stored = true;
+}
+
+static void basic_tim_pm_share_restore(void)
+{
+	if (!basic_tim_share_stored) {
+		return;
+	}
+
+	TIMSHARE_DLPSExit(&basic_tim_share_buf);
+	basic_tim_share_stored = false;
+}
+#endif
+
 static const struct bee_timer_ops bee_basic_ops = {
 	.init = basic_tim_init,
 	.start = basic_tim_start,
@@ -249,6 +299,12 @@ static const struct bee_timer_ops bee_basic_ops = {
 	.int_disable = basic_tim_int_disable,
 	.int_clear = basic_tim_int_clear,
 	.int_status = basic_tim_int_status,
+#if defined(BEE_TIMER_PM_STORE)
+	.pm_store = basic_tim_pm_store,
+	.pm_restore = basic_tim_pm_restore,
+	.pm_share_store = basic_tim_pm_share_store,
+	.pm_share_restore = basic_tim_pm_share_restore,
+#endif
 };
 #endif /* CONFIG_HAL_REALTEK_BEE_TIM */
 
@@ -375,6 +431,44 @@ static enum bee_pwm_output_mode enh_tim_set_pwm_duty(uint32_t reg, uint32_t peri
 	return output_mode;
 }
 
+#if defined(BEE_TIMER_PM_STORE)
+static void enh_tim_pm_store(uint32_t reg, union bee_timer_store_reg *buf)
+{
+	ENHTIM_DLPSEnter((void *)reg, &buf->enhtim);
+}
+
+static void enh_tim_pm_restore(uint32_t reg, union bee_timer_store_reg *buf)
+{
+	ENHTIM_DLPSExit((void *)reg, &buf->enhtim);
+}
+
+/* One copy for the whole IP, taken by the first device that suspends and put
+ * back by the first device that resumes.
+ */
+static ENHTIMShareStoreReg_TypeDef enh_tim_share_buf;
+static bool enh_tim_share_stored;
+
+static void enh_tim_pm_share_store(void)
+{
+	if (enh_tim_share_stored) {
+		return;
+	}
+
+	ENHTIMSHARE_DLPSEnter(&enh_tim_share_buf);
+	enh_tim_share_stored = true;
+}
+
+static void enh_tim_pm_share_restore(void)
+{
+	if (!enh_tim_share_stored) {
+		return;
+	}
+
+	ENHTIMSHARE_DLPSExit(&enh_tim_share_buf);
+	enh_tim_share_stored = false;
+}
+#endif
+
 static const struct bee_timer_ops bee_enh_ops = {
 	.init = enh_tim_init,
 	.start = enh_tim_start,
@@ -387,6 +481,12 @@ static const struct bee_timer_ops bee_enh_ops = {
 	.int_disable = enh_tim_int_disable,
 	.int_clear = enh_tim_int_clear,
 	.int_status = enh_tim_int_status,
+#if defined(BEE_TIMER_PM_STORE)
+	.pm_store = enh_tim_pm_store,
+	.pm_restore = enh_tim_pm_restore,
+	.pm_share_store = enh_tim_pm_share_store,
+	.pm_share_restore = enh_tim_pm_share_restore,
+#endif
 };
 #endif /* CONFIG_HAL_REALTEK_BEE_ENHTIM */
 
