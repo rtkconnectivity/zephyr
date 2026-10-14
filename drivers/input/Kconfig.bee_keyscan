@@ -24,10 +24,23 @@ config BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
 config BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP
 	bool "Key wakeup the system during sleep"
 	default y
-	depends on PM && !BEE_INPUT_KEYSCAN_AUTOSCAN_MODE && SOC_SERIES_RTL87X2J
+	depends on PM_DEVICE && !BEE_INPUT_KEYSCAN_AUTOSCAN_MODE && REALTEK_BEE_HAS_PCK600
 	help
 	  When enabled, row pads are configured as wakeup sources before
 	  entering sleep. A key press or release immediately wakes the
 	  system to perform a scan.
 	  When disabled, the system relies solely on the periodic timer
 	  to wake up and detect key changes.
+
+config BEE_INPUT_KEYSCAN_PM_RELEASE_WAKEUP
+	bool "Key release wakeup the system during sleep"
+	default n
+	depends on PM_DEVICE && !BEE_INPUT_KEYSCAN_AUTOSCAN_MODE && !REALTEK_BEE_HAS_PCK600
+	help
+	  When enabled, the wakeup polarity of a row holding a key down is
+	  inverted before entering sleep, so releasing the key wakes the
+	  system immediately. The pull resistor leaks current while the key
+	  is held.
+	  When disabled, such a row is pulled to the level the key drives it
+	  to, which removes the leakage but the release is only detected on
+	  the next timer wakeup.

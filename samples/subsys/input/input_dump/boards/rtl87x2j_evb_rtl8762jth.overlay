@@ -27,8 +27,8 @@
 		};
 
 		group2 {
-			psels = <BEE_PSEL(KEY_ROW_0, P2_4)>,
-				<BEE_PSEL(KEY_ROW_1, P2_5)>;
+			psels = <BEE_PSEL(KEY_ROW_0, P0_6)>,
+				<BEE_PSEL(KEY_ROW_1, P0_7)>;
 			output-disable;
 			bias-pull-up;
 			bias-pull-strong;
