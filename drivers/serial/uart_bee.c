@@ -21,13 +21,6 @@
 #ifdef CONFIG_UART_ASYNC_API
 #include <zephyr/drivers/dma/dma_bee.h>
 #include <zephyr/drivers/dma.h>
-#if defined(CONFIG_SOC_SERIES_RTL87X2G)
-#include <rtl_gdma.h>
-#elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#include <rtl876x_gdma.h>
-#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
-#include <rtl_dma.h>
-#endif
 #endif
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
@@ -151,6 +144,20 @@ static const struct {
 #if defined(CONFIG_SOC_SERIES_RTL87X2J)
 static void uart_bee_clock_force_on_enable(const struct device *dev, bool is_tx, bool en);
 #endif
+
+/* UART_INTConfig() read-modify-writes the interrupt enable register, which the
+ * interrupt service routine does as well, so the two have to be kept apart.
+ */
+static void uart_bee_int_config(const struct device *dev, uint32_t int_mask,
+				FunctionalState state)
+{
+	const struct uart_bee_config *config = dev->config;
+	unsigned int key = irq_lock();
+
+	UART_INTConfig(config->uart, int_mask, state);
+
+	irq_unlock(key);
+}
 
 static int uart_bee_cfg2idx_baudrate(uint32_t baudrate)
 {
@@ -387,22 +394,18 @@ static int uart_bee_fifo_read(const struct device *dev, uint8_t *rx_data, const 
 
 static void uart_bee_irq_tx_enable(const struct device *dev)
 {
-	const struct uart_bee_config *config = dev->config;
-	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data = dev->data;
 
 	data->tx_int_en = true;
-	UART_INTConfig(uart, UART_INT_TX_FIFO_EMPTY, ENABLE);
+	uart_bee_int_config(dev, UART_INT_TX_FIFO_EMPTY, ENABLE);
 }
 
 static void uart_bee_irq_tx_disable(const struct device *dev)
 {
-	const struct uart_bee_config *config = dev->config;
-	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data = dev->data;
 
 	data->tx_int_en = false;
-	UART_INTConfig(uart, UART_INT_TX_FIFO_EMPTY, DISABLE);
+	uart_bee_int_config(dev, UART_INT_TX_FIFO_EMPTY, DISABLE);
 }
 
 static int uart_bee_irq_tx_ready(const struct device *dev)
@@ -421,13 +424,11 @@ static int uart_bee_irq_tx_complete(const struct device *dev)
 
 static void uart_bee_irq_rx_enable(const struct device *dev)
 {
-	const struct uart_bee_config *config = dev->config;
-	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data = dev->data;
 
 	data->rx_int_en = true;
-	UART_INTConfig(uart, UART_INT_RD_AVA, ENABLE);
-	UART_INTConfig(uart, UART_INT_RX_IDLE, ENABLE);
+	uart_bee_int_config(dev, UART_INT_RD_AVA, ENABLE);
+	uart_bee_int_config(dev, UART_INT_RX_IDLE, ENABLE);
 
 #if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(dev, false, false);
@@ -441,13 +442,11 @@ static void uart_bee_irq_rx_enable(const struct device *dev)
 
 static void uart_bee_irq_rx_disable(const struct device *dev)
 {
-	const struct uart_bee_config *config = dev->config;
-	UART_TypeDef *uart = config->uart;
 	struct uart_bee_data *data = dev->data;
 
 	data->rx_int_en = false;
-	UART_INTConfig(uart, UART_INT_RD_AVA, DISABLE);
-	UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
+	uart_bee_int_config(dev, UART_INT_RD_AVA, DISABLE);
+	uart_bee_int_config(dev, UART_INT_RX_IDLE, DISABLE);
 
 #if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 	uart_bee_clock_force_on_enable(dev, false, false);
@@ -470,18 +469,12 @@ static int uart_bee_irq_rx_ready(const struct device *dev)
 
 static void uart_bee_irq_err_enable(const struct device *dev)
 {
-	const struct uart_bee_config *config = dev->config;
-	UART_TypeDef *uart = config->uart;
-
-	UART_INTConfig(uart, UART_INT_RX_LINE_STS, ENABLE);
+	uart_bee_int_config(dev, UART_INT_RX_LINE_STS, ENABLE);
 }
 
 static void uart_bee_irq_err_disable(const struct device *dev)
 {
-	const struct uart_bee_config *config = dev->config;
-	UART_TypeDef *uart = config->uart;
-
-	UART_INTConfig(uart, UART_INT_RX_LINE_STS, DISABLE);
+	uart_bee_int_config(dev, UART_INT_RX_LINE_STS, DISABLE);
 }
 
 static int uart_bee_irq_is_pending(const struct device *dev)
@@ -912,10 +905,7 @@ static int uart_bee_async_tx(const struct device *dev, const uint8_t *tx_data, s
 	uart_bee_dma_tx_enable(dev);
 
 	/* Start the TX dma */
-	if (dma_start(data->dma_tx.dma_dev, data->dma_tx.dma_channel)) {
-		LOG_ERR("UART err: TX DMA start failed!");
-		return -EFAULT;
-	}
+	dma_start(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
 
 	return 0;
 }
@@ -1003,7 +993,7 @@ static int uart_bee_async_rx_enable(const struct device *dev, uint8_t *rx_buf, s
 	data->rx_next_buffer_len = 0;
 
 	/* Disable UART RX AVA interrupts to let DMA to handle it */
-	UART_INTConfig(uart, UART_INT_RD_AVA, DISABLE);
+	uart_bee_int_config(dev, UART_INT_RD_AVA, DISABLE);
 
 	data->dma_rx.blk_cfg.block_size = buf_size;
 	data->dma_rx.blk_cfg.dest_address = (uint32_t)rx_buf;
@@ -1020,13 +1010,10 @@ static int uart_bee_async_rx_enable(const struct device *dev, uint8_t *rx_buf, s
 	uart_bee_dma_rx_enable(dev);
 
 	/* Enable UART_INT_RX_IDLE to define the end of a RX DMA transaction */
-	UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
-	UART_INTConfig(uart, UART_INT_RX_IDLE, ENABLE);
+	uart_bee_int_config(dev, UART_INT_RX_IDLE, DISABLE);
+	uart_bee_int_config(dev, UART_INT_RX_IDLE, ENABLE);
 
-	if (dma_start(data->dma_rx.dma_dev, data->dma_rx.dma_channel)) {
-		LOG_ERR("UART ERR: RX DMA start failed!");
-		return -EFAULT;
-	}
+	dma_start(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
 
 	/* Generate RX_BUF_REQUEST event to get the next buffer */
 	async_evt_rx_buf_request(data);
@@ -1050,7 +1037,7 @@ static int uart_bee_async_rx_disable(const struct device *dev)
 {
 	const struct uart_bee_config *config = dev->config;
 	struct uart_bee_data *data = dev->data;
-	UART_TypeDef *uart = config->uart;
+	__maybe_unused UART_TypeDef *uart = config->uart;
 	struct dma_status stat;
 
 #if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
@@ -1069,7 +1056,7 @@ static int uart_bee_async_rx_disable(const struct device *dev)
 		return -EFAULT;
 	}
 
-	UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
+	uart_bee_int_config(dev, UART_INT_RX_IDLE, DISABLE);
 
 	/* Disable the UART RX DMA requests */
 	uart_bee_dma_rx_disable(dev);
@@ -1266,8 +1253,8 @@ static void uart_bee_isr(const struct device *dev)
 #endif
 
 	if (UART_GetFlagStatus(uart, UART_FLAG_RX_IDLE)) {
-		UART_INTConfig(uart, UART_INT_RX_IDLE, DISABLE);
-		UART_INTConfig(uart, UART_INT_RX_IDLE, ENABLE);
+		uart_bee_int_config(dev, UART_INT_RX_IDLE, DISABLE);
+		uart_bee_int_config(dev, UART_INT_RX_IDLE, ENABLE);
 
 #if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
 		if (data->has_wakeup_pin) {
