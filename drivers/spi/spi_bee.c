@@ -38,6 +38,14 @@ LOG_MODULE_REGISTER(spi_bee, CONFIG_SPI_LOG_LEVEL);
 #define SPI_DATASIZE_TO_BYTE(size) ((size) <= 16 ? ((((size) - 1) >> 3) + 1) : 4)
 #define SPI_SRC_CLOCK_HZ           40000000U
 
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_SPI_PM_RESTORE 1
+#endif
+
+#if defined(BEE_SPI_PM_RESTORE)
+#include <zephyr/pm/device.h>
+#endif
+
 #ifdef CONFIG_SPI_SLAVE
 #define SPI_SLAVE_ENABLED 1
 #else
@@ -821,22 +829,17 @@ static int spi_bee_init(const struct device *dev)
 		return ret;
 	}
 
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
-	const struct pinctrl_state *state;
-
-	ret = pinctrl_lookup_state(cfg->pcfg, PINCTRL_STATE_SLEEP, &state);
-	if (ret == 0) {
-		ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
-		if (ret < 0 && ret != -ENOENT) {
-			LOG_ERR("Failed to apply pinctrl state");
-			return ret;
-		}
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		LOG_ERR("Failed to apply pinctrl state");
+		return ret;
 	}
 #endif
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	/* Configure as default mode, or SPI slave will keep the SPI qactive on. */
 	SPI_InitTypeDef spi_init_struct;
 	SPI_TypeDef *spi = (SPI_TypeDef *)cfg->reg;
@@ -874,6 +877,46 @@ static int spi_bee_init(const struct device *dev)
 
 	return 0;
 }
+
+#if defined(BEE_SPI_PM_RESTORE)
+static int spi_bee_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	struct spi_bee_data *data = dev->data;
+	const struct spi_bee_config *cfg = dev->config;
+	int ret;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+		ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			return ret;
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
+		if (ret < 0) {
+			return ret;
+		}
+
+		(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+		if (data->initialized) {
+			data->initialized = false;
+			ret = spi_bee_configure(dev, data->ctx.config);
+			if (ret < 0) {
+				return ret;
+			}
+		}
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+#endif /* BEE_SPI_PM_RESTORE */
 
 static DEVICE_API(spi, spi_bee_driver_api) = {
 	.transceive = spi_bee_transceive,
@@ -924,6 +967,14 @@ static DEVICE_API(spi, spi_bee_driver_api) = {
 		irq_enable(DT_INST_IRQN(index));                                                   \
 	}
 
+#if defined(BEE_SPI_PM_RESTORE)
+#define BEE_SPI_PM_DEFINE(index) PM_DEVICE_DT_INST_DEFINE(index, spi_bee_pm_action);
+#define BEE_SPI_PM_GET(index)    PM_DEVICE_DT_INST_GET(index)
+#else
+#define BEE_SPI_PM_DEFINE(index)
+#define BEE_SPI_PM_GET(index) NULL
+#endif
+
 #define BEE_SPI_INIT(index)                                                                        \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
 	IF_ENABLED(CONFIG_SPI_BEE_INTERRUPT,                                                       \
@@ -940,7 +991,8 @@ static DEVICE_API(spi, spi_bee_driver_api) = {
 		.is_slave = DT_INST_PROP_OR(index, is_slave, false),                               \
 		IF_ENABLED(CONFIG_SPI_BEE_INTERRUPT,                                               \
 			   (.irq_configure = spi_bee_irq_config_##index))}; \
-	DEVICE_DT_INST_DEFINE(index, &spi_bee_init, NULL, &spi_bee_data_##index,                   \
+	BEE_SPI_PM_DEFINE(index)                                                                   \
+	DEVICE_DT_INST_DEFINE(index, &spi_bee_init, BEE_SPI_PM_GET(index), &spi_bee_data_##index,  \
 			      &spi_bee_config_##index, POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,      \
 			      &spi_bee_driver_api);
 
