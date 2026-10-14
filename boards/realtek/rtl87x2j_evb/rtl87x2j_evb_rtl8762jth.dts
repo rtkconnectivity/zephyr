@@ -64,6 +64,8 @@
 	parity = "none";
 	stop-bits = "1";
 	data-bits = <8>;
+	wakeup-source;
+	zephyr,pm-device-runtime-auto;
 };
 
 &can {
