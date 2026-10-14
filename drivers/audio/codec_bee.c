@@ -31,6 +31,26 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(codec_bee, CONFIG_AUDIO_CODEC_LOG_LEVEL);
 
+#if defined(CONFIG_PM_DEVICE) && !defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_CODEC_PM_RESTORE 1
+#endif
+
+#if defined(BEE_CODEC_PM_RESTORE)
+#include <zephyr/pm/device.h>
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#include <pm.h>
+#include "power_manager_unit_platform.h"
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#include <dlps.h>
+extern void (*platform_pm_register_callback_func_with_priority)(void *cb_func,
+								PlatformPMStage pf_pm_stage,
+								int8_t priority);
+#endif
+#define BEE_PM_CHECK_PASS PM_CHECK_PASS
+#define BEE_PM_CHECK_FAIL PM_CHECK_FAIL
+#define BEE_PM_CHECK_RET  PMCheckResult
+#endif
+
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define BEE_CODEC_CH_AMIC              CODEC_CH_AMIC
 #define BEE_CODEC_CH_DMIC              CODEC_CH_DMIC
@@ -192,7 +212,17 @@ struct codec_bee_data {
 	struct i2s_config i2s_cfg;
 	size_t pcm_mem_size;
 	struct k_mem_slab *pcm_mem_slab;
+#if defined(BEE_CODEC_PM_RESTORE)
+	bool started;
+	BEE_PM_CHECK_RET pm_check_state_idle;
+#endif
 };
+
+#if defined(BEE_CODEC_PM_RESTORE)
+#define BEE_CODEC_DEVICE_AND_COMMA(node_id) DEVICE_DT_GET(node_id),
+static const struct device *const codec_bee_devices[] = {
+	DT_FOREACH_STATUS_OKAY(DT_DRV_COMPAT, BEE_CODEC_DEVICE_AND_COMMA)};
+#endif
 
 static const uint32_t codec_channel_sequence_table[] = {
 	BEE_CODEC_CH_L_R,
@@ -406,16 +436,80 @@ static void codec_bee_start_output(const struct device *dev)
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 	CODEC_Init(CODEC, &data->codec_initstruct);
+
+#if defined(BEE_CODEC_PM_RESTORE)
+	data->started = true;
+	data->pm_check_state_idle = BEE_PM_CHECK_FAIL;
+#endif
 }
 
 static void codec_bee_stop_output(const struct device *dev)
 {
 	const struct codec_bee_config *config = dev->config;
+	__maybe_unused struct codec_bee_data *data = dev->data;
 
 	CODEC_DeInit(CODEC);
 
-	pinctrl_apply_state(config->pinctrl, PINCTRL_STATE_SLEEP);
+#if defined(BEE_CODEC_PM_RESTORE)
+	data->started = false;
+	data->pm_check_state_idle = BEE_PM_CHECK_PASS;
+#endif
 }
+
+#if defined(BEE_CODEC_PM_RESTORE)
+static int codec_bee_pm_action(const struct device *dev, enum pm_device_action action)
+{
+	const struct codec_bee_config *config = dev->config;
+	struct codec_bee_data *data = dev->data;
+	int ret;
+
+	switch (action) {
+	case PM_DEVICE_ACTION_SUSPEND:
+		if (data->started) {
+			(void)clock_control_off(BEE_CLOCK_CONTROLLER,
+						(clock_control_subsys_t)&config->clkid);
+		}
+
+		ret = pinctrl_apply_state(config->pinctrl, PINCTRL_STATE_SLEEP);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			return ret;
+		}
+		break;
+	case PM_DEVICE_ACTION_RESUME:
+		if (data->started) {
+			codec_bee_start_output(dev);
+		}
+		break;
+	default:
+		return -ENOTSUP;
+	}
+
+	return 0;
+}
+
+/* Keeps the system out of DLPS while any codec instance is running output. */
+static BEE_PM_CHECK_RET codec_bee_pm_check(void)
+{
+	BEE_PM_CHECK_RET ret = BEE_PM_CHECK_FAIL;
+	struct codec_bee_data *data;
+
+	for (int i = 0; i < ARRAY_SIZE(codec_bee_devices); i++) {
+		data = (struct codec_bee_data *)(codec_bee_devices[i]->data);
+		if (data->pm_check_state_idle == BEE_PM_CHECK_FAIL) {
+			goto check_ret;
+		}
+	}
+	ret = BEE_PM_CHECK_PASS;
+check_ret:
+	return ret;
+}
+
+static void codec_bee_register_pm_check_cb(void)
+{
+	platform_pm_register_callback_func_with_priority((void *)codec_bee_pm_check,
+							PLATFORM_PM_CHECK, 1);
+}
+#endif /* BEE_CODEC_PM_RESTORE */
 
 static const struct audio_codec_api codec_bee_driver_api = {
 #if DT_ANY_INST_ON_BUS_STATUS_OKAY(i2s)
@@ -430,10 +524,16 @@ static const struct audio_codec_api codec_bee_driver_api = {
 static int codec_bee_init(const struct device *dev)
 {
 	const struct codec_bee_config *config = dev->config;
+	struct codec_bee_data *data = dev->data;
 
 	if (!device_is_ready(config->bus)) {
 		return -ENODEV;
 	}
+
+#if defined(BEE_CODEC_PM_RESTORE)
+	data->pm_check_state_idle = BEE_PM_CHECK_PASS;
+	codec_bee_register_pm_check_cb();
+#endif
 
 	return 0;
 }
@@ -522,6 +622,14 @@ static int codec_bee_init(const struct device *dev)
 	},
 #endif
 
+#if defined(BEE_CODEC_PM_RESTORE)
+#define BEE_CODEC_PM_DEFINE(index) PM_DEVICE_DT_INST_DEFINE(index, codec_bee_pm_action);
+#define BEE_CODEC_PM_GET(index)    PM_DEVICE_DT_INST_GET(index)
+#else
+#define BEE_CODEC_PM_DEFINE(index)
+#define BEE_CODEC_PM_GET(index) NULL
+#endif
+
 #define BEE_CODEC_INIT(index)                                                                      \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
 	                                                                                           \
@@ -533,8 +641,9 @@ static int codec_bee_init(const struct device *dev)
 	                                                                                           \
 	static struct codec_bee_data codec_bee_data_##index = {BEE_CODEC_STRUCT_INIT(index)};      \
 	                                                                                           \
-	DEVICE_DT_INST_DEFINE(index, &codec_bee_init, NULL, &codec_bee_data_##index,               \
-			      &codec_bee_cfg_##index, POST_KERNEL,                                 \
+	BEE_CODEC_PM_DEFINE(index)                                                                 \
+	DEVICE_DT_INST_DEFINE(index, &codec_bee_init, BEE_CODEC_PM_GET(index),                     \
+			      &codec_bee_data_##index, &codec_bee_cfg_##index, POST_KERNEL,        \
 			      CONFIG_AUDIO_CODEC_INIT_PRIORITY, &codec_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BEE_CODEC_INIT)
