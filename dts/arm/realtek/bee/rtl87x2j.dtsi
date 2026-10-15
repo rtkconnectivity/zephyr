@@ -46,12 +46,12 @@
 
 		sram: memory@20000000 {
 			device_type = "sram region";
-			reg = <0x20000000 DT_SIZE_K(83)>;
+			reg = <0x20000000 DT_SIZE_K(70)>;
 		};
 
-		heap_sram: memory@20014c00 {
+		heap_sram: memory@20011800 {
 			device_type = "sram heap region";
-			reg = <0x20014c00 DT_SIZE_K(13)>;
+			reg = <0x20011800 DT_SIZE_K(26)>;
 		};
 
 		sram_non_retention: memory@20018000 {
@@ -116,17 +116,12 @@
 
 					boot_partition: partition@0 {
 						label = "boot-patch";
-						reg = <0x0 DT_SIZE_K(90)>;
+						reg = <0x0 DT_SIZE_K(100)>;
 					};
 
-					slot0_partition: partition@16800 {
+					slot0_partition: partition@19000 {
 						label = "image-0";
-						reg = <0x16800 DT_SIZE_K(310)>;
-					};
-
-					slot1_partition: partition@64000 {
-						label = "image-1";
-						reg = <0x64000 DT_SIZE_K(311)>;
+						reg = <0x19000 DT_SIZE_K(620)>;
 					};
 				};
 			};
