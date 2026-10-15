@@ -18,3 +18,4 @@ config SOC_SERIES_RTL87X2J
 	select REALTEK_GRTC_TIMER
 	select HAS_PM
 	select HAS_POWEROFF
+	select SOC_RESET_HOOK

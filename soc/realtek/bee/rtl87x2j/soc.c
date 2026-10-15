@@ -51,6 +51,11 @@ static bool zephyr_ram_vector_table_update(int irqn, IRQ_Fun isr_handler, bool *
 	return true;
 }
 
+void soc_reset_hook(void)
+{
+	rtl87x2j_platform_reset_init();
+}
+
 #ifdef CONFIG_BT
 static void bt_controller_init(void)
 {
@@ -65,10 +70,9 @@ void soc_early_init_hook(void)
 	os_zephyr_patch_init();//both mcuboot and Zephyr need OSIF
 
 	/* Assign Zephyr version of ram_vector_table_update to patch variable */
-	//may only place at mcuboot side to save code size??
 	patch_ram_vector_table_update = zephyr_ram_vector_table_update;
 
-#if !defined(CONFIG_BOOTLOADER_MCUBOOT)
+#if defined(CONFIG_BOOTLOADER_MCUBOOT)
 	rtl87x2j_platform_early_init();
 #endif
 }
