@@ -15,6 +15,7 @@ zephyr_link_libraries(
 )
 
 zephyr_linker_sources(SECTIONS trace_section.ld)
+zephyr_linker_sources(SECTIONS rtk_bt_controller_bss.ld)
 zephyr_linker_sources(RAMFUNC_SECTION rtk_ramfunc.ld)
 zephyr_linker_sources(ROM_SECTIONS rtk_xip.ld)
 zephyr_linker_sources(RWDATA rtk_data.ld)
