@@ -34,9 +34,6 @@ LOG_MODULE_REGISTER(bee_keyscan, CONFIG_INPUT_LOG_LEVEL);
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
 #include "rtl_keyscan.h"
 #include "rtl_pinmux.h"
-#if defined(CONFIG_PM)
-#include <zephyr/dt-bindings/pinctrl/rtl87x2j-pinctrl.h>
-#endif
 #else
 #error "Unsupported Realtek Bee SoC series"
 #endif
@@ -371,7 +368,7 @@ static void bee_keyscan_process_matrix(const struct device *dev, uint8_t new_pre
 #ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
 	if (new_press_num == 0 && bee_keyscan_all_released_and_debounced(cfg_common)) {
 		k_timer_stop(&manual_keyscan_timer);
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 #if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
 		for (uint8_t r = 0; r < cfg_common->row_size; r++) {
 			bool wakeup_detected = data->wakeup_ctx[r].wakeup_detected;
@@ -425,7 +422,7 @@ static void bee_keyscan_isr(const struct device *dev)
 	uint8_t new_press_num = BEE_KEYSCAN_GET_FIFO_DATA_NUM(keyscan);
 
 #ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	KEYSCAN_SetManualSelect(keyscan, BEE_KEYSCAN_MANUAL_SEL_BIT);
 #if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
 	data->wakeup_configured = false;
@@ -510,7 +507,7 @@ static int bee_keyscan_init(const struct device *dev)
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM_DEVICE)
 	const struct pinctrl_state *state;
 
 	pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
@@ -530,12 +527,19 @@ static int bee_keyscan_init(const struct device *dev)
 				pad, (P_PAD_CBACK)keyscan_bee_process_pad_wakeup_cb,
 				(uint32_t)&data->wakeup_ctx[r]);
 			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_SYS, true);
-#else
+#elif defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_PPU, true);
 #endif
 		}
 	}
+
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
+	}
 #endif
+#endif /* CONFIG_PM_DEVICE */
 
 	bee_keyscan_init_driver(dev,
 				IS_ENABLED(CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE)

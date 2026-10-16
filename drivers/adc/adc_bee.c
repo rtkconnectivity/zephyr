@@ -344,7 +344,7 @@ static int adc_bee_init(const struct device *dev)
 	ADC_StructInit(&adc_init_struct);
 	adc_init_struct.BEE_ADC_DATA_AVE = DISABLE;
 
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(CONFIG_PM_DEVICE) && defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	/* Disable power always on, or it will keep the  ADC Qactive on. */
 	adc_init_struct.ADC_PowerAlwaysOnEn = DISABLE;
 #else
@@ -363,6 +363,13 @@ static int adc_bee_init(const struct device *dev)
 	adc_init_struct.ADC_SchIndex[cfg->channels - 1U] = INTERNAL_VBAT_MODE;
 
 	ADC_Init(adc, &adc_init_struct);
+
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
+	}
+#endif
 
 	cfg->irq_config_func(dev);
 

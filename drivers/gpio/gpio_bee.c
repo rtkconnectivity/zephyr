@@ -39,6 +39,10 @@
 #error "Unsupported Realtek Bee SoC series"
 #endif
 
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+#define BEE_GPIO_PM_WAKEUP_PPU 1
+#endif
+
 #include <zephyr/drivers/gpio/gpio_utils.h>
 #include <zephyr/logging/log.h>
 
@@ -114,12 +118,12 @@ extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 #define GPIO_GET_INT_ENABLE(port, pin)                                                             \
 	(((GPIO_TypeDef *)(port))->INTEN & (uint32_t)(pin) ? true : false)
 #define GPIO_GET_TRIGGER_MODE(port, pin)                                                           \
-	((GPIO_TypeDef *)(port)->INTBOTHEDGE & (uint32_t)(pin) ? GPIO_INT_BOTH_EDGE                \
-	 : (GPIO_TypeDef *)(port)->INTTYPE & (uint32_t)(pin)   ? GPIO_INT_Trigger_EDGE             \
-							       : GPIO_INT_Trigger_LEVEL)
+	(((GPIO_TypeDef *)(port))->INTBOTHEDGE & (uint32_t)(pin) ? GPIO_INT_BOTH_EDGE              \
+	 : ((GPIO_TypeDef *)(port))->INTTYPE & (uint32_t)(pin)   ? GPIO_INT_Trigger_EDGE           \
+								 : GPIO_INT_Trigger_LEVEL)
 #define GPIO_GET_TRIGGER_POLARITY(port, pin)                                                       \
-	((GPIO_TypeDef *)(port)->INTPOLARITY & (uint32_t)(pin) ? GPIO_INT_POLARITY_ACTIVE_HIGH     \
-							       : GPIO_INT_POLARITY_ACTIVE_LOW)
+	(((GPIO_TypeDef *)(port))->INTPOLARITY & (uint32_t)(pin) ? GPIO_INT_POLARITY_ACTIVE_HIGH   \
+								 : GPIO_INT_POLARITY_ACTIVE_LOW)
 
 #define BEE_GPIO_DIR         GPIO_Mode
 #define BEE_GPIO_DEBOUNCE_EN GPIO_ITDebounce
@@ -132,7 +136,6 @@ extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 #define BEE_GPIO_DIR_IN               GPIO_Mode_IN
 #define BEE_GPIO_TRIGGER_LEVEL        GPIO_INT_Trigger_LEVEL
 #define BEE_GPIO_TRIGGER_EDGE         GPIO_INT_Trigger_EDGE
-#define BEE_GPIO_TRIGGER_BOTH_EDGE    GPIO_INT_BOTH_EDGE
 #define BEE_GPIO_POLARITY_ACTIVE_LOW  GPIO_INT_POLARITY_ACTIVE_LOW
 #define BEE_GPIO_POLARITY_ACTIVE_HIGH GPIO_INT_POLARITY_ACTIVE_HIGH
 #define BEE_GPIO_INT_EVENT_EN         GPIO_ITCmd
@@ -177,7 +180,6 @@ extern uint32_t GPIO_SwapDebPinBit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 #define BEE_GPIO_DIR_IN               GPIO_DIR_IN
 #define BEE_GPIO_TRIGGER_LEVEL        GPIO_TRIGGER_LEVEL
 #define BEE_GPIO_TRIGGER_EDGE         GPIO_TRIGGER_EDGE
-#define BEE_GPIO_TRIGGER_BOTH_EDGE    GPIO_TRIGGER_BOTH_EDGE
 #define BEE_GPIO_POLARITY_ACTIVE_LOW  GPIO_POLARITY_ACTIVE_LOW
 #define BEE_GPIO_POLARITY_ACTIVE_HIGH GPIO_POLARITY_ACTIVE_HIGH
 #define BEE_GPIO_INT_EVENT_EN         GPIO_INTEventEn
@@ -188,6 +190,9 @@ struct gpio_pad_node {
 	uint8_t pad_num;
 	uint8_t pin_debounce_ms;
 	bool both_edge;
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
+	bool wakeup;
+#endif
 };
 
 struct gpio_bee_irq_info {
@@ -412,27 +417,39 @@ static int gpio_bee_pin_interrupt_configure(const struct device *port, gpio_pin_
 	__maybe_unused GPIO_TypeDef *port_base = config->port_base;
 	uint32_t gpio_bit = BIT(pin);
 	GPIO_InitTypeDef gpio_init_struct;
+	__maybe_unused bool wakeup = (trig & GPIO_INT_TRIG_WAKE) != 0;
 
 	LOG_DBG("port=%s, pin=%d, mode=0x%x, trig=0x%x, line%d", port->name, pin, mode, trig,
 		__LINE__);
+
+	trig = (enum gpio_int_trig)(trig & ~GPIO_INT_TRIG_WAKE);
+
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
+	data->array[pin].wakeup = wakeup;
+#endif
 
 #ifdef CONFIG_GPIO_ENABLE_DISABLE_INTERRUPT
 	if (mode == GPIO_INT_MODE_DISABLE_ONLY) {
 		BEE_GPIO_MASK_INT_CONFIG(port_base, gpio_bit, ENABLE);
 		BEE_GPIO_INT_CONFIG(port_base, gpio_bit, DISABLE);
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
 		pinctrl_bee_wakeup_config(data->array[pin].pad_num, 0, PINCTRL_BEE_WAKEUP_PPU,
 					  false);
 #endif
+
 		return 0;
 	} else if (mode == GPIO_INT_MODE_ENABLE_ONLY) {
 		BEE_GPIO_INT_CONFIG(port_base, gpio_bit, ENABLE);
 		BEE_GPIO_MASK_INT_CONFIG(port_base, gpio_bit, DISABLE);
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-		pinctrl_bee_wakeup_config(data->array[pin].pad_num,
-					  BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) ? 0 : 1,
-					  PINCTRL_BEE_WAKEUP_PPU, true);
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
+		if (wakeup) {
+			pinctrl_bee_wakeup_config(
+				data->array[pin].pad_num,
+				BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) ? 0 : 1,
+				PINCTRL_BEE_WAKEUP_PPU, true);
+		}
 #endif
+
 		return 0;
 	}
 #endif /* CONFIG_GPIO_ENABLE_DISABLE_INTERRUPT */
@@ -440,7 +457,7 @@ static int gpio_bee_pin_interrupt_configure(const struct device *port, gpio_pin_
 	BEE_GPIO_MASK_INT_CONFIG(port_base, gpio_bit, ENABLE);
 	BEE_GPIO_INT_CONFIG(port_base, gpio_bit, DISABLE);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
 	if ((BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) && trig == GPIO_INT_TRIG_HIGH) ||
 	    (!BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) && trig == GPIO_INT_TRIG_LOW)) {
 		return -ENOTSUP;
@@ -506,10 +523,13 @@ static int gpio_bee_pin_interrupt_configure(const struct device *port, gpio_pin_
 	BEE_GPIO_INIT(port_base, &gpio_init_struct);
 	BEE_GPIO_MASK_INT_CONFIG(port_base, gpio_bit, ENABLE);
 	BEE_GPIO_INT_CONFIG(port_base, gpio_bit, ENABLE);
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	pinctrl_bee_wakeup_config(data->array[pin].pad_num,
-				  BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) ? 0 : 1,
-				  PINCTRL_BEE_WAKEUP_PPU, true);
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
+	if (wakeup) {
+		pinctrl_bee_wakeup_config(
+			data->array[pin].pad_num,
+			BEE_GPIO_READ_INPUT_DATA_BIT(port_base, gpio_bit) ? 0 : 1,
+			PINCTRL_BEE_WAKEUP_PPU, true);
+	}
 #endif
 
 	/* to avoid trigger gpio interrupt */
@@ -575,15 +595,45 @@ static void gpio_bee_isr(void *arg)
 
 	for (uint32_t i = 0; i < 32; i++) {
 		if ((BIT(i) & pins) && data->array[i].both_edge) {
-			BEE_GPIO_SET_POLARITY(port_base, BIT(i),
-					      BEE_GPIO_READ_INPUT_DATA_BIT(port_base, BIT(i))
-						      ? BEE_GPIO_POLARITY_ACTIVE_LOW
-						      : BEE_GPIO_POLARITY_ACTIVE_HIGH);
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-			pinctrl_bee_wakeup_config(
-				data->array[i].pad_num,
-				BEE_GPIO_READ_INPUT_DATA_BIT(port_base, BIT(i)) ? 0 : 1,
-				PINCTRL_BEE_WAKEUP_PPU, true);
+			bool level;
+
+			/* A level interrupt stays asserted while it is being
+			 * handled, and its debounce filter keeps the old verdict
+			 * until the new polarity has made it through, so take the
+			 * interrupt away for both.
+			 */
+			BEE_GPIO_INT_CONFIG(port_base, BIT(i), DISABLE);
+			BEE_GPIO_MASK_INT_CONFIG(port_base, BIT(i), ENABLE);
+
+			level = BEE_GPIO_READ_INPUT_DATA_BIT(port_base, BIT(i));
+
+			/* The pin has already left the level this interrupt was
+			 * armed on, so the debounce filter never validated it.
+			 * Drop it and leave the polarity where it is.
+			 */
+			if (GPIO_GET_TRIGGER_POLARITY(port_base, BIT(i)) !=
+			    (level ? BEE_GPIO_POLARITY_ACTIVE_HIGH
+				   : BEE_GPIO_POLARITY_ACTIVE_LOW)) {
+				pins &= ~BIT(i);
+			} else {
+				BEE_GPIO_SET_POLARITY(port_base, BIT(i),
+						      level ? BEE_GPIO_POLARITY_ACTIVE_LOW
+							    : BEE_GPIO_POLARITY_ACTIVE_HIGH);
+			}
+
+			BEE_GPIO_CLEAR_INT_PENDING_BIT(port_base, BIT(i));
+
+			BEE_GPIO_MASK_INT_CONFIG(port_base, BIT(i), DISABLE);
+			BEE_GPIO_INT_CONFIG(port_base, BIT(i), ENABLE);
+
+			if ((pins & BIT(i)) == 0) {
+				continue;
+			}
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
+			if (data->array[i].wakeup) {
+				pinctrl_bee_wakeup_config(data->array[i].pad_num, level ? 0 : 1,
+							  PINCTRL_BEE_WAKEUP_PPU, true);
+			}
 #endif
 		}
 	}

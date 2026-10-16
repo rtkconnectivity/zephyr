@@ -296,13 +296,7 @@ static int can_bee_start(const struct device *dev)
 		}
 	}
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	/* Deep sleep power-gates the stopped controller and clears its
-	 * registers, so re-initialize from the retained init_struct on every
-	 * start to avoid a spurious bus-off.
-	 */
 	BEE_CAN_INIT(can, &data->init_struct);
-#endif
 
 	BEE_CAN_CMD(can, ENABLE);
 
@@ -968,17 +962,10 @@ static int can_bee_init(const struct device *dev)
 		return ret;
 	}
 
-#if defined(CONFIG_PM) && defined(CONFIG_SOC_SERIES_RTL87X2J)
-	{
-		const struct pinctrl_state *state;
-
-		ret = pinctrl_lookup_state(cfg->pcfg, PINCTRL_STATE_SLEEP, &state);
-		if (ret == 0) {
-			ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
-			if (ret < 0 && ret != -ENOENT) {
-				return ret;
-			}
-		}
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
 	}
 #endif
 
@@ -1009,8 +996,7 @@ static int can_bee_init(const struct device *dev)
 
 	BEE_CAN_INIT(can, init_struct);
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	/* Enable CAN automatic clock gating on RTL87X2J */
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	CAN_ClockAutoModeCmd(can, ENABLE);
 #endif
 

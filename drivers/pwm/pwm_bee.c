@@ -108,6 +108,13 @@ static int pwm_bee_init(const struct device *dev)
 
 	data->ops->init(config->reg, config->clock_div, UINT32_MAX, BEE_TIMER_MODE_PWM);
 
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
+	}
+#endif
+
 	return 0;
 }
 
