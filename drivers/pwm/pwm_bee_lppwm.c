@@ -54,7 +54,7 @@ static int pwm_bee_lppwm_set_cycles(const struct device *dev, uint32_t channel,
 		return -EINVAL;
 	}
 
-	LPPWM_Reset(config->reg);
+	LPPWM_Cmd(config->reg, DISABLE);
 
 	LPPWM_StructInit(&lppwm_init);
 	lppwm_init.LPPWM_Polarity = (flags & PWM_POLARITY_INVERTED) ? LPPWM_POLARITY_INVERT

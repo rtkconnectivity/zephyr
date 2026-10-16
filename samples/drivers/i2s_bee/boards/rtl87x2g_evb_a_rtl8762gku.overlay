@@ -24,6 +24,7 @@
 	codec: codec@0 {
 		compatible = "realtek,bee-codec";
 		reg = <0>;
+		clocks = <&cctl APB_CLK(CODEC)>;
 		channel-sequence = "l_r";
 		mic-bias = "1_8";
 		mic-bst-gain = "30dB";

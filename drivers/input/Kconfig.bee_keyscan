@@ -24,7 +24,7 @@ config BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
 config BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP
 	bool "Key wakeup the system during sleep"
 	default y
-	depends on PM && !BEE_INPUT_KEYSCAN_AUTOSCAN_MODE && SOC_SERIES_RTL87X2J
+	depends on PM_DEVICE && !BEE_INPUT_KEYSCAN_AUTOSCAN_MODE && REALTEK_BEE_HAS_PCK600
 	help
 	  When enabled, row pads are configured as wakeup sources before
 	  entering sleep. A key press or release immediately wakes the

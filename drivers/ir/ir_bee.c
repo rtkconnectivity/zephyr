@@ -47,9 +47,6 @@ LOG_MODULE_REGISTER(ir_bee, CONFIG_IR_LOG_LEVEL);
 #define BEE_IR_RX_FIFO_REG(ir) ((ir)->RX_FIFO)
 #define BEE_IR_HAS_TX_FINISH   1
 #elif defined(CONFIG_SOC_SERIES_RTL87X2G)
-/* rtl87x2g ships its own device HAL header (src/device/rtl87x2g/rtl_ir.h) with
- * mixed-case identifiers; it has no TX-finish interrupt.
- */
 #define BEE_IR_TX_DMA_EN       IR_TxDmaEn
 #define BEE_IR_RX_DMA_EN       IR_RxDmaEn
 #define BEE_IR_RX_FILTER_200NS IR_RX_FILTER_TIME_200ns
@@ -59,10 +56,6 @@ LOG_MODULE_REGISTER(ir_bee, CONFIG_IR_LOG_LEVEL);
 #define BEE_IR_RX_FIFO_REG(ir) ((ir)->IR_RX_FIFO)
 #define BEE_IR_HAS_TX_FINISH   IR_SUPPORT_TX_FINISH_INTERRUPT
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
-/* rtl87x2j has no device-specific rtl_ir.h, so <rtl_ir.h> resolves to the
- * common inc/rtl_ir.h, whose identifiers are ALL-CAPS (IR_TxDMAEn etc.). It
- * does provide the TX-finish interrupt (IR_SUPPORT_TX_FINISH_INTERRUPT == 1).
- */
 #define BEE_IR_TX_DMA_EN       IR_TxDMAEn
 #define BEE_IR_RX_DMA_EN       IR_RxDMAEn
 #define BEE_IR_RX_FILTER_200NS IR_RX_FILTER_TIME_200NS
@@ -264,14 +257,13 @@ static int ir_bee_tx_init(const struct device *dev)
 static int ir_bee_tx_enable(const struct device *dev, ir_callback_t callback, void *user_data)
 {
 	struct ir_bee_data *data = dev->data;
-	int err;
 
 	if (callback == NULL) {
 		return -EINVAL;
 	}
 
 #if defined(CONFIG_SOC_SERIES_RTL8752H)
-	err = ir_bee_tx_init(dev);
+	int err = ir_bee_tx_init(dev);
 	if (err < 0) {
 		return err;
 	}
@@ -731,6 +723,14 @@ static int ir_bee_init(const struct device *dev)
 	data->dma_rx.dma_cfg.cyclic = true;
 	data->dma_rx.dma_cfg.head_block = &data->dma_rx.blk_cfg[0];
 	data->dma_rx.dma_cfg.user_data = (void *)dev;
+#endif
+
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	int err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+
+	if ((err < 0) && (err != -ENOENT)) {
+		return err;
+	}
 #endif
 
 	return ret;

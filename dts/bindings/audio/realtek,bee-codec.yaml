@@ -9,6 +9,9 @@ compatible: "realtek,bee-codec"
 include: [i2s-device.yaml, pinctrl-device.yaml]
 
 properties:
+  clocks:
+    required: true
+
   channel-sequence:
     type: string
     description: |

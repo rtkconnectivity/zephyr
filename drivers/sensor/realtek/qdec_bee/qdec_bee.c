@@ -250,6 +250,13 @@ static int qdec_bee_init(const struct device *dev)
 		}
 	}
 
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		return ret;
+	}
+#endif
+
 	config->irq_connect();
 
 	return 0;

@@ -21,13 +21,10 @@
 #include <string.h>
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
-#include <rtl_rcc.h>
 #include <rtl_codec.h>
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-#include <rtl876x_rcc.h>
 #include <rtl876x_codec.h>
 #elif defined(CONFIG_SOC_SERIES_RTL87X2J)
-#include <rtl_rcc.h>
 #include <rtl_codec.h>
 #endif
 
@@ -186,6 +183,7 @@ LOG_MODULE_REGISTER(codec_bee, CONFIG_AUDIO_CODEC_LOG_LEVEL);
 
 struct codec_bee_config {
 	const struct device *bus;
+	uint16_t clkid;
 	const struct pinctrl_dev_config *pinctrl;
 };
 
@@ -405,22 +403,14 @@ static void codec_bee_start_output(const struct device *dev)
 
 	CODEC_AnalogCircuitInit();
 
-#if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	RCC_ClockCmd(CODEC_CLOCK, ENABLE);
-#else
-	RCC_PeriphClockCmd(APBPeriph_CODEC, APBPeriph_CODEC_CLOCK, ENABLE);
-#endif
+	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 	CODEC_Init(CODEC, &data->codec_initstruct);
 }
 
 static void codec_bee_stop_output(const struct device *dev)
 {
-	const struct codec_bee_config *config = dev->config;
-
 	CODEC_DeInit(CODEC);
-
-	pinctrl_apply_state(config->pinctrl, PINCTRL_STATE_SLEEP);
 }
 
 static const struct audio_codec_api codec_bee_driver_api = {
@@ -533,6 +523,7 @@ static int codec_bee_init(const struct device *dev)
 	                                                                                           \
 	static const struct codec_bee_config codec_bee_cfg_##index = {                             \
 		.bus = DEVICE_DT_GET(DT_INST_BUS(0)),                                              \
+		.clkid = DT_INST_CLOCKS_CELL(index, id),                                           \
 		.pinctrl = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                  \
 	};                                                                                         \
 	                                                                                           \
