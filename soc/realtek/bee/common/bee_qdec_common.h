@@ -44,11 +44,17 @@ enum bee_qdec_axis {
 	BEE_QDEC_AXIS_MAX
 };
 
+/**
+ * @brief QDEC event types.
+ *
+ * The values are bit flags, so several events can be OR'ed together into one
+ * mask and handed to @ref bee_qdec_ops.int_clear in a single call.
+ */
 enum bee_qdec_event_type {
-	BEE_QDEC_EVENT_NEW_DATA,
-	BEE_QDEC_EVENT_ILLEGAL,
-	BEE_QDEC_EVENT_OVERFLOW,
-	BEE_QDEC_EVENT_UNDERFLOW,
+	BEE_QDEC_EVENT_NEW_DATA = BIT(0),
+	BEE_QDEC_EVENT_ILLEGAL = BIT(1),
+	BEE_QDEC_EVENT_OVERFLOW = BIT(2),
+	BEE_QDEC_EVENT_UNDERFLOW = BIT(3),
 };
 
 /**
@@ -99,8 +105,12 @@ struct bee_qdec_ops {
 
 	/**
 	 * @brief Clear interrupt pending status / flag.
+	 * @param event_mask OR'ed combination of @ref bee_qdec_event_type. All the
+	 *                   requested flags are cleared with a single register
+	 *                   write, because every clear costs the hardware a
+	 *                   settling delay.
 	 */
-	void (*int_clear)(uint32_t reg, enum bee_qdec_axis axis, enum bee_qdec_event_type type);
+	void (*int_clear)(uint32_t reg, enum bee_qdec_axis axis, uint32_t event_mask);
 
 	/**
 	 * @brief Check interrupt status / flag state.
