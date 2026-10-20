@@ -174,14 +174,16 @@ static void qdec_bee_isr_handle_axis(const struct device *dev, int axis_idx)
 	const struct qdec_bee_config *config = dev->config;
 	const struct bee_qdec_ops *ops = data->ops;
 	uint32_t reg = config->reg;
-	sensor_trigger_handler_t handler;
+	sensor_trigger_handler_t handler = NULL;
+	uint32_t clear_mask = 0;
 
 	if (!config->axis_cfgs[axis_idx].enable) {
 		return;
 	}
 
 	if (ops->get_status(reg, axis_idx, BEE_QDEC_EVENT_ILLEGAL)) {
-		ops->int_clear(reg, axis_idx, BEE_QDEC_EVENT_ILLEGAL);
+		clear_mask |= BEE_QDEC_EVENT_ILLEGAL;
+
 		const char *axis_name = (axis_idx == 0) ? "X" : (axis_idx == 1) ? "Y" : "Z";
 
 		LOG_ERR("%s axis qdec illegal status", axis_name);
@@ -190,20 +192,28 @@ static void qdec_bee_isr_handle_axis(const struct device *dev, int axis_idx)
 	if (ops->get_status(reg, axis_idx, BEE_QDEC_EVENT_NEW_DATA)) {
 		if (ops->get_status(reg, axis_idx, BEE_QDEC_EVENT_OVERFLOW)) {
 			data->axes[axis_idx].round += 1;
-			ops->int_clear(reg, axis_idx, BEE_QDEC_EVENT_OVERFLOW);
+			clear_mask |= BEE_QDEC_EVENT_OVERFLOW;
 		}
 		if (ops->get_status(reg, axis_idx, BEE_QDEC_EVENT_UNDERFLOW)) {
 			data->axes[axis_idx].round -= 1;
-			ops->int_clear(reg, axis_idx, BEE_QDEC_EVENT_UNDERFLOW);
+			clear_mask |= BEE_QDEC_EVENT_UNDERFLOW;
 		}
 
-		ops->int_clear(reg, axis_idx, BEE_QDEC_EVENT_NEW_DATA);
+		clear_mask |= BEE_QDEC_EVENT_NEW_DATA;
 
 		handler = data->axes[axis_idx].data_ready_handler;
+	}
 
-		if (handler) {
-			handler(dev, data->axes[axis_idx].data_ready_trigger);
-		}
+	/* Clear every pending flag with one call: the hardware needs a settling
+	 * delay after each clear, so back-to-back clears of different flags can
+	 * leave a flag asserted and keep the CPU from sleeping afterwards.
+	 */
+	if (clear_mask) {
+		ops->int_clear(reg, axis_idx, clear_mask);
+	}
+
+	if (handler) {
+		handler(dev, data->axes[axis_idx].data_ready_trigger);
 	}
 }
 
@@ -247,6 +257,10 @@ static int qdec_bee_init(const struct device *dev)
 			data->ops->int_enable(config->reg, i, BEE_QDEC_EVENT_NEW_DATA);
 			data->ops->int_enable(config->reg, i, BEE_QDEC_EVENT_ILLEGAL);
 			data->ops->enable(config->reg, i);
+			data->ops->int_clear(config->reg, i,
+					     BEE_QDEC_EVENT_OVERFLOW |
+						     BEE_QDEC_EVENT_UNDERFLOW |
+						     BEE_QDEC_EVENT_NEW_DATA);
 		}
 	}
 

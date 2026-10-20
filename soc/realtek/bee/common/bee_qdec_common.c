@@ -170,49 +170,48 @@ static void basic_qdec_int_disable(uint32_t reg, enum bee_qdec_axis axis,
 	}
 }
 
-static void basic_qdec_int_clear(uint32_t reg, enum bee_qdec_axis axis,
-				 enum bee_qdec_event_type type)
+static void basic_qdec_int_clear(uint32_t reg, enum bee_qdec_axis axis, uint32_t event_mask)
 {
 	uint32_t val = 0;
 
 	if (axis == BEE_QDEC_AXIS_X) {
-		if (type == BEE_QDEC_EVENT_NEW_DATA) {
-			val = QDEC_CLR_NEW_CT_X;
-		} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
-			val = QDEC_CLR_ILLEGAL_INT_X;
-			QDEC_ClearINTPendingBit((QDEC_TypeDef *)reg, QDEC_CLR_ILLEGAL_CT_X);
-		} else if (type == BEE_QDEC_EVENT_OVERFLOW) {
-			val = QDEC_CLR_OVERFLOW_X;
-		} else if (type == BEE_QDEC_EVENT_UNDERFLOW) {
-			val = QDEC_CLR_UNDERFLOW_X;
-		} else {
-			/* Do nothing */
+		if (event_mask & BEE_QDEC_EVENT_NEW_DATA) {
+			val |= QDEC_CLR_NEW_CT_X;
+		}
+		if (event_mask & BEE_QDEC_EVENT_ILLEGAL) {
+			val |= QDEC_CLR_ILLEGAL_INT_X | QDEC_CLR_ILLEGAL_CT_X;
+		}
+		if (event_mask & BEE_QDEC_EVENT_OVERFLOW) {
+			val |= QDEC_CLR_OVERFLOW_X;
+		}
+		if (event_mask & BEE_QDEC_EVENT_UNDERFLOW) {
+			val |= QDEC_CLR_UNDERFLOW_X;
 		}
 	} else if (axis == BEE_QDEC_AXIS_Y) {
-		if (type == BEE_QDEC_EVENT_NEW_DATA) {
-			val = QDEC_CLR_NEW_CT_Y;
-		} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
-			val = QDEC_CLR_ILLEGAL_INT_Y;
-			QDEC_ClearINTPendingBit((QDEC_TypeDef *)reg, QDEC_CLR_ILLEGAL_CT_Y);
-		} else if (type == BEE_QDEC_EVENT_OVERFLOW) {
-			val = QDEC_CLR_OVERFLOW_Y;
-		} else if (type == BEE_QDEC_EVENT_UNDERFLOW) {
-			val = QDEC_CLR_UNDERFLOW_Y;
-		} else {
-			/* Do nothing */
+		if (event_mask & BEE_QDEC_EVENT_NEW_DATA) {
+			val |= QDEC_CLR_NEW_CT_Y;
+		}
+		if (event_mask & BEE_QDEC_EVENT_ILLEGAL) {
+			val |= QDEC_CLR_ILLEGAL_INT_Y | QDEC_CLR_ILLEGAL_CT_Y;
+		}
+		if (event_mask & BEE_QDEC_EVENT_OVERFLOW) {
+			val |= QDEC_CLR_OVERFLOW_Y;
+		}
+		if (event_mask & BEE_QDEC_EVENT_UNDERFLOW) {
+			val |= QDEC_CLR_UNDERFLOW_Y;
 		}
 	} else if (axis == BEE_QDEC_AXIS_Z) {
-		if (type == BEE_QDEC_EVENT_NEW_DATA) {
-			val = QDEC_CLR_NEW_CT_Z;
-		} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
-			val = QDEC_CLR_ILLEGAL_INT_Z;
-			QDEC_ClearINTPendingBit((QDEC_TypeDef *)reg, QDEC_CLR_ILLEGAL_CT_Z);
-		} else if (type == BEE_QDEC_EVENT_OVERFLOW) {
-			val = QDEC_CLR_OVERFLOW_Z;
-		} else if (type == BEE_QDEC_EVENT_UNDERFLOW) {
-			val = QDEC_CLR_UNDERFLOW_Z;
-		} else {
-			/* Do nothing */
+		if (event_mask & BEE_QDEC_EVENT_NEW_DATA) {
+			val |= QDEC_CLR_NEW_CT_Z;
+		}
+		if (event_mask & BEE_QDEC_EVENT_ILLEGAL) {
+			val |= QDEC_CLR_ILLEGAL_INT_Z | QDEC_CLR_ILLEGAL_CT_Z;
+		}
+		if (event_mask & BEE_QDEC_EVENT_OVERFLOW) {
+			val |= QDEC_CLR_OVERFLOW_Z;
+		}
+		if (event_mask & BEE_QDEC_EVENT_UNDERFLOW) {
+			val |= QDEC_CLR_UNDERFLOW_Z;
 		}
 	} else {
 		/* Do nothing */
@@ -386,7 +385,7 @@ static void aon_qdec_int_disable(uint32_t reg, enum bee_qdec_axis axis,
 	}
 }
 
-static void aon_qdec_int_clear(uint32_t reg, enum bee_qdec_axis axis, enum bee_qdec_event_type type)
+static void aon_qdec_int_clear(uint32_t reg, enum bee_qdec_axis axis, uint32_t event_mask)
 {
 	if (axis != BEE_QDEC_AXIS_X) {
 		return;
@@ -395,17 +394,17 @@ static void aon_qdec_int_clear(uint32_t reg, enum bee_qdec_axis axis, enum bee_q
 	AON_QDEC_TypeDef *qdec = (AON_QDEC_TypeDef *)reg;
 	uint32_t val = 0;
 
-	if (type == BEE_QDEC_EVENT_NEW_DATA) {
-		val = AON_QDEC_CLR_NEW_CT_X;
-	} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
-		val = AON_QDEC_CLR_ILLEGAL_INT_X;
-		AON_QDEC_ClearINTPendingBit(qdec, AON_QDEC_CLR_ILLEGAL_CT_X);
-	} else if (type == BEE_QDEC_EVENT_OVERFLOW) {
-		val = AON_QDEC_CLR_OVERFLOW_X;
-	} else if (type == BEE_QDEC_EVENT_UNDERFLOW) {
-		val = AON_QDEC_CLR_UNDERFLOW_X;
-	} else {
-		/* Do nothing */
+	if (event_mask & BEE_QDEC_EVENT_NEW_DATA) {
+		val |= AON_QDEC_CLR_NEW_CT_X;
+	}
+	if (event_mask & BEE_QDEC_EVENT_ILLEGAL) {
+		val |= AON_QDEC_CLR_ILLEGAL_INT_X | AON_QDEC_CLR_ILLEGAL_CT_X;
+	}
+	if (event_mask & BEE_QDEC_EVENT_OVERFLOW) {
+		val |= AON_QDEC_CLR_OVERFLOW_X;
+	}
+	if (event_mask & BEE_QDEC_EVENT_UNDERFLOW) {
+		val |= AON_QDEC_CLR_UNDERFLOW_X;
 	}
 
 	if (val) {
@@ -553,7 +552,7 @@ static void lpqdec_int_disable(uint32_t reg, enum bee_qdec_axis axis, enum bee_q
 	}
 }
 
-static void lpqdec_int_clear(uint32_t reg, enum bee_qdec_axis axis, enum bee_qdec_event_type type)
+static void lpqdec_int_clear(uint32_t reg, enum bee_qdec_axis axis, uint32_t event_mask)
 {
 	if (axis != BEE_QDEC_AXIS_X) {
 		return;
@@ -562,16 +561,17 @@ static void lpqdec_int_clear(uint32_t reg, enum bee_qdec_axis axis, enum bee_qde
 	LPQDEC_TypeDef *qdec = (LPQDEC_TypeDef *)reg;
 	uint32_t val = 0;
 
-	if (type == BEE_QDEC_EVENT_NEW_DATA) {
-		val = LPQDEC_X_INT_CLEAR_NEW_DATA;
-	} else if (type == BEE_QDEC_EVENT_ILLEGAL) {
-		val = LPQDEC_X_INT_CLEAR_ILLEGAL;
-	} else if (type == BEE_QDEC_EVENT_OVERFLOW) {
-		val = LPQDEC_X_INT_CLEAR_OVERFLOW;
-	} else if (type == BEE_QDEC_EVENT_UNDERFLOW) {
-		val = LPQDEC_X_INT_CLEAR_UNDERFLOW;
-	} else {
-		/* Do nothing */
+	if (event_mask & BEE_QDEC_EVENT_NEW_DATA) {
+		val |= LPQDEC_X_INT_CLEAR_NEW_DATA;
+	}
+	if (event_mask & BEE_QDEC_EVENT_ILLEGAL) {
+		val |= LPQDEC_X_INT_CLEAR_ILLEGAL;
+	}
+	if (event_mask & BEE_QDEC_EVENT_OVERFLOW) {
+		val |= LPQDEC_X_INT_CLEAR_OVERFLOW;
+	}
+	if (event_mask & BEE_QDEC_EVENT_UNDERFLOW) {
+		val |= LPQDEC_X_INT_CLEAR_UNDERFLOW;
 	}
 
 	if (val) {
