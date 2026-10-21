@@ -24,7 +24,7 @@ const T_IMG_HEADER_FORMAT img_header __attribute__((section(".image_header")))
 		.secure_version = 0,
 		.ctrl_flag.load_when_boot = 1,
 		.ctrl_flag.integrity_check_en_in_boot = 0,
-		.image_id = IMG_MCUAPP,
+		.image_id = IMG_BOOTPATCH,
 		.header_len = IMG_HEADER_SIZE,
 		.payload_len = 0x100,
 	},
