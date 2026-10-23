@@ -22,6 +22,19 @@
 		zephyr,canbus = &can;
 	};
 
+	aliases {
+		led0 = &led0;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led0: led0 {
+			gpios = <&gpioa 9 GPIO_ACTIVE_LOW>;
+			label = "LED 0";
+		};
+	};
+
 	gpio_keys {
 		compatible = "gpio-keys";
 
