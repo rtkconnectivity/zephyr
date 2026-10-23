@@ -80,6 +80,7 @@ tests:
       - ophelia4ev/nrf54l15/cpuapp
       - rtl8752h_evb/rtl8752hjl
       - rtl87x2g_evb_a/rtl8762gku
+      - rtl87x2j_evb/rtl8762jth
       - s32k5xxcvb/s32k566/m7
       - s32k5xxcvb/s32k566/r52
       - it51xxx_evb/it51526aw
