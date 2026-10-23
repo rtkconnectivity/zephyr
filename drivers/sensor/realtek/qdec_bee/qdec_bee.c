@@ -168,61 +168,75 @@ static int qdec_bee_trigger_set(const struct device *dev, const struct sensor_tr
 	return 0;
 }
 
-static void qdec_bee_isr_handle_axis(const struct device *dev, int axis_idx)
+static uint32_t qdec_bee_isr_get_status(const struct device *dev, int axis_idx)
 {
-	struct qdec_bee_data *data = dev->data;
 	const struct qdec_bee_config *config = dev->config;
-	const struct bee_qdec_ops *ops = data->ops;
-	uint32_t reg = config->reg;
-	sensor_trigger_handler_t handler = NULL;
-	uint32_t clear_mask = 0;
+	const struct bee_qdec_ops *ops = ((struct qdec_bee_data *)dev->data)->ops;
+	uint32_t status = 0;
 
 	if (!config->axis_cfgs[axis_idx].enable) {
-		return;
+		return 0;
 	}
 
-	if (ops->get_status(reg, axis_idx, BEE_QDEC_EVENT_ILLEGAL)) {
-		clear_mask |= BEE_QDEC_EVENT_ILLEGAL;
-
-		const char *axis_name = (axis_idx == 0) ? "X" : (axis_idx == 1) ? "Y" : "Z";
-
-		LOG_ERR("%s axis qdec illegal status", axis_name);
+	if (ops->get_status(config->reg, axis_idx, BEE_QDEC_EVENT_ILLEGAL)) {
+		status |= BEE_QDEC_EVENT_ILLEGAL;
 	}
 
-	if (ops->get_status(reg, axis_idx, BEE_QDEC_EVENT_NEW_DATA)) {
-		if (ops->get_status(reg, axis_idx, BEE_QDEC_EVENT_OVERFLOW)) {
-			data->axes[axis_idx].round += 1;
-			clear_mask |= BEE_QDEC_EVENT_OVERFLOW;
+	if (ops->get_status(config->reg, axis_idx, BEE_QDEC_EVENT_NEW_DATA)) {
+		status |= BEE_QDEC_EVENT_NEW_DATA;
+		if (ops->get_status(config->reg, axis_idx, BEE_QDEC_EVENT_OVERFLOW)) {
+			status |= BEE_QDEC_EVENT_OVERFLOW;
 		}
-		if (ops->get_status(reg, axis_idx, BEE_QDEC_EVENT_UNDERFLOW)) {
-			data->axes[axis_idx].round -= 1;
-			clear_mask |= BEE_QDEC_EVENT_UNDERFLOW;
+		if (ops->get_status(config->reg, axis_idx, BEE_QDEC_EVENT_UNDERFLOW)) {
+			status |= BEE_QDEC_EVENT_UNDERFLOW;
 		}
-
-		clear_mask |= BEE_QDEC_EVENT_NEW_DATA;
-
-		handler = data->axes[axis_idx].data_ready_handler;
 	}
 
-	/* Clear every pending flag with one call: the hardware needs a settling
-	 * delay after each clear, so back-to-back clears of different flags can
-	 * leave a flag asserted and keep the CPU from sleeping afterwards.
-	 */
-	if (clear_mask) {
-		ops->int_clear(reg, axis_idx, clear_mask);
-	}
-
-	if (handler) {
-		handler(dev, data->axes[axis_idx].data_ready_trigger);
-	}
+	return status;
 }
 
 static void qdec_bee_isr(void *arg)
 {
 	const struct device *dev = (const struct device *)arg;
+	struct qdec_bee_data *data = dev->data;
+	const struct qdec_bee_config *config = dev->config;
+	const struct bee_qdec_ops *ops = data->ops;
+	uint32_t status[QDEC_AXIS_COUNT];
+	int i;
 
-	for (int i = 0; i < QDEC_AXIS_COUNT; i++) {
-		qdec_bee_isr_handle_axis(dev, i);
+	for (i = 0; i < QDEC_AXIS_COUNT; i++) {
+		status[i] = qdec_bee_isr_get_status(dev, i);
+	}
+
+	/* Clear every pending flag of an axis with one call: the hardware needs a
+	 * settling delay after each clear, so back-to-back clears of different
+	 * flags can leave a flag asserted and keep the CPU from sleeping afterwards.
+	 */
+	for (i = 0; i < QDEC_AXIS_COUNT; i++) {
+		if (status[i]) {
+			ops->int_clear(config->reg, i, status[i]);
+		}
+	}
+
+	for (i = 0; i < QDEC_AXIS_COUNT; i++) {
+		if (status[i] & BEE_QDEC_EVENT_ILLEGAL) {
+			LOG_ERR("%c axis qdec illegal status", "XYZ"[i]);
+		}
+
+		if (!(status[i] & BEE_QDEC_EVENT_NEW_DATA)) {
+			continue;
+		}
+
+		if (status[i] & BEE_QDEC_EVENT_OVERFLOW) {
+			data->axes[i].round += 1;
+		}
+		if (status[i] & BEE_QDEC_EVENT_UNDERFLOW) {
+			data->axes[i].round -= 1;
+		}
+
+		if (data->axes[i].data_ready_handler) {
+			data->axes[i].data_ready_handler(dev, data->axes[i].data_ready_trigger);
+		}
 	}
 }
 
