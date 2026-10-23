@@ -65,6 +65,16 @@ enum bee_pwm_output_mode {
 };
 
 /**
+ * @brief Bee PWM output configuration (RTL87X2J only).
+ */
+struct bee_pwm_output_cfg {
+	/** Each PWM period starts with output low instead of high. */
+	bool start_low;
+	/** Drive the PWM output as open-drain instead of push-pull. */
+	bool open_drain;
+};
+
+/**
  * @brief Unified Timer Operations Structure.
  *
  * This structure holds function pointers to the specific HAL implementations.
@@ -77,9 +87,11 @@ struct bee_timer_ops {
 	 * @param prescaler_idx Prescaler value or index (SoC dependent).
 	 * @param top_val The reload/max count value (Period).
 	 * @param mode Operation mode (Counter or PWM).
+	 * @param pwm_cfg PWM output configuration, or NULL for the HAL defaults.
+	 *                Only applied on RTL87X2J in PWM mode.
 	 */
 	void (*init)(uint32_t reg, uint8_t prescaler_idx, uint32_t top_val,
-		     enum bee_timer_mode mode);
+		     enum bee_timer_mode mode, const struct bee_pwm_output_cfg *pwm_cfg);
 
 	/**
 	 * @brief Start the timer.
