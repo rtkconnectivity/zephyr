@@ -20,6 +20,28 @@ properties:
   "#pwm-cells":
     const: 3
 
+  start-polarity:
+    type: string
+    enum:
+      - "high"
+      - "low"
+    description: |
+      Output level at the start of each PWM period. The pulse width is
+      kept either way, so this only shifts the phase of the waveform.
+      Only supported on RTL87X2J, where the SoC devicetree sets it to
+      "low"; must not be set on other series.
+
+  output-mode:
+    type: string
+    default: "push-pull"
+    enum:
+      - "push-pull"
+      - "open-drain"
+    description: |
+      PWM output driver mode. With "open-drain" the high level comes
+      from an external pull-up.
+      Only supported on RTL87X2J; other series must keep the default.
+
 pwm-cells:
   - channel
   - period

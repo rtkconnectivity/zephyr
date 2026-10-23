@@ -33,6 +33,7 @@ struct pwm_bee_config {
 	uint8_t clock_div;
 	uint16_t clkid;
 	const struct pinctrl_dev_config *pcfg;
+	struct bee_pwm_output_cfg output_cfg;
 };
 
 static int pwm_bee_set_cycles(const struct device *dev, uint32_t channel, uint32_t period_cycles,
@@ -61,8 +62,12 @@ static int pwm_bee_set_cycles(const struct device *dev, uint32_t channel, uint32
 					      (flags & PWM_POLARITY_INVERTED));
 
 	if (output_mode != BEE_PWM_OUTPUT_MODE_TIMER) {
+		/* An open-drain output never drives high: release the pad instead. */
+		bool release = config->output_cfg.open_drain &&
+			       (output_mode == BEE_PWM_OUTPUT_MODE_HIGH);
+
 		Pad_Config(state->pins[0].pin, PAD_SW_MODE, PAD_IS_PWRON, PAD_PULL_NONE,
-			   PAD_OUT_ENABLE,
+			   release ? PAD_OUT_DISABLE : PAD_OUT_ENABLE,
 			   output_mode == BEE_PWM_OUTPUT_MODE_HIGH ? PAD_OUT_HIGH : PAD_OUT_LOW);
 		data->ops->stop(config->reg);
 		return 0;
@@ -106,7 +111,8 @@ static int pwm_bee_init(const struct device *dev)
 
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
-	data->ops->init(config->reg, config->clock_div, UINT32_MAX, BEE_TIMER_MODE_PWM);
+	data->ops->init(config->reg, config->clock_div, UINT32_MAX, BEE_TIMER_MODE_PWM,
+			&config->output_cfg);
 
 #if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
 	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
@@ -136,7 +142,15 @@ static DEVICE_API(pwm, pwm_bee_driver_api) = {
 	.clock_div = CONCAT(TIMER_CLOCK_DIV_, DT_PROP(PWM_BEE_PARENT_NODE(index), prescaler))
 #endif
 
+#define PWM_BEE_START_LOW(index)  DT_INST_ENUM_HAS_VALUE(index, start_polarity, low)
+#define PWM_BEE_OPEN_DRAIN(index) DT_INST_ENUM_HAS_VALUE(index, output_mode, open_drain)
+
 #define PWM_BEE_INIT(index)                                                                        \
+	BUILD_ASSERT(IS_ENABLED(CONFIG_SOC_SERIES_RTL87X2J) ||                                     \
+			     (!DT_INST_NODE_HAS_PROP(index, start_polarity) &&                     \
+			      !PWM_BEE_OPEN_DRAIN(index)),                                         \
+		     "start-polarity and output-mode are only supported on RTL87X2J");             \
+                                                                                                   \
 	static struct pwm_bee_data pwm_bee_data_##index;                                           \
                                                                                                    \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
@@ -148,6 +162,10 @@ static DEVICE_API(pwm, pwm_bee_driver_api) = {
 		.enhanced = DT_NODE_HAS_COMPAT(PWM_BEE_PARENT_NODE(index),                         \
 					       realtek_bee_enhanced_timer),                        \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
+		.output_cfg = {                                                                    \
+			.start_low = PWM_BEE_START_LOW(index),                                     \
+			.open_drain = PWM_BEE_OPEN_DRAIN(index),                                   \
+		},                                                                                 \
 		TIMER_DIV_CONFIG(index),                                                           \
 	};                                                                                         \
                                                                                                    \

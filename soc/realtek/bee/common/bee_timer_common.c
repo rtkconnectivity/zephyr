@@ -12,9 +12,11 @@
 /* Basic Timer Implementations */
 #if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL8752H)
 static void basic_tim_init(uint32_t reg, uint8_t prescaler_idx, uint32_t top_val,
-			   enum bee_timer_mode mode)
+			   enum bee_timer_mode mode, const struct bee_pwm_output_cfg *pwm_cfg)
 {
 	TIM_TimeBaseInitTypeDef timer_init_struct;
+
+	ARG_UNUSED(pwm_cfg);
 
 	TIM_StructInit(&timer_init_struct);
 
@@ -127,7 +129,7 @@ static enum bee_pwm_output_mode basic_tim_set_pwm_duty(uint32_t reg, uint32_t pe
 #define TIMER_MAX_CNT(reg) ((TIMER_TypeDef *)reg)->TIMER_MAX_CNT
 
 static void basic_tim_init(uint32_t reg, uint8_t prescaler_idx, uint32_t top_val,
-			   enum bee_timer_mode mode)
+			   enum bee_timer_mode mode, const struct bee_pwm_output_cfg *pwm_cfg)
 {
 	TIMER_TimeBaseInitTypeDef timer_init_struct;
 
@@ -142,6 +144,12 @@ static void basic_tim_init(uint32_t reg, uint8_t prescaler_idx, uint32_t top_val
 		timer_init_struct.PWM_En = ENABLE;
 		timer_init_struct.TIMER_Period = UINT32_MAX;
 		timer_init_struct.PWM_HighCount = 0;
+		if (pwm_cfg != NULL) {
+			timer_init_struct.PWM_Polarity =
+				pwm_cfg->start_low ? PWM_POLARITY_LOW : PWM_POLARITY_HIGH;
+			timer_init_struct.PWM_OutputMode =
+				pwm_cfg->open_drain ? PWM_OPEN_DRAIN : PWM_PUSH_PULL;
+		}
 	} else {
 		timer_init_struct.TIMER_Period = top_val;
 	}
@@ -257,9 +265,11 @@ static const struct bee_timer_ops bee_basic_ops = {
 /* Enhanced Timer Implementations */
 
 static void enh_tim_init(uint32_t reg, uint8_t prescaler_idx, uint32_t top_val,
-			 enum bee_timer_mode mode)
+			 enum bee_timer_mode mode, const struct bee_pwm_output_cfg *pwm_cfg)
 {
 	ENHTIM_InitTypeDef enh_tim_init_struct;
+
+	ARG_UNUSED(pwm_cfg);
 
 	ENHTIM_StructInit(&enh_tim_init_struct);
 

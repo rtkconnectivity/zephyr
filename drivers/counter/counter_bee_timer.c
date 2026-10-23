@@ -248,7 +248,7 @@ static int counter_bee_timer_init(const struct device *dev)
 	data->top.ticks = cfg->counter_info.max_top_value;
 
 	data->ops->init(cfg->reg, cfg->clock_div, cfg->counter_info.max_top_value,
-			BEE_TIMER_MODE_COUNTER);
+			BEE_TIMER_MODE_COUNTER, NULL);
 
 	return 0;
 }
