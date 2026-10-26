@@ -71,8 +71,10 @@
 		#size-cells = <1>;
 
 		/* 0x20100000 ~ 0x20106000 */
-		lowstack_global: memory@20100000 {
-			device_type = "lowstack global region";
+		bt_ctrl_ram: memory@20100000 {
+			compatible = "zephyr,memory-region";
+			device_type = "bt controller ram region";
+			zephyr,memory-region = "BT_CTRL_RAM";
 			reg = <0x20100000 DT_SIZE_K(2)>;
 		};
 

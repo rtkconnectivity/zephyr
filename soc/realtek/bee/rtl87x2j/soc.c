@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <string.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/entropy.h>
 #include <zephyr/logging/log.h>
@@ -14,13 +16,17 @@
 #include <osif_zephyr.h>
 #include <system_init.h>
 #include <sys_reset.h>
-#ifdef CONFIG_BT
-#include <image_info.h>
-#endif
 
 #include <rtl87x2j_platform_init.h>
+#include <rtl87x2j_btcontroller_init.h>
 
 LOG_MODULE_REGISTER(soc, CONFIG_SOC_LOG_LEVEL);
+
+#ifdef CONFIG_BT
+/* Boundaries of the ".bss.sram" output section, see rtk_bt_controller_bss.ld */
+extern char __bt_ctrl_bss_start[];
+extern char __bt_ctrl_bss_end[];
+#endif
 
 /* The platform init below runs in the application image only, not in MCUboot */
 #ifndef CONFIG_MCUBOOT
@@ -59,17 +65,13 @@ void soc_reset_hook(void)
 	rtl87x2j_platform_reset_init();
 }
 
-#ifdef CONFIG_BT
-static void bt_controller_init(void)
-{
-	IMG_ID image_id =
-		(ota_dual_bank_enable() == true) ? PRE_IMG_BT_CONTROLLER : IMG_BT_CONTROLLER_PATCH;
-	image_entry_validation(image_id);
-}
-#endif
-
 void soc_early_init_hook(void)
 {
+#ifdef CONFIG_BT
+	/* Not covered by the kernel's bss clearing (__bss_start..__bss_end) */
+	memset(__bt_ctrl_bss_start, 0, __bt_ctrl_bss_end - __bt_ctrl_bss_start);
+#endif
+
 #ifndef CONFIG_MCUBOOT
 	os_zephyr_patch_init();
 
@@ -85,33 +87,8 @@ void soc_late_init_hook(void)
 #ifndef CONFIG_MCUBOOT
 	rtl87x2j_platform_late_init();
 #endif
-
 #ifdef CONFIG_BT
-	/*
-	 * The BT controller relies on the rand() implementation in the bootloader (ROM).
-	 * srand_bl() is the corresponding seed initializer for that ROM rand function.
-	 * Use Zephyr's entropy module to supply a hardware-random seed so that each
-	 * boot produces a different random sequence.
-	 */
-	extern void srand_bl(int seed);
-
-#if DT_HAS_CHOSEN(zephyr_entropy)
-	{
-		const struct device *const entropy_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy));
-		uint32_t seed = 0;
-
-		if (entropy_get_entropy(entropy_dev, (uint8_t *)&seed, sizeof(seed)) == 0) {
-			printf("Seeding BT controller RNG with 0x%08X\n", seed);
-			srand_bl((int)seed);
-		} else {
-			srand_bl(0);
-		}
-	}
-#else
-	srand_bl(0);
-#endif
-
-	bt_controller_init();
+	rtl87x2j_btcontroller_init();
 #endif
 }
 
