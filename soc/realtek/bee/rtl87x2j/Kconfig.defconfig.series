@@ -6,9 +6,6 @@ if SOC_SERIES_RTL87X2J
 config NUM_IRQS
 	default 91
 
-config USE_DT_CODE_PARTITION
-	default y
-
 config SYS_CLOCK_TICKS_PER_SEC
 	int
 	default 1000 if CORTEX_M_SYSTICK #1ms/1tick
