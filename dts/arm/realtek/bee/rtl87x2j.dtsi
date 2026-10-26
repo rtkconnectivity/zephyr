@@ -158,6 +158,12 @@
 			};
 		};
 
+		trace: memory@e0640000 {
+			compatible = "zephyr,memory-region";
+			reg = <0xE0640000 0x400000>;
+			zephyr,memory-region = "TRACE";
+		};
+
 		cctl: clock-controller@400003c4 {
 			compatible = "realtek,bee-cctl";
 			reg = <0x400003c4 0x400>;
