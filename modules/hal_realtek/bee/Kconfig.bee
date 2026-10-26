@@ -123,7 +123,7 @@ if USE_REALTEK_BEE_OS_INTERFACE
 
 config REALTEK_BEE_OSIF_TIMER_MAX_COUNT
 	int "Maximum number of timers"
-	default 64
+	default 10
 	range 0 255
 	help
 	  Set the maximum number of timer objects that can be allocated
