@@ -155,21 +155,15 @@ static int rtl87x2j_system_pm_init(void)
 {
 	pck600_system_set_dynamic_power_policy(POWER_POLICY_SYSTEM_ON_LOW_POWER);
 
-#ifdef CONFIG_PM_DEBUG_SNAPSHOT
-	k_timer_start(&pm_snapshot_timer, K_MSEC(3000), K_MSEC(3000));
-#endif
-
-	return 0;
-}
-SYS_INIT(rtl87x2j_system_pm_init, POST_KERNEL, 0);
-
 #ifdef CONFIG_BT
-static int rtl87x2j_bt_controller_pm_init(void)
-{
 	lowerstack_SystemCall_in_platform(SYSCALL_OPCODE_SET_MAC_POWER_MODE,
 					  BT_POWER_DEEP_SLEEP, 0, 0);
+#endif
+
+#ifdef CONFIG_PM_DEBUG_SNAPSHOT
+	k_timer_start(&pm_snapshot_timer, K_MSEC(8000), K_MSEC(8000));
+#endif
 
 	return 0;
 }
-SYS_INIT(rtl87x2j_bt_controller_pm_init, APPLICATION, 0);
-#endif
+SYS_INIT(rtl87x2j_system_pm_init, APPLICATION, 0);
