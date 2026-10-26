@@ -11,6 +11,7 @@
  */
 
 #include <stdint.h>
+#include <string.h>
 
 #include <zephyr/kernel.h>
 #include <zephyr/devicetree.h>
@@ -108,20 +109,75 @@ void os_mem_peek_printf_zephyr(void)
  * Wrapper functions to adapt function signatures for os_interface
  ************************************************************/
 
+/*
+ * RTL87x2J specific allocator.
+ *
+ * Unlike the generic os_mem_alloc_intern_zephyr() in osif_zephyr_impl.c, a
+ * RAM_TYPE_DATA_ON request falls back to buffer_on_heap when data_on_heap is
+ * exhausted. RAM_TYPE_BUFFER_ON never falls back to data_on_heap.
+ *
+ * os_mem_free_zephyr() resolves the owning heap from the pointer address via
+ * get_heap_by_address(), so a block served by the fallback is returned to
+ * buffer_on_heap correctly.
+ */
+static void *heap_alloc_rtl87x2j(struct k_heap *h, size_t size, bool aligned, uint8_t alignment)
+{
+	if (aligned) {
+		return k_heap_aligned_alloc(h, alignment, size, K_NO_WAIT);
+	}
+
+	return k_heap_alloc(h, size, K_NO_WAIT);
+}
+
+static void *os_mem_alloc_intern_rtl87x2j(RAM_TYPE ram_type, size_t size, bool aligned,
+					  uint8_t alignment, const char *p_func,
+					  uint32_t file_line)
+{
+	struct k_heap *h = get_heap_by_type(ram_type);
+	void *ptr;
+
+	if (h == NULL) {
+		return NULL;
+	}
+
+	ptr = heap_alloc_rtl87x2j(h, size, aligned, alignment);
+	if (ptr != NULL) {
+		return ptr;
+	}
+
+	if (ram_type == RAM_TYPE_DATA_ON) {
+		ptr = heap_alloc_rtl87x2j(&buffer_on_heap, size, aligned, alignment);
+		if (ptr != NULL) {
+			return ptr;
+		}
+	}
+
+	LOG_ERR("Mem alloc failed! Type: %d, Size: %zu, Align: %u, Caller: %s:%u", ram_type, size,
+		aligned ? alignment : 0U, p_func, file_line);
+
+	return NULL;
+}
+
 /* Memory - wrappers to ignore func/line parameters */
 static void *wrapper_os_mem_alloc_intern(RAM_TYPE ram_type, size_t size)
 {
-	return os_mem_alloc_intern_zephyr(ram_type, size, __func__, __LINE__);
+	return os_mem_alloc_intern_rtl87x2j(ram_type, size, false, 0, __func__, __LINE__);
 }
 
 static void *wrapper_os_mem_zalloc_intern(RAM_TYPE ram_type, size_t size)
 {
-	return os_mem_zalloc_intern_zephyr(ram_type, size, __func__, __LINE__);
+	void *ptr = os_mem_alloc_intern_rtl87x2j(ram_type, size, false, 0, __func__, __LINE__);
+
+	if (ptr != NULL) {
+		memset(ptr, 0, size);
+	}
+
+	return ptr;
 }
 
 static void *wrapper_os_mem_aligned_alloc_intern(RAM_TYPE ram_type, size_t size, uint8_t alignment)
 {
-	return os_mem_aligned_alloc_intern_zephyr(ram_type, size, alignment, __func__, __LINE__);
+	return os_mem_alloc_intern_rtl87x2j(ram_type, size, true, alignment, __func__, __LINE__);
 }
 
 /* Message Queue - wrappers to ignore func/line parameters */
