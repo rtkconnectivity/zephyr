@@ -44,25 +44,14 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		/* 0x20000000 ~ 0x2001a000 */
-		sram_internal: memory@20000000 {
-			device_type = "internal sram region";
-			reg = <0x20000000 DT_SIZE_K(28)>;
-		};
-
-		sram: memory@20007000 {
+		sram: memory@20000000 {
 			device_type = "sram region";
-			reg = <0x20007000 DT_SIZE_K(45)>;
+			reg = <0x20000000 DT_SIZE_K(80)>;
 		};
 
-		heap_sram: memory@20012400 {
+		heap_sram: memory@20014000 {
 			device_type = "sram heap region";
-			reg = <0x20012400 DT_SIZE_K(23)>;
-		};
-
-		sram_non_retention: memory@20018000 {
-			device_type = "sram (non-retention) region";
-			reg = <0x20018000 0x1600>;/* 5.5k */
+			reg = <0x20014000 0x5600>;
 		};
 
 		rom_global: memory@20019600 {
@@ -120,22 +109,19 @@
 					#address-cells = <1>;
 					#size-cells = <1>;
 
-					/* 0x2000000-0x2017c00 is reserved for Realtek firmwares.
-					 * Do not use.
-					 */
-					boot_patch: partition@0 {
+					boot_partition: partition@0 {
 						label = "boot-patch";
-						reg = <0x0 DT_SIZE_K(75)>;
+						reg = <0x0 DT_SIZE_K(34)>;
 					};
 
-					ota_header: partition@12c00 {
-						label = "ota-header";
-						reg = <0x12c00 DT_SIZE_K(1)>;
+					slot0_partition: partition@8800 {
+						label = "image-0";
+						reg = <0x8800 DT_SIZE_K(343)>;
 					};
 
-					sys_patch: partition@13000 {
-						label = "system-patch";
-						reg = <0x13000 DT_SIZE_K(24)>;
+					slot1_partition: partition@5e400 {
+						label = "image-1";
+						reg = <0x5e400 DT_SIZE_K(343)>;
 					};
 				};
 			};
