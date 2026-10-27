@@ -48,4 +48,14 @@ config MAIN_STACK_SIZE
 
 endif # BT
 
+if PM
+
+config PM_DEVICE
+	default y
+
+config PM_DEVICE_RUNTIME
+	default y
+
+endif # PM
+
 endif # SOC_SERIES_RTL87X2J
