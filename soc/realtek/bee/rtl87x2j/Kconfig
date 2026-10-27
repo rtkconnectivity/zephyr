@@ -20,3 +20,4 @@ config SOC_SERIES_RTL87X2J
 	select HAS_PM
 	select HAS_POWEROFF
 	select SOC_RESET_HOOK
+	select REQUIRES_FULL_LIBC
