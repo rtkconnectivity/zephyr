@@ -18,7 +18,7 @@ config SOC_FAMILY_REALTEK_BEE_IMAGE_HEADER
 
 config CRYPTO_BEE_PSA_ACCELERATOR
 	bool "Accelerate PSA cryptography using Realtek Bee hardware"
-	depends on MBEDTLS
+	depends on MBEDTLS && !MCUBOOT
 	default y
 	select PSA_WANT_KEY_TYPE_AES
 	select PSA_WANT_ALG_ECB_NO_PADDING
