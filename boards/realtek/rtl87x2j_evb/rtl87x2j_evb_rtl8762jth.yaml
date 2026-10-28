@@ -2,8 +2,8 @@ identifier: rtl87x2j_evb/rtl8762jth
 name: Realtek rtl87x2j evaluation board
 type: mcu
 arch: arm
-ram: 41
-flash: 403
+ram: 80
+flash: 343
 toolchain:
   - zephyr
   - gnuarmemb
