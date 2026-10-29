@@ -6,8 +6,7 @@
 
 &uart2 {
 	pinctrl-0 = <&uart2_default>;
-	pinctrl-1 = <&uart2_sleep>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	status = "okay";
 	parity = "none";
 	stop-bits = "1";
@@ -30,34 +29,10 @@
 &pinctrl {
 	uart2_default: uart2_default {
 		group1 {
-			psels = <BEE_PSEL(UART2_TX, P3_0)>;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(UART2_RX, P3_1)>;
+			psels = <BEE_PSEL(UART2_TX, P3_0)>,
+				<BEE_PSEL(UART2_RX, P3_1)>;
 			output-disable;
 			bias-pull-up;
-		};
-	};
-
-	uart2_sleep: uart2_sleep {
-		group1 {
-			psels = <BEE_PSEL(SW_MODE, P3_0)>;
-			sleep-hardware-state;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(SW_MODE, P3_1)>;
-			sleep-hardware-state;
-			output-disable;
-			bias-pull-up;
-			wakeup-low;
 		};
 	};
 };

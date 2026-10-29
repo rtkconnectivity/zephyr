@@ -672,8 +672,6 @@ static int i2s_bee_configure(const struct device *dev, enum i2s_dir dir,
 		(void)clock_control_off(BEE_CLOCK_CONTROLLER,
 					(clock_control_subsys_t)&dev_cfg->clkid);
 
-		pinctrl_apply_state(dev_cfg->pinctrl, PINCTRL_STATE_SLEEP);
-
 		i2s_set_satus(dev_data, dir, I2S_STATE_NOT_READY);
 		return 0;
 	}

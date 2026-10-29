@@ -66,8 +66,7 @@
 				<BEE_PSEL(SPI0_MO_MASTER, P6_1)>,
 				<BEE_PSEL(SPI0_MI_MASTER, P6_2)>,
 				<BEE_PSEL(SPI0_SS_N_0_MASTER, P6_3)>;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-pull-up;
 		};
 	};

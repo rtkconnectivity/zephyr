@@ -54,6 +54,24 @@ description: |
   Available pin functions can be found in the
   zephyr\include\zephyr\dt-bindings\pinctrl\rtl87xxx-pinctrl.h header file.
 
+  On rtl87x2j, a group marked 'sleep-hardware-state' does not configure the
+  pad. It only sets the pull the hardware applies on its own while the SoC
+  is in DLPS; the other properties of the group are ignored. Put it in the
+  default state, after the group that configures the same pad:
+
+    uart2_default: uart2_default {
+      group1 {
+        psels = <BEE_PSEL(UART2_RX, P3_3)>;
+        output-disable;
+        bias-pull-up;
+      };
+      group2 {
+        psels = <BEE_PSEL(UART2_RX, P3_3)>;
+        sleep-hardware-state;
+        bias-pull-down;
+      };
+    };
+
   To link this pin configuration with a device, use a pinctrl-N property
   for some number N, like this example you could place in your board's DTS
   file:
@@ -118,11 +136,3 @@ child-binding:
           - 1
           - 2
           - 3
-
-      wakeup-high:
-        type: boolean
-        description: Enable wakeup high function
-
-      wakeup-low:
-        type: boolean
-        description: Enable wakeup low function

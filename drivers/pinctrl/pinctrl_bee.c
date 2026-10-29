@@ -64,15 +64,17 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 		cfg_pull = PAD_PULL_DOWN;
 	}
 
+	/* A sleep-hardware-state group only sets the pull the hardware applies
+	 * on its own in DLPS. It follows the group that configures the same pad,
+	 * since Pad_LPConfig() takes the active pull from the pad.
+	 */
+	if (pin[0].sleep_hardware_state) {
 #if defined(CONFIG_SOC_SERIES_RTL87X2J)
-	uint32_t cfg_sleep_hardware_state = pin[0].sleep_hardware_state;
-
-	if (cfg_sleep_hardware_state) {
 		Pad_LPConfig(cfg_pin, cfg_pull, ENABLE);
 		Pad_ModeAutoSwitchCmd(cfg_pin, ENABLE);
+#endif
 		return;
 	}
-#endif
 
 	/* set pull strength */
 	BEE_PAD_SET_PULL(cfg_pin, cfg_pull_strength);
@@ -101,8 +103,11 @@ static void pinctrl_configure_pin(const pinctrl_soc_pin_t *pin)
 
 	/* set pad and pinmux */
 	if (cfg_fun == BEE_PWR_OFF) {
+		/* Pinmux is per pad, so a stale function keeps the peripheral input routed */
+		Pinmux_Deinit(cfg_pin);
 		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_NOT_PWRON, cfg_pull, cfg_dir, cfg_drv);
 	} else if (cfg_fun == BEE_SW_MODE) {
+		Pinmux_Deinit(cfg_pin);
 		Pad_Config(cfg_pin, PAD_SW_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);
 	} else if (cfg_fun < BEE_PINMUX_MAX) {
 		Pad_Config(cfg_pin, PAD_PINMUX_MODE, PAD_IS_PWRON, cfg_pull, cfg_dir, cfg_drv);

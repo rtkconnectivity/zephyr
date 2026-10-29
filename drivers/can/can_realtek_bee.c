@@ -962,13 +962,6 @@ static int can_bee_init(const struct device *dev)
 		return ret;
 	}
 
-#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
-	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		return ret;
-	}
-#endif
-
 	clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 	ret = can_calc_timing(dev, &timing, cfg->common.bitrate, cfg->common.sample_point);

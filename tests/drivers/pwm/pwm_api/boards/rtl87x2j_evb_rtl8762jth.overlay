@@ -27,9 +27,8 @@
 	pwm2_default: pwm2_default {
 		group1 {
 			psels = <BEE_PSEL(PWM2, P0_2)>;
-			output-enable;
-			output-low;
-			bias-pull-down;
+			output-disable;
+			bias-disable;
 		};
 	};
 };

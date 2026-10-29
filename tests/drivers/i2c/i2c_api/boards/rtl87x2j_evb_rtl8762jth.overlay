@@ -21,8 +21,7 @@
 		group1 {
 			psels = <BEE_PSEL(I2C0_CLK, P2_2)>,
 				<BEE_PSEL(I2C0_DAT, P2_3)>;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-pull-up;
 		};
 	};

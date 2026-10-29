@@ -514,7 +514,7 @@ static int bee_keyscan_init(const struct device *dev)
 	for (uint8_t i = 0; i < state->pin_cnt; i++) {
 		uint16_t fun = state->pins[i].fun;
 
-		if (fun >= BEE_KEY_ROW_0 &&
+		if (!state->pins[i].sleep_hardware_state && fun >= BEE_KEY_ROW_0 &&
 		    fun < (uint16_t)(BEE_KEY_ROW_0 + config->common.row_size)) {
 			uint8_t pad = (uint8_t)state->pins[i].pin;
 
@@ -532,13 +532,6 @@ static int bee_keyscan_init(const struct device *dev)
 #endif
 		}
 	}
-
-#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
-	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		return ret;
-	}
-#endif
 #endif /* CONFIG_PM_DEVICE */
 
 	bee_keyscan_init_driver(dev,
