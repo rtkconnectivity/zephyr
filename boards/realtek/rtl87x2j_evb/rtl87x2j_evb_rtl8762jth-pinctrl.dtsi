@@ -16,34 +16,10 @@
 
 	uart2_default: uart2_default {
 		group1 {
-			psels = <BEE_PSEL(UART2_TX, P3_0)>;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(UART2_RX, P3_1)>;
+			psels = <BEE_PSEL(UART2_TX, P3_0)>,
+				<BEE_PSEL(UART2_RX, P3_1)>;
 			output-disable;
 			bias-pull-up;
-		};
-	};
-
-	uart2_sleep: uart2_sleep {
-		group1 {
-			psels = <BEE_PSEL(IDLE_MODE, P3_0)>;
-			sleep-hardware-state;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(IDLE_MODE, P3_1)>;
-			sleep-hardware-state;
-			output-disable;
-			bias-pull-up;
-			wakeup-low;
 		};
 	};
 
@@ -51,8 +27,7 @@
 		group1 {
 			psels = <BEE_PSEL(CAN_TX, P7_0)>,
 				<BEE_PSEL(CAN_RX, P7_1)>;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-disable;
 		};
 	};

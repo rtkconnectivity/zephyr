@@ -111,7 +111,7 @@ struct uart_bee_data {
 	atomic_t pm_rx_held;
 #if defined(BEE_UART_PM_WAKEUP)
 	bool has_wakeup_pin;
-	pinctrl_soc_pin_t wakeup_pin;
+	uint8_t wakeup_pin;
 	/* Every UART is powered on its own, so it needs its own keep alive timer */
 	struct k_timer timer;
 #endif
@@ -164,6 +164,12 @@ static void uart_bee_int_config(const struct device *dev, uint32_t int_mask,
 }
 
 #if defined(BEE_UART_PM_WAKEUP)
+static bool uart_bee_is_rx_fun(uint16_t fun)
+{
+	return (fun == BEE_UART0_RX) || (fun == BEE_UART1_RX) || (fun == BEE_UART2_RX) ||
+	       (fun == BEE_UART3_RX);
+}
+
 static inline void uart_bee_wakeup_pin_config(const struct device *dev, bool enable)
 {
 	struct uart_bee_data *data = dev->data;
@@ -172,10 +178,10 @@ static inline void uart_bee_wakeup_pin_config(const struct device *dev, bool ena
 		return;
 	}
 
-	BEE_UART_WAKEUP_CLEAR_INT_PENDING_BIT(data->wakeup_pin.pin);
+	BEE_UART_WAKEUP_CLEAR_INT_PENDING_BIT(data->wakeup_pin);
 
-	pinctrl_bee_wakeup_config(data->wakeup_pin.pin, data->wakeup_pin.wakeup_high,
-				  PINCTRL_BEE_WAKEUP_SYS, enable);
+	/* RX idles high, so the start bit of a frame wakes the SoC up */
+	pinctrl_bee_wakeup_config(data->wakeup_pin, 0, PINCTRL_BEE_WAKEUP_SYS, enable);
 }
 #else
 #define uart_bee_wakeup_pin_config(dev, enable)
@@ -1371,47 +1377,33 @@ static int uart_bee_init(const struct device *dev)
 		return err;
 	}
 
-#if defined(CONFIG_REALTEK_BEE_HAS_PCK600) && defined(CONFIG_PM_DEVICE)
-	/* Arm the sleep configuration, which the hardware switches to on its own
-	 * once the clock is gated. The pads stay in their active configuration.
-	 */
-	err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
-	if ((err < 0) && (err != -ENOENT)) {
-		return err;
-	}
-#endif
-
 #if defined(BEE_UART_PM_WAKEUP)
-	/* A pad wakeup needs both a wakeup-source device and a pin configured
-	 * for wakeup in its sleep state, so find the pin and check both.
-	 */
-	{
+	/* A wakeup-source device wakes the SoC up from its RX pad */
+	if (pm_device_wakeup_is_capable(dev)) {
 		const struct pinctrl_state *state;
-		const pinctrl_soc_pin_t *wakeup_pin = NULL;
 
-		err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_SLEEP, &state);
-		if (err == 0) {
-			for (uint8_t i = 0; i < state->pin_cnt; i++) {
-				if (state->pins[i].wakeup_low || state->pins[i].wakeup_high) {
-					wakeup_pin = &state->pins[i];
-					break;
-				}
+		err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
+		if (err < 0) {
+			return err;
+		}
+
+		for (uint8_t i = 0; i < state->pin_cnt; i++) {
+			if (!state->pins[i].sleep_hardware_state &&
+			    uart_bee_is_rx_fun(state->pins[i].fun)) {
+				data->has_wakeup_pin = true;
+				data->wakeup_pin = state->pins[i].pin;
+				break;
 			}
 		}
 
-		if (pm_device_wakeup_is_capable(dev) && (wakeup_pin != NULL)) {
-			data->has_wakeup_pin = true;
-			data->wakeup_pin = *wakeup_pin;
+		if (data->has_wakeup_pin) {
 			k_timer_init(&data->timer, uart_bee_rx_wakeup_timer_cb, NULL);
 			data->timer.user_data = (void *)dev;
 			System_RegisterPadWakeupCallback(
-				data->wakeup_pin.pin,
-				(P_PAD_CBACK)uart_bee_process_pad_wakeup_cb, (uint32_t)dev);
-		} else if (pm_device_wakeup_is_capable(dev)) {
-			LOG_ERR("%s: wakeup-source without a wakeup pin in its sleep state",
-				dev->name);
-		} else if (wakeup_pin != NULL) {
-			LOG_ERR("%s: wakeup pin in its sleep state without wakeup-source",
+				data->wakeup_pin, (P_PAD_CBACK)uart_bee_process_pad_wakeup_cb,
+				(uint32_t)dev);
+		} else {
+			LOG_ERR("%s: wakeup-source without an RX pin in its default state",
 				dev->name);
 		}
 	}

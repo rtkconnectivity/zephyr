@@ -39,7 +39,7 @@
 		group1 {
 			psels = <BEE_PSEL(SW_MODE, P2_2)>;
 			output-disable;
-			bias-pull-down;
+			bias-disable;
 		};
 	};
 };

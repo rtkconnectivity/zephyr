@@ -725,14 +725,6 @@ static int ir_bee_init(const struct device *dev)
 	data->dma_rx.dma_cfg.user_data = (void *)dev;
 #endif
 
-#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
-	int err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
-
-	if ((err < 0) && (err != -ENOENT)) {
-		return err;
-	}
-#endif
-
 	return ret;
 }
 

@@ -77,8 +77,7 @@
 
 &uart2 {
 	pinctrl-0 = <&uart2_default>;
-	pinctrl-1 = <&uart2_sleep>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	status = "okay";
 	current-speed = <2000000>;
 	parity = "none";
@@ -88,8 +87,7 @@
 
 &uart0 {
 	pinctrl-0 = <&uart0_default>;
-	pinctrl-1 = <&uart0_sleep>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	status = "okay";
 	current-speed = <2000000>;
 	parity = "none";
@@ -146,8 +144,7 @@
 
 &i2c0 {
 	pinctrl-0 = <&i2c0_default>;
-	pinctrl-1 = <&i2c0_sleep>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 	status = "okay";
 };
@@ -174,8 +171,7 @@
 
 &keyscan {
 	pinctrl-0 = <&keyscan_default>;
-	pinctrl-1 = <&keyscan_sleep>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	row-size = <2>;
 	col-size = <2>;
 	scan-div = <15>;
@@ -222,67 +218,19 @@
 
 	uart0_default: uart0_default {
 		group1 {
-			psels = <BEE_PSEL(UART0_TX, P0_6)>;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(UART0_RX, P2_3)>;
+			psels = <BEE_PSEL(UART0_TX, P0_6)>,
+				<BEE_PSEL(UART0_RX, P2_3)>;
 			output-disable;
 			bias-pull-up;
-		};
-	};
-
-	uart0_sleep: uart0_sleep {
-		group1 {
-			psels = <BEE_PSEL(SW_MODE, P0_6)>;
-			sleep-hardware-state;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(SW_MODE, P2_3)>;
-			sleep-hardware-state;
-			output-disable;
-			bias-pull-up;
-			wakeup-low;
 		};
 	};
 
 	uart2_default: uart2_default {
 		group1 {
-			psels = <BEE_PSEL(UART2_TX, P3_0)>;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(UART2_RX, P3_1)>;
+			psels = <BEE_PSEL(UART2_TX, P3_0)>,
+				<BEE_PSEL(UART2_RX, P3_1)>;
 			output-disable;
 			bias-pull-up;
-		};
-	};
-
-	uart2_sleep: uart2_sleep {
-		group1 {
-			psels = <BEE_PSEL(SW_MODE, P3_0)>;
-			sleep-hardware-state;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(SW_MODE, P3_1)>;
-			sleep-hardware-state;
-			output-disable;
-			bias-pull-up;
-			wakeup-low;
 		};
 	};
 
@@ -291,8 +239,7 @@
 			psels = <BEE_PSEL(SPI0_CLK_MASTER, P4_0)>,
 				<BEE_PSEL(SPI0_MO_MASTER, P4_1)>,
 				<BEE_PSEL(SPI0_MI_MASTER, P4_2)>;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-pull-up;
 		};
 	};
@@ -300,9 +247,8 @@
 	pwm6_default: pwm6_default {
 		group1 {
 			psels = <BEE_PSEL(ENPWM0, P0_2)>;
-			output-enable;
-			output-low;
-			bias-pull-down;
+			output-disable;
+			bias-disable;
 		};
 	};
 
@@ -311,7 +257,7 @@
 			psels = <BEE_PSEL(QDEC_PHASE_A_X, P3_2)>,
 				<BEE_PSEL(QDEC_PHASE_B_X, P3_3)>;
 			output-disable;
-			bias-pull-up;
+			bias-disable;
 		};
 	};
 
@@ -319,19 +265,7 @@
 		group1 {
 			psels = <BEE_PSEL(I2C0_CLK, P0_4)>,
 				<BEE_PSEL(I2C0_DAT, P0_5)>;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-	};
-
-	i2c0_sleep: i2c0_sleep {
-		group1 {
-			psels = <BEE_PSEL(SW_MODE, P0_4)>,
-				<BEE_PSEL(SW_MODE, P0_5)>;
-			sleep-hardware-state;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-pull-up;
 		};
 	};
@@ -354,32 +288,11 @@
 		};
 	};
 
-	keyscan_sleep: keyscan_sleep {
-		group1 {
-			psels = <BEE_PSEL(SW_MODE, P2_6)>,
-				<BEE_PSEL(SW_MODE, P2_7)>;
-			sleep-hardware-state;
-			output-enable;
-			output-low;
-			bias-disable;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(SW_MODE, P2_4)>,
-				<BEE_PSEL(SW_MODE, P2_5)>;
-			sleep-hardware-state;
-			output-disable;
-			bias-pull-up;
-			bias-pull-strong;
-			wakeup-low;
-		};
-	};
-
 	adc_default: adc_default {
 		group1 {
 			psels = <BEE_PSEL(SW_MODE, P2_2)>;
 			output-disable;
-			bias-pull-down;
+			bias-disable;
 		};
 	};
 };

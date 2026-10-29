@@ -364,13 +364,6 @@ static int adc_bee_init(const struct device *dev)
 
 	ADC_Init(adc, &adc_init_struct);
 
-#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
-	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		return ret;
-	}
-#endif
-
 	cfg->irq_config_func(dev);
 
 	adc_context_unlock_unconditionally(&data->ctx);

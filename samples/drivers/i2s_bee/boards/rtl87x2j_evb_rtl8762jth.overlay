@@ -46,8 +46,7 @@
 
 &uart0 {
 	pinctrl-0 = <&uart0_default>;
-	pinctrl-1 = <&uart0_sleep>;
-	pinctrl-names = "default", "sleep";
+	pinctrl-names = "default";
 	status = "okay";
 	current-speed = <2000000>;
 	parity = "none";
@@ -64,8 +63,7 @@
 				<BEE_PSEL(SDO_CODEC_SLAVE, P2_3)>, /* i2s_codec_rx waveform */
 				<BEE_PSEL(ADCDAT_SPORT0, P2_4)>, /* i2s_tx waveform */
 				<BEE_PSEL(DACDAT_SPORT0, P2_5)>; /* i2s_tx waveform */
-			output-enable;
-			output-low;
+			output-disable;
 			bias-disable;
 		};
 	};
@@ -90,32 +88,9 @@
 
 	uart0_default: uart0_default {
 		group1 {
-			psels = <BEE_PSEL(UART0_TX, P0_0)>;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		/* To avoid dummy data in RX fifo, which pulls qactive line */
-		group2 {
-			psels = <BEE_PSEL(UART0_RX, P0_1)>;
-			output-disable;
-			bias-pull-up;
-		};
-	};
-
-	uart0_sleep: uart0_sleep {
-		group1 {
-			psels = <BEE_PSEL(IDLE_MODE, P0_0)>;
-			sleep-hardware-state;
-			output-enable;
-			output-high;
-			bias-pull-up;
-		};
-
-		group2 {
-			psels = <BEE_PSEL(IDLE_MODE, P0_1)>;
-			sleep-hardware-state;
+			/* To avoid dummy data in RX fifo, which pulls qactive line */
+			psels = <BEE_PSEL(UART0_TX, P0_0)>,
+				<BEE_PSEL(UART0_RX, P0_1)>;
 			output-disable;
 			bias-pull-up;
 		};

@@ -781,13 +781,6 @@ static int i2c_bee_init(const struct device *dev)
 		return err;
 	}
 
-#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
-	err = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_SLEEP);
-	if ((err < 0) && (err != -ENOENT)) {
-		return err;
-	}
-#endif
-
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 
 	k_sem_init(&data->lock, 1, 1);

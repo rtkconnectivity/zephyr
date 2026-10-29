@@ -695,6 +695,10 @@ static int gpio_bee_init(const struct device *dev)
 	}
 
 	for (uint8_t state_cnt = 0; state_cnt < state->pin_cnt; state_cnt++) {
+		if (state->pins[state_cnt].sleep_hardware_state) {
+			continue;
+		}
+
 		pad_num = state->pins[state_cnt].pin;
 		pin_num = GPIO_GetNum(pad_num) & 31;
 		if (pin_num == 0xff) {

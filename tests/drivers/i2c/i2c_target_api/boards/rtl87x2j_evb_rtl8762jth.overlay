@@ -45,8 +45,7 @@
 		group1 {
 			psels = <BEE_PSEL(I2C0_CLK, P2_3)>,
 				<BEE_PSEL(I2C0_DAT, P2_4)>;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-pull-up;
 		};
 	};
@@ -55,8 +54,7 @@
 		group1 {
 			psels = <BEE_PSEL(I2C1_CLK, P7_0)>,
 				<BEE_PSEL(I2C1_DAT, P7_1)>;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-pull-up;
 		};
 	};

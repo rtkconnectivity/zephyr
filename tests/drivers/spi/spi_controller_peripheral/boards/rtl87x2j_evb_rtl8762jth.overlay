@@ -57,8 +57,7 @@ dut_spis: &spi0_slave {
 				<BEE_PSEL(SPI1_MO_MASTER, P4_1)>,
 				<BEE_PSEL(SPI1_MI_MASTER, P4_2)>,
 				<BEE_PSEL(SPI1_SS_N_0_MASTER, P4_3)>;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-pull-up;
 		};
 	};
@@ -69,8 +68,7 @@ dut_spis: &spi0_slave {
 				<BEE_PSEL(SPI0_SI_SLAVE, P0_5)>,
 				<BEE_PSEL(SPI0_SO_SLAVE, P0_6)>,
 				<BEE_PSEL(SPI0_SS_N_0_SLAVE, P0_7)>;
-			output-enable;
-			output-high;
+			output-disable;
 			bias-pull-up;
 		};
 	};
