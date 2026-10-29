@@ -74,7 +74,7 @@ struct uart_bee_config {
 	bool hw_flow_ctrl;
 	const struct pinctrl_dev_config *pcfg;
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
-	uart_irq_config_func_t irq_config_func;
+	void (*irq_config_func)(const struct device *dev, bool enable);
 #endif
 };
 
@@ -1421,7 +1421,7 @@ static int uart_bee_init(const struct device *dev)
 
 	/* Enable nvic */
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
-	config->irq_config_func(dev);
+	config->irq_config_func(dev, true);
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN || CONFIG_UART_ASYNC_API */
 
 #ifdef CONFIG_UART_ASYNC_API
@@ -1433,6 +1433,103 @@ static int uart_bee_init(const struct device *dev)
 
 	return pm_device_driver_init(dev, uart_bee_pm_action);
 }
+
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+/* Pinmux is per pad, so a pad left on a UART function keeps feeding the
+ * peripheral after another pad takes it over. A sleep state, if any, decides
+ * how the pads are left; otherwise they become inputs with their default pull.
+ */
+static int uart_bee_pins_release(const struct device *dev)
+{
+	const struct uart_bee_config *config = dev->config;
+	const struct pinctrl_state *state;
+	int err;
+
+	err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
+	if (err != -ENOENT) {
+		return err;
+	}
+
+	err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
+	if (err < 0) {
+		return err;
+	}
+
+	for (uint8_t i = 0; i < state->pin_cnt; i++) {
+		pinctrl_soc_pin_t pin = state->pins[i];
+
+		if (pin.sleep_hardware_state) {
+			continue;
+		}
+
+		pin.fun = BEE_SW_MODE;
+		pin.dir = 0;
+
+		err = pinctrl_configure_pins(&pin, 1, PINCTRL_REG_NONE);
+		if (err < 0) {
+			return err;
+		}
+	}
+
+	return 0;
+}
+
+static int uart_bee_deinit(const struct device *dev)
+{
+	const struct uart_bee_config *config = dev->config;
+	struct uart_bee_data *data = dev->data;
+	int err;
+
+#if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
+	config->irq_config_func(dev, false);
+#endif
+
+#ifdef CONFIG_UART_ASYNC_API
+	/* Transfers in flight are dropped without any event */
+	(void)k_work_cancel_delayable(&data->dma_rx.timeout_work);
+	(void)k_work_cancel_delayable(&data->dma_tx.timeout_work);
+
+	/* uart_bee_async_init() claims the channels again */
+	if (data->dma_rx.dma_dev != NULL) {
+		uart_bee_dma_rx_disable(dev);
+		dma_stop(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
+		dma_release_channel(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
+	}
+
+	if (data->dma_tx.dma_dev != NULL) {
+		uart_bee_dma_tx_disable(dev);
+		dma_stop(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+		dma_release_channel(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+	}
+
+	data->dma_rx.buffer = NULL;
+	data->dma_rx.buffer_length = 0;
+	data->dma_tx.buffer_length = 0;
+	data->rx_next_buffer = NULL;
+	data->rx_next_buffer_len = 0;
+#endif
+
+	uart_bee_wakeup_pin_config(dev, false);
+	uart_bee_keep_alive_stop(dev);
+#if defined(BEE_UART_PM_WAKEUP)
+	/* uart_bee_init() looks the RX pad up again */
+	data->has_wakeup_pin = false;
+#endif
+
+	/* Drop the references the stopped transfers held */
+	uart_bee_pm_put(dev, &data->pm_tx_held);
+	uart_bee_pm_put(dev, &data->pm_rx_held);
+
+	err = pm_device_driver_deinit(dev, uart_bee_pm_action);
+	if (err < 0) {
+		return err;
+	}
+
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
+
+	return uart_bee_pins_release(dev);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
 
 static DEVICE_API(uart, uart_bee_driver_api) = {
 	.poll_in = uart_bee_poll_in,
@@ -1512,10 +1609,15 @@ static DEVICE_API(uart, uart_bee_driver_api) = {
 
 #if defined(CONFIG_UART_INTERRUPT_DRIVEN) || defined(CONFIG_UART_ASYNC_API)
 #define BEE_UART_IRQ_HANDLER_DECL(index)                                                           \
-	static void uart_bee_irq_config_func_##index(const struct device *dev);
+	static void uart_bee_irq_config_func_##index(const struct device *dev, bool enable);
 #define BEE_UART_IRQ_HANDLER(index)                                                                \
-	static void uart_bee_irq_config_func_##index(const struct device *dev)                     \
+	static void uart_bee_irq_config_func_##index(const struct device *dev, bool enable)        \
 	{                                                                                          \
+		if (!enable) {                                                                     \
+			irq_disable(DT_INST_IRQN(index));                                          \
+			return;                                                                    \
+		}                                                                                  \
+                                                                                                   \
 		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), uart_bee_isr,       \
 			    DEVICE_DT_INST_GET(index), 0);                                         \
 		irq_enable(DT_INST_IRQN(index));                                                   \
@@ -1577,9 +1679,10 @@ static DEVICE_API(uart, uart_bee_driver_api) = {
 			},                                                                         \
 		UART_DMA_CHANNEL(index, rx) UART_DMA_CHANNEL(index, tx)};                          \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(index, &uart_bee_init, PM_DEVICE_DT_INST_GET(index),                 \
-			      &uart_bee_data_##index, &uart_bee_cfg_##index, PRE_KERNEL_1,         \
-			      CONFIG_SERIAL_INIT_PRIORITY, &uart_bee_driver_api);                  \
+	DEVICE_DT_INST_DEINIT_DEFINE(index, &uart_bee_init, &uart_bee_deinit,                      \
+				     PM_DEVICE_DT_INST_GET(index), &uart_bee_data_##index,         \
+				     &uart_bee_cfg_##index, PRE_KERNEL_1,                          \
+				     CONFIG_SERIAL_INIT_PRIORITY, &uart_bee_driver_api);           \
                                                                                                    \
 	BEE_UART_IRQ_HANDLER(index)
 
