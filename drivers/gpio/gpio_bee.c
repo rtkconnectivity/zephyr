@@ -13,6 +13,7 @@
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/gpio/gpio_bee.h>
 #include <zephyr/drivers/clock_control/bee_clock_control.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/irq.h>
@@ -301,10 +302,18 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 		return -ENOTSUP;
 	}
 
-	if (flags == GPIO_DISCONNECTED) {
+	pull_config = gpio_bee_get_pull_config(flags);
+
+	if ((flags & GPIO_DIR_MASK) == GPIO_DISCONNECTED) {
 		Pinmux_Deinit(pad_pin);
-		Pad_Config(pad_pin, PAD_SW_MODE, PAD_NOT_PWRON, PAD_PULL_NONE, PAD_OUT_DISABLE,
-			   PAD_OUT_HIGH);
+		if (pull_config == PAD_PULL_NONE) {
+			Pad_Config(pad_pin, PAD_SW_MODE, PAD_NOT_PWRON, PAD_PULL_NONE,
+				   PAD_OUT_DISABLE, PAD_OUT_HIGH);
+		} else {
+			/* A disconnected pin may still keep its pull */
+			Pad_Config(pad_pin, PAD_SW_MODE, PAD_IS_PWRON, pull_config,
+				   PAD_OUT_DISABLE, PAD_OUT_HIGH);
+		}
 
 		key = irq_lock();
 		data->connect_pin &= ~gpio_bit;
@@ -312,8 +321,6 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 
 		return 0;
 	}
-
-	pull_config = gpio_bee_get_pull_config(flags);
 
 	data->array[pin].pin_debounce_ms = debounce_ms;
 
@@ -663,6 +670,100 @@ static void gpio_bee_isr(void *arg)
 	gpio_fire_callbacks(&data->cb, dev, pins);
 
 	BEE_GPIO_CLEAR_INT_PENDING_BIT(port_base, UINT32_MAX);
+}
+
+int gpio_bee_pin_remap(const struct device *port, gpio_pin_t pin, uint8_t pad, uint8_t *prev_pad)
+{
+	__maybe_unused const struct gpio_bee_config *config = port->config;
+	struct gpio_bee_data *data = port->data;
+	__maybe_unused bool old_wakeup = false;
+	uint8_t old_pad;
+	uint8_t gpio_num;
+	unsigned int key;
+
+	if (pin >= 32U) {
+		return -EINVAL;
+	}
+
+	if (pad == GPIO_BEE_PAD_NONE) {
+		pad = TOTAL_PIN_NUM;
+	} else {
+		if (pad >= TOTAL_PIN_NUM) {
+			return -EINVAL;
+		}
+
+		gpio_num = GPIO_GetNum(pad);
+		if (gpio_num == 0xFF || (gpio_num & 31) != pin) {
+			return -EINVAL;
+		}
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
+		if (GPIO_GetPort(pad) != config->port_base) {
+			return -EINVAL;
+		}
+#endif
+	}
+
+	key = irq_lock();
+	if ((data->connect_pin & BIT(pin)) != 0U) {
+		irq_unlock(key);
+		return -EBUSY;
+	}
+
+	old_pad = data->array[pin].pad_num;
+	data->array[pin].pad_num = pad;
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
+	old_wakeup = data->array[pin].wakeup;
+	data->array[pin].wakeup = false;
+#endif
+	irq_unlock(key);
+
+#if defined(BEE_GPIO_PM_WAKEUP_PPU)
+	/* PPU wakeup is armed per pad, so it does not follow the pin */
+	if (old_wakeup && old_pad != TOTAL_PIN_NUM && old_pad != pad) {
+		pinctrl_bee_wakeup_config(old_pad, 0, PINCTRL_BEE_WAKEUP_PPU, false);
+	}
+#endif
+
+	if (prev_pad != NULL) {
+		*prev_pad = old_pad == TOTAL_PIN_NUM ? GPIO_BEE_PAD_NONE : old_pad;
+	}
+
+	return 0;
+}
+
+#define GPIO_BEE_DEVICE_GET(index) DEVICE_DT_INST_GET(index),
+
+static const struct device *const gpio_bee_ports[] = {
+	DT_INST_FOREACH_STATUS_OKAY(GPIO_BEE_DEVICE_GET)};
+
+int gpio_bee_pad_to_pin(uint8_t pad, const struct device **port, gpio_pin_t *pin)
+{
+	uint8_t gpio_num;
+
+	if (pad >= TOTAL_PIN_NUM) {
+		return -EINVAL;
+	}
+
+	gpio_num = GPIO_GetNum(pad);
+	if (gpio_num == 0xFF) {
+		return -EINVAL;
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(gpio_bee_ports); i++) {
+		__maybe_unused const struct gpio_bee_config *config = gpio_bee_ports[i]->config;
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
+		if (GPIO_GetPort(pad) != config->port_base) {
+			continue;
+		}
+#endif
+		*port = gpio_bee_ports[i];
+		*pin = gpio_num & 31;
+		return 0;
+	}
+
+	return -ENODEV;
 }
 
 static int gpio_bee_init(const struct device *dev)

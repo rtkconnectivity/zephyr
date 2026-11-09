@@ -52,7 +52,7 @@ struct adc_bee_config {
 	uint16_t clkid;
 	uint8_t channels;
 	const struct pinctrl_dev_config *pcfg;
-	void (*irq_config_func)(const struct device *dev);
+	void (*irq_config_func)(const struct device *dev, bool enable);
 };
 
 struct adc_bee_data {
@@ -364,17 +364,44 @@ static int adc_bee_init(const struct device *dev)
 
 	ADC_Init(adc, &adc_init_struct);
 
-	cfg->irq_config_func(dev);
+	cfg->irq_config_func(dev, true);
 
 	adc_context_unlock_unconditionally(&data->ctx);
 
 	return 0;
 }
 
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static int adc_bee_deinit(const struct device *dev)
+{
+	struct adc_bee_data *data = dev->data;
+	const struct adc_bee_config *cfg = dev->config;
+	ADC_TypeDef *adc = (ADC_TypeDef *)cfg->reg;
+
+	/* Held until adc_bee_init() unlocks it again */
+	if (k_sem_take(&data->ctx.lock, K_NO_WAIT) < 0) {
+		return -EBUSY;
+	}
+
+	cfg->irq_config_func(dev, false);
+	ADC_Cmd(adc, ADC_ONE_SHOT_MODE, DISABLE);
+	ADC_INTConfig(adc, ADC_INT_ONE_SHOT_DONE, DISABLE);
+	data->configured_channels = 0U;
+
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+	return pinctrl_bee_release(cfg->pcfg);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
+
 #define BEE_ADC_INIT(index)                                                                        \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
-	static void adc_bee_irq_config_func(const struct device *dev)                              \
+	static void adc_bee_irq_config_func(const struct device *dev, bool enable)                 \
 	{                                                                                          \
+		if (!enable) {                                                                     \
+			irq_disable(DT_INST_IRQN(index));                                          \
+			return;                                                                    \
+		}                                                                                  \
 		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), adc_bee_isr,        \
 			    DEVICE_DT_INST_GET(index), 0);                                         \
 		irq_enable(DT_INST_IRQN(index));                                                   \
@@ -392,8 +419,8 @@ static int adc_bee_init(const struct device *dev)
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
 		.irq_config_func = adc_bee_irq_config_func,                                        \
 	};                                                                                         \
-	DEVICE_DT_INST_DEFINE(index, adc_bee_init, NULL, &adc_bee_data_##index,                    \
-			      &adc_bee_config_##index, POST_KERNEL, CONFIG_ADC_INIT_PRIORITY,      \
-			      &adc_bee_driver_api);
+	DEVICE_DT_INST_DEINIT_DEFINE(index, adc_bee_init, adc_bee_deinit, NULL,                    \
+				     &adc_bee_data_##index, &adc_bee_config_##index, POST_KERNEL,  \
+				     CONFIG_ADC_INIT_PRIORITY, &adc_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BEE_ADC_INIT)

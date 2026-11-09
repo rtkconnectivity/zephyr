@@ -186,7 +186,7 @@ struct bee_keyscan_config {
 	uint8_t delay_div;
 	uint16_t scan_cnt;
 	uint16_t rel_cnt;
-	void (*irq_config_func)(void);
+	void (*irq_config_func)(bool enable);
 };
 
 struct bee_keyscan_wakeup_ctx {
@@ -493,6 +493,53 @@ void keyscan_bee_process_pad_wakeup_cb(void *user_data)
 }
 #endif
 
+#if defined(CONFIG_PM_DEVICE)
+/* Row wakeup is armed per pad, so it is torn down before the pads move */
+static void bee_keyscan_row_wakeup_config(const struct device *dev, bool enable)
+{
+	const struct bee_keyscan_config *config = dev->config;
+	__maybe_unused struct bee_keyscan_data *data = dev->data;
+	const struct pinctrl_state *state;
+
+	if (pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state) < 0) {
+		return;
+	}
+
+	for (uint8_t i = 0; i < state->pin_cnt; i++) {
+		uint16_t fun = state->pins[i].fun;
+
+		if (!state->pins[i].sleep_hardware_state && fun >= BEE_KEY_ROW_0 &&
+		    fun < (uint16_t)(BEE_KEY_ROW_0 + config->common.row_size)) {
+			uint8_t pad = (uint8_t)state->pins[i].pin;
+
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+			uint8_t r = fun - BEE_KEY_ROW_0;
+
+			if (enable) {
+				data->wakeup_ctx[r].dev = dev;
+				data->wakeup_ctx[r].row_pad = pad;
+				System_RegisterPadWakeupCallback(
+					pad, (P_PAD_CBACK)keyscan_bee_process_pad_wakeup_cb,
+					(uint32_t)&data->wakeup_ctx[r]);
+			} else {
+				System_RegisterPadWakeupCallback(pad, NULL, 0);
+				data->wakeup_ctx[r].wakeup_detected = false;
+			}
+			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_SYS, enable);
+#elif defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_PPU, enable);
+#endif
+		}
+	}
+
+#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
+	if (!enable) {
+		data->wakeup_configured = false;
+	}
+#endif
+}
+#endif /* CONFIG_PM_DEVICE */
+
 static int bee_keyscan_init(const struct device *dev)
 {
 	const struct bee_keyscan_config *config = dev->config;
@@ -508,31 +555,8 @@ static int bee_keyscan_init(const struct device *dev)
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 #if defined(CONFIG_PM_DEVICE)
-	const struct pinctrl_state *state;
-
-	pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
-	for (uint8_t i = 0; i < state->pin_cnt; i++) {
-		uint16_t fun = state->pins[i].fun;
-
-		if (!state->pins[i].sleep_hardware_state && fun >= BEE_KEY_ROW_0 &&
-		    fun < (uint16_t)(BEE_KEY_ROW_0 + config->common.row_size)) {
-			uint8_t pad = (uint8_t)state->pins[i].pin;
-
-#if defined(CONFIG_BEE_INPUT_KEYSCAN_PM_KEY_WAKEUP)
-			uint8_t r = fun - BEE_KEY_ROW_0;
-
-			data->wakeup_ctx[r].dev = dev;
-			data->wakeup_ctx[r].row_pad = pad;
-			System_RegisterPadWakeupCallback(
-				pad, (P_PAD_CBACK)keyscan_bee_process_pad_wakeup_cb,
-				(uint32_t)&data->wakeup_ctx[r]);
-			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_SYS, true);
-#elif defined(CONFIG_REALTEK_BEE_HAS_PCK600)
-			pinctrl_bee_wakeup_config(pad, 0, PINCTRL_BEE_WAKEUP_PPU, true);
+	bee_keyscan_row_wakeup_config(dev, true);
 #endif
-		}
-	}
-#endif /* CONFIG_PM_DEVICE */
 
 	bee_keyscan_init_driver(dev,
 				IS_ENABLED(CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE)
@@ -545,15 +569,47 @@ static int bee_keyscan_init(const struct device *dev)
 	data->dev = dev;
 #endif
 
-	config->irq_config_func();
+	config->irq_config_func(true);
 
 	return 0;
 }
 
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static int bee_keyscan_deinit(const struct device *dev)
+{
+	const struct bee_keyscan_config *config = dev->config;
+	__maybe_unused struct bee_keyscan_data *data = dev->data;
+
+	config->irq_config_func(false);
+
+#ifndef CONFIG_BEE_INPUT_KEYSCAN_AUTOSCAN_MODE
+	struct k_work_sync sync;
+
+	/* The work restarts the scan timer, so it goes first */
+	(void)k_work_cancel_sync(&data->work, &sync);
+	k_timer_stop(&manual_keyscan_timer);
+#endif
+
+	BEE_KEYSCAN_CMD(config->reg, DISABLE);
+
+#if defined(CONFIG_PM_DEVICE)
+	bee_keyscan_row_wakeup_config(dev, false);
+#endif
+
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
+
+	return pinctrl_bee_release(config->pcfg);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
+
 #if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
 #define BEE_KEYSCAN_IRQ_HANDLER(index)                                                             \
-	static void bee_keyscan_irq_config_func_##index(void)                                      \
+	static void bee_keyscan_irq_config_func_##index(bool enable)                               \
 	{                                                                                          \
+		if (!enable) {                                                                     \
+			irq_disable(DT_INST_IRQN(index));                                          \
+			return;                                                                    \
+		}                                                                                  \
 		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), bee_keyscan_isr,    \
 			    DEVICE_DT_INST_GET(index), 0);                                         \
 		irq_enable(DT_INST_IRQN(index));                                                   \
@@ -565,13 +621,13 @@ static int bee_keyscan_init(const struct device *dev)
 		const struct device *dev = DEVICE_DT_GET(DT_DRV_INST(index));                      \
 		bee_keyscan_isr(dev);                                                              \
 	}                                                                                          \
-	static void bee_keyscan_irq_config_func_##index(void)                                      \
+	static void bee_keyscan_irq_config_func_##index(bool enable)                               \
 	{                                                                                          \
 		RamVectorTableUpdate(Keyscan_VECTORn, bee_keyscan_isr_handler_##index);            \
 		NVIC_InitTypeDef NVIC_InitStruct;                                                  \
 		NVIC_InitStruct.NVIC_IRQChannel = KeyScan_IRQn;                                    \
 		NVIC_InitStruct.NVIC_IRQChannelPriority = 2;                                       \
-		NVIC_InitStruct.NVIC_IRQChannelCmd = ENABLE;                                       \
+		NVIC_InitStruct.NVIC_IRQChannelCmd = enable ? ENABLE : DISABLE;                    \
 		NVIC_Init(&NVIC_InitStruct);                                                       \
 	}
 #endif
@@ -609,7 +665,7 @@ static int bee_keyscan_init(const struct device *dev)
 			     BEE_KEYSCAN_MAX_TICKS,                                                \
 		     "release-time-us ticks > " STRINGIFY(BEE_KEYSCAN_MAX_TICKS));                 \
                                                                                                    \
-	static void bee_keyscan_irq_config_func_##index(void);                                     \
+	static void bee_keyscan_irq_config_func_##index(bool enable);                              \
                                                                                                    \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
                                                                                                    \
@@ -640,9 +696,9 @@ static int bee_keyscan_init(const struct device *dev)
 			   (.wakeup_ctx = bee_keyscan_wakeup_ctx_##index,)                         \
 			) };                       \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(index, &bee_keyscan_init, NULL, &bee_keyscan_data_##index,           \
-			      &bee_keyscan_cfg_##index, POST_KERNEL, CONFIG_INPUT_INIT_PRIORITY,   \
-			      NULL);                                                               \
+	DEVICE_DT_INST_DEINIT_DEFINE(index, &bee_keyscan_init, &bee_keyscan_deinit, NULL,          \
+				     &bee_keyscan_data_##index, &bee_keyscan_cfg_##index,          \
+				     POST_KERNEL, CONFIG_INPUT_INIT_PRIORITY, NULL);               \
                                                                                                    \
 	BEE_KEYSCAN_IRQ_HANDLER(index)
 

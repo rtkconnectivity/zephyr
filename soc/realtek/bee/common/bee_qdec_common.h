@@ -79,6 +79,14 @@ struct bee_qdec_ops {
 	int (*init)(uint32_t reg, const struct bee_qdec_axis_config *axis_cfgs);
 
 	/**
+	 * @brief Undo what init set up beyond the axes and their interrupts.
+	 *
+	 * Optional, NULL if there is nothing to undo.
+	 * @param reg Base address of the QDEC register.
+	 */
+	void (*deinit)(uint32_t reg);
+
+	/**
 	 * @brief Enable the QDEC axis.
 	 */
 	void (*enable)(uint32_t reg, enum bee_qdec_axis axis);

@@ -109,7 +109,7 @@ struct spi_bee_config {
 	uint16_t clkid;
 	bool is_slave;
 #ifdef CONFIG_SPI_BEE_INTERRUPT
-	void (*irq_configure)(void);
+	void (*irq_configure)(bool enable);
 #endif
 };
 
@@ -854,13 +854,49 @@ static int spi_bee_init(const struct device *dev)
 	}
 
 #ifdef CONFIG_SPI_BEE_INTERRUPT
-	cfg->irq_configure();
+	cfg->irq_configure(true);
 #endif
 
 	spi_context_unlock_unconditionally(&data->ctx);
 
 	return 0;
 }
+
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static int spi_bee_deinit(const struct device *dev)
+{
+	struct spi_bee_data *data = dev->data;
+	const struct spi_bee_config *cfg = dev->config;
+
+#ifdef CONFIG_MULTITHREADING
+	/* Held until spi_bee_init() unlocks it again */
+	if (k_sem_take(&data->ctx.lock, K_NO_WAIT) < 0) {
+		return -EBUSY;
+	}
+#endif
+
+#ifdef CONFIG_SPI_BEE_INTERRUPT
+	cfg->irq_configure(false);
+#endif
+
+	SPI_Cmd((SPI_TypeDef *)cfg->reg, DISABLE);
+	data->initialized = false;
+
+#ifdef CONFIG_SPI_BEE_DMA
+	/* spi_bee_dma_init() claims the channels again */
+	if (data->dma_rx.dma_dev != NULL && data->dma_tx.dma_dev != NULL) {
+		dma_stop(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
+		dma_stop(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+		dma_release_channel(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
+		dma_release_channel(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+	}
+#endif
+
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+	return pinctrl_bee_release(cfg->pcfg);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
 
 static DEVICE_API(spi, spi_bee_driver_api) = {
 	.transceive = spi_bee_transceive,
@@ -904,8 +940,12 @@ static DEVICE_API(spi, spi_bee_driver_api) = {
 #endif
 
 #define SPI_BEE_IRQ_CONFIGURE(index)                                                               \
-	static void spi_bee_irq_config_##index(void)                                               \
+	static void spi_bee_irq_config_##index(bool enable)                                        \
 	{                                                                                          \
+		if (!enable) {                                                                     \
+			irq_disable(DT_INST_IRQN(index));                                          \
+			return;                                                                    \
+		}                                                                                  \
 		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), spi_bee_isr,        \
 			    DEVICE_DT_INST_GET(index), 0);                                         \
 		irq_enable(DT_INST_IRQN(index));                                                   \
@@ -927,8 +967,8 @@ static DEVICE_API(spi, spi_bee_driver_api) = {
 		.is_slave = DT_INST_PROP_OR(index, is_slave, false),                               \
 		IF_ENABLED(CONFIG_SPI_BEE_INTERRUPT,                                               \
 			   (.irq_configure = spi_bee_irq_config_##index))}; \
-	DEVICE_DT_INST_DEFINE(index, &spi_bee_init, NULL, &spi_bee_data_##index,                   \
-			      &spi_bee_config_##index, POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,      \
-			      &spi_bee_driver_api);
+	DEVICE_DT_INST_DEINIT_DEFINE(index, &spi_bee_init, &spi_bee_deinit, NULL,                  \
+				     &spi_bee_data_##index, &spi_bee_config_##index, POST_KERNEL,  \
+				     CONFIG_SPI_INIT_PRIORITY, &spi_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BEE_SPI_INIT)

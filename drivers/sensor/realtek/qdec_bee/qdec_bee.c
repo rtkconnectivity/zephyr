@@ -48,7 +48,7 @@ struct qdec_bee_data {
 struct qdec_bee_config {
 	uint32_t reg;
 	const struct pinctrl_dev_config *pcfg;
-	void (*irq_connect)(void);
+	void (*irq_connect)(bool enable);
 	struct bee_qdec_axis_config axis_cfgs[BEE_QDEC_AXIS_MAX];
 #if defined(USE_BASIC_QDEC) || defined(USE_LPQDEC)
 	uint16_t clkid;
@@ -278,10 +278,41 @@ static int qdec_bee_init(const struct device *dev)
 		}
 	}
 
-	config->irq_connect();
+	config->irq_connect(true);
 
 	return 0;
 }
+
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static int qdec_bee_deinit(const struct device *dev)
+{
+	struct qdec_bee_data *data = dev->data;
+	const struct qdec_bee_config *config = dev->config;
+
+	config->irq_connect(false);
+
+	for (int i = 0; i < QDEC_AXIS_COUNT; i++) {
+		if (config->axis_cfgs[i].enable) {
+			data->ops->disable(config->reg, i);
+			data->ops->int_disable(config->reg, i, BEE_QDEC_EVENT_NEW_DATA);
+			data->ops->int_disable(config->reg, i, BEE_QDEC_EVENT_ILLEGAL);
+		}
+	}
+
+	if (data->ops->deinit) {
+		data->ops->deinit(config->reg);
+	}
+
+	/* The count restarts from zero on the next init */
+	memset(data->axes, 0, sizeof(data->axes));
+
+#if defined(USE_BASIC_QDEC) || defined(USE_LPQDEC)
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
+#endif
+
+	return pinctrl_bee_release(config->pcfg);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
 
 static DEVICE_API(sensor, qdec_bee_driver_api) = {
 	.sample_fetch = qdec_bee_sample_fetch,
@@ -307,19 +338,23 @@ static DEVICE_API(sensor, qdec_bee_driver_api) = {
 		const struct device *dev = DEVICE_DT_INST_GET(inst);                               \
 		qdec_bee_isr((void *)dev);                                                         \
 	}                                                                                          \
-	static void qdec_bee_irq_connect_##inst(void)                                              \
+	static void qdec_bee_irq_connect_##inst(bool enable)                                       \
 	{                                                                                          \
 		RamVectorTableUpdate(Qdecode_VECTORn, qdec_bee_isr_wrapper_##inst);                \
 		NVIC_InitTypeDef NVIC_InitStruct;                                                  \
 		NVIC_InitStruct.NVIC_IRQChannel = Qdecode_IRQn;                                    \
 		NVIC_InitStruct.NVIC_IRQChannelPriority = 2;                                       \
-		NVIC_InitStruct.NVIC_IRQChannelCmd = ENABLE;                                       \
+		NVIC_InitStruct.NVIC_IRQChannelCmd = enable ? ENABLE : DISABLE;                    \
 		NVIC_Init(&NVIC_InitStruct);                                                       \
 	}
 #else
 #define QDEC_BEE_IRQ_CONNECT_FUNC(inst)                                                            \
-	static void qdec_bee_irq_connect_##inst(void)                                              \
+	static void qdec_bee_irq_connect_##inst(bool enable)                                       \
 	{                                                                                          \
+		if (!enable) {                                                                     \
+			irq_disable(DT_INST_IRQN(inst));                                           \
+			return;                                                                    \
+		}                                                                                  \
 		IRQ_CONNECT(DT_INST_IRQN(inst), DT_INST_IRQ(inst, priority), qdec_bee_isr,         \
 			    DEVICE_DT_INST_GET(inst), 0);                                          \
 		irq_enable(DT_INST_IRQN(inst));                                                    \
@@ -361,8 +396,9 @@ static DEVICE_API(sensor, qdec_bee_driver_api) = {
                                                                                                    \
 	static struct qdec_bee_data qdec_bee_data_##inst;                                          \
                                                                                                    \
-	SENSOR_DEVICE_DT_INST_DEFINE(inst, qdec_bee_init, NULL, &qdec_bee_data_##inst,             \
-				     &qdec_bee_config_##inst, POST_KERNEL,                         \
-				     CONFIG_SENSOR_INIT_PRIORITY, &qdec_bee_driver_api);
+	DEVICE_DT_INST_DEINIT_DEFINE(inst, qdec_bee_init, qdec_bee_deinit, NULL,                   \
+				     &qdec_bee_data_##inst, &qdec_bee_config_##inst, POST_KERNEL,  \
+				     CONFIG_SENSOR_INIT_PRIORITY, &qdec_bee_driver_api);           \
+	SENSOR_INFO_DT_DEFINE(DT_DRV_INST(inst));
 
 DT_INST_FOREACH_STATUS_OKAY(QDEC_BEE_DEFINE)

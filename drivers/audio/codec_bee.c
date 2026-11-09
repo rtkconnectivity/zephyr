@@ -192,6 +192,7 @@ struct codec_bee_data {
 	struct i2s_config i2s_cfg;
 	size_t pcm_mem_size;
 	struct k_mem_slab *pcm_mem_slab;
+	bool started;
 };
 
 static const uint32_t codec_channel_sequence_table[] = {
@@ -406,11 +407,15 @@ static void codec_bee_start_output(const struct device *dev)
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
 	CODEC_Init(CODEC, &data->codec_initstruct);
+	data->started = true;
 }
 
 static void codec_bee_stop_output(const struct device *dev)
 {
+	struct codec_bee_data *data = dev->data;
+
 	CODEC_DeInit(CODEC);
+	data->started = false;
 }
 
 static const struct audio_codec_api codec_bee_driver_api = {
@@ -433,6 +438,21 @@ static int codec_bee_init(const struct device *dev)
 
 	return 0;
 }
+
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static int codec_bee_deinit(const struct device *dev)
+{
+	const struct codec_bee_config *config = dev->config;
+	struct codec_bee_data *data = dev->data;
+
+	/* CODEC_DeInit() also gates the codec clock */
+	if (data->started) {
+		codec_bee_stop_output(dev);
+	}
+
+	return pinctrl_bee_release(config->pinctrl);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
 
 #if defined(CONFIG_SOC_SERIES_RTL87X2G)
 #define BEE_CODEC_STRUCT_INIT(index)                                                               \
@@ -529,8 +549,8 @@ static int codec_bee_init(const struct device *dev)
 	                                                                                           \
 	static struct codec_bee_data codec_bee_data_##index = {BEE_CODEC_STRUCT_INIT(index)};      \
 	                                                                                           \
-	DEVICE_DT_INST_DEFINE(index, &codec_bee_init, NULL, &codec_bee_data_##index,               \
-			      &codec_bee_cfg_##index, POST_KERNEL,                                 \
-			      CONFIG_AUDIO_CODEC_INIT_PRIORITY, &codec_bee_driver_api);
+	DEVICE_DT_INST_DEINIT_DEFINE(index, &codec_bee_init, &codec_bee_deinit, NULL,              \
+				     &codec_bee_data_##index, &codec_bee_cfg_##index, POST_KERNEL, \
+				     CONFIG_AUDIO_CODEC_INIT_PRIORITY, &codec_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BEE_CODEC_INIT)

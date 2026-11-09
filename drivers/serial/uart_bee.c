@@ -1435,45 +1435,6 @@ static int uart_bee_init(const struct device *dev)
 }
 
 #ifdef CONFIG_DEVICE_DEINIT_SUPPORT
-/* Pinmux is per pad, so a pad left on a UART function keeps feeding the
- * peripheral after another pad takes it over. A sleep state, if any, decides
- * how the pads are left; otherwise they become inputs with their default pull.
- */
-static int uart_bee_pins_release(const struct device *dev)
-{
-	const struct uart_bee_config *config = dev->config;
-	const struct pinctrl_state *state;
-	int err;
-
-	err = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_SLEEP);
-	if (err != -ENOENT) {
-		return err;
-	}
-
-	err = pinctrl_lookup_state(config->pcfg, PINCTRL_STATE_DEFAULT, &state);
-	if (err < 0) {
-		return err;
-	}
-
-	for (uint8_t i = 0; i < state->pin_cnt; i++) {
-		pinctrl_soc_pin_t pin = state->pins[i];
-
-		if (pin.sleep_hardware_state) {
-			continue;
-		}
-
-		pin.fun = BEE_SW_MODE;
-		pin.dir = 0;
-
-		err = pinctrl_configure_pins(&pin, 1, PINCTRL_REG_NONE);
-		if (err < 0) {
-			return err;
-		}
-	}
-
-	return 0;
-}
-
 static int uart_bee_deinit(const struct device *dev)
 {
 	const struct uart_bee_config *config = dev->config;
@@ -1513,6 +1474,9 @@ static int uart_bee_deinit(const struct device *dev)
 	uart_bee_keep_alive_stop(dev);
 #if defined(BEE_UART_PM_WAKEUP)
 	/* uart_bee_init() looks the RX pad up again */
+	if (data->has_wakeup_pin) {
+		System_RegisterPadWakeupCallback(data->wakeup_pin, NULL, 0);
+	}
 	data->has_wakeup_pin = false;
 #endif
 
@@ -1527,7 +1491,7 @@ static int uart_bee_deinit(const struct device *dev)
 
 	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
 
-	return uart_bee_pins_release(dev);
+	return pinctrl_bee_release(config->pcfg);
 }
 #endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
 

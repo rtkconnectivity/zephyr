@@ -171,7 +171,7 @@ struct i2s_bee_config {
 	I2S_TypeDef *base;
 	uint32_t clkid;
 	const struct pinctrl_dev_config *pinctrl;
-	void (*irq_config_func)(const struct device *dev);
+	void (*irq_config_func)(const struct device *dev, bool enable);
 	bool internal_codec;
 };
 
@@ -1085,12 +1085,69 @@ static int i2s_bee_init(const struct device *dev)
 #endif
 
 	/* register ISR */
-	dev_cfg->irq_config_func(dev);
+	dev_cfg->irq_config_func(dev, true);
 
 	LOG_INF("Device %s initialized", dev->name);
 
 	return ret;
 }
+
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static bool i2s_stream_is_active(const struct stream *strm)
+{
+	return strm->state == I2S_STATE_RUNNING || strm->state == I2S_STATE_STOPPING;
+}
+
+static int i2s_bee_deinit(const struct device *dev)
+{
+	const struct i2s_bee_config *dev_cfg = dev->config;
+	struct i2s_bee_data *dev_data = dev->data;
+	unsigned int key;
+
+	key = irq_lock();
+
+#if defined(CONFIG_I2S_BEE_TX)
+	if (i2s_stream_is_active(&dev_data->dma_tx)) {
+		irq_unlock(key);
+		return -EBUSY;
+	}
+#endif
+#if defined(CONFIG_I2S_BEE_RX)
+	if (i2s_stream_is_active(&dev_data->dma_rx)) {
+		irq_unlock(key);
+		return -EBUSY;
+	}
+#endif
+
+	/* Buffers left over from a READY or ERROR stream go back to their slab */
+#if defined(CONFIG_I2S_BEE_TX)
+	i2s_purge_stream_buffers(&dev_data->dma_tx, dev_data->dma_tx.cfg.mem_slab, true, true);
+	dev_data->dma_tx.state = I2S_STATE_NOT_READY;
+#endif
+#if defined(CONFIG_I2S_BEE_RX)
+	i2s_purge_stream_buffers(&dev_data->dma_rx, dev_data->dma_rx.cfg.mem_slab, true, true);
+	dev_data->dma_rx.state = I2S_STATE_NOT_READY;
+#endif
+
+	irq_unlock(key);
+
+	dev_cfg->irq_config_func(dev, false);
+
+	/* i2s_bee_init() claims the channels again */
+#if defined(CONFIG_I2S_BEE_TX)
+	dma_release_channel(dev_data->dma_tx.dma_dev, dev_data->dma_tx.dma_channel);
+#endif
+#if defined(CONFIG_I2S_BEE_RX)
+	if (!i2s_rx_shares_tx_channel(dev_data)) {
+		dma_release_channel(dev_data->dma_rx.dma_dev, dev_data->dma_rx.dma_channel);
+	}
+#endif
+
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&dev_cfg->clkid);
+
+	return pinctrl_bee_release(dev_cfg->pinctrl);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
 
 static DEVICE_API(i2s, i2s_bee_driver_api) = {
 	.configure = i2s_bee_configure,
@@ -1144,7 +1201,7 @@ static DEVICE_API(i2s, i2s_bee_driver_api) = {
 #endif
 
 #define BEE_I2S_INIT(index)                                                                        \
-	static void i2s_bee_irq_config_func_##index(const struct device *dev);                     \
+	static void i2s_bee_irq_config_func_##index(const struct device *dev, bool enable);        \
 	                                                                                           \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
 	                                                                                           \
@@ -1159,12 +1216,16 @@ static DEVICE_API(i2s, i2s_bee_driver_api) = {
 	                                                                                           \
 	static struct i2s_bee_data i2s_bee_data_##index = {I2S_DMA_INIT(index)};                   \
 	                                                                                           \
-	DEVICE_DT_INST_DEFINE(index, &i2s_bee_init, NULL, &i2s_bee_data_##index,                   \
-			      &i2s_bee_cfg_##index, POST_KERNEL, CONFIG_I2S_INIT_PRIORITY,         \
-			      &i2s_bee_driver_api);                                                \
+	DEVICE_DT_INST_DEINIT_DEFINE(index, &i2s_bee_init, &i2s_bee_deinit, NULL,                  \
+				     &i2s_bee_data_##index, &i2s_bee_cfg_##index, POST_KERNEL,     \
+				     CONFIG_I2S_INIT_PRIORITY, &i2s_bee_driver_api);               \
 	                                                                                           \
-	static void i2s_bee_irq_config_func_##index(const struct device *dev)                      \
+	static void i2s_bee_irq_config_func_##index(const struct device *dev, bool enable)         \
 	{                                                                                          \
+		if (!enable) {                                                                     \
+			irq_disable(DT_INST_IRQN(index));                                          \
+			return;                                                                    \
+		}                                                                                  \
 		IRQ_CONNECT(DT_INST_IRQ_BY_IDX(index, 0, irq),                                     \
 			    DT_INST_IRQ_BY_IDX(index, 0, priority), i2s_bee_isr,                   \
 			    DEVICE_DT_INST_GET(index), 0);                                         \

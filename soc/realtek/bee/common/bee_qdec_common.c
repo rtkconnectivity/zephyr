@@ -323,6 +323,13 @@ static int aon_qdec_init(uint32_t reg, const struct bee_qdec_axis_config *axis_c
 	return 0;
 }
 
+static void aon_qdec_deinit(uint32_t reg)
+{
+	ARG_UNUSED(reg);
+
+	AON_QDEC_DeInit();
+}
+
 static void aon_qdec_enable(uint32_t reg, enum bee_qdec_axis axis)
 {
 	if (axis == BEE_QDEC_AXIS_X) {
@@ -439,6 +446,7 @@ static bool aon_qdec_get_status(uint32_t reg, enum bee_qdec_axis axis,
 
 static const struct bee_qdec_ops bee_aon_qdec_ops = {
 	.init = aon_qdec_init,
+	.deinit = aon_qdec_deinit,
 	.enable = aon_qdec_enable,
 	.disable = aon_qdec_disable,
 	.get_count = aon_qdec_get_count,
@@ -490,6 +498,14 @@ static int lpqdec_init(uint32_t reg, const struct bee_qdec_axis_config *axis_cfg
 	LPQDEC_WakeUpCmd(qdec, ENABLE);
 
 	return 0;
+}
+
+static void lpqdec_deinit(uint32_t reg)
+{
+	LPQDEC_TypeDef *qdec = (LPQDEC_TypeDef *)reg;
+
+	LPQDEC_WakeUpCmd(qdec, DISABLE);
+	LPQDEC_NVICCmd(qdec, DISABLE);
 }
 
 static void lpqdec_enable(uint32_t reg, enum bee_qdec_axis axis)
@@ -605,6 +621,7 @@ static bool lpqdec_get_status(uint32_t reg, enum bee_qdec_axis axis, enum bee_qd
 
 static const struct bee_qdec_ops bee_lpqdec_ops = {
 	.init = lpqdec_init,
+	.deinit = lpqdec_deinit,
 	.enable = lpqdec_enable,
 	.disable = lpqdec_disable,
 	.get_count = lpqdec_get_count,
