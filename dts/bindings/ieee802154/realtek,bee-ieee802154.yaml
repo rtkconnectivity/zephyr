@@ -1,0 +1,5 @@
+description: Realtek bee IEEE 802.15.4 node
+
+compatible: "realtek,bee-ieee802154"
+
+include: base.yaml
