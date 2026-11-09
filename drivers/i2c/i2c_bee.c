@@ -24,6 +24,7 @@ LOG_MODULE_REGISTER(i2c_bee, CONFIG_I2C_LOG_LEVEL);
 
 #include "i2c-priv.h"
 #ifdef CONFIG_I2C_BEE_BUS_RECOVERY
+#include <zephyr/drivers/gpio/gpio_bee.h>
 #include "i2c_bitbang.h"
 #endif
 
@@ -67,6 +68,21 @@ LOG_MODULE_REGISTER(i2c_bee, CONFIG_I2C_LOG_LEVEL);
 extern I2C_Status I2C_CheckAbortStatus(I2C_TypeDef *I2Cx);
 #endif
 
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+#define BEE_I2C_FUN_IS_SCL(fun)                                                                    \
+	((fun) == BEE_I2C0_CLK || (fun) == BEE_I2C1_CLK || (fun) == BEE_I2C2_CLK ||                \
+	 (fun) == BEE_I2C3_CLK)
+#define BEE_I2C_FUN_IS_SDA(fun)                                                                    \
+	((fun) == BEE_I2C0_DAT || (fun) == BEE_I2C1_DAT || (fun) == BEE_I2C2_DAT ||                \
+	 (fun) == BEE_I2C3_DAT)
+#elif defined(CONFIG_SOC_SERIES_RTL8752H)
+#define BEE_I2C_FUN_IS_SCL(fun) ((fun) == BEE_I2C0_CLK || (fun) == BEE_I2C1_CLK)
+#define BEE_I2C_FUN_IS_SDA(fun) ((fun) == BEE_I2C0_DAT || (fun) == BEE_I2C1_DAT)
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define BEE_I2C_FUN_IS_SCL(fun) ((fun) == BEE_I2C0_CLK || (fun) == BEE_I2C1_CLK)
+#define BEE_I2C_FUN_IS_SDA(fun) ((fun) == BEE_I2C0_DAT || (fun) == BEE_I2C1_DAT)
+#endif
+
 struct i2c_bee_context {
 	struct i2c_msg *msgs;
 	uint8_t num_msgs;
@@ -80,12 +96,8 @@ struct i2c_bee_config {
 	uint32_t bitrate;
 	uint16_t clkid;
 	const struct pinctrl_dev_config *pcfg;
-	void (*irq_cfg_func)(void);
+	void (*irq_cfg_func)(bool enable);
 	k_timeout_t transfer_timeout;
-#ifdef CONFIG_I2C_BEE_BUS_RECOVERY
-	struct gpio_dt_spec scl_gpio;
-	struct gpio_dt_spec sda_gpio;
-#endif
 };
 
 struct i2c_bee_data {
@@ -620,6 +632,12 @@ static int i2c_bee_target_unregister(const struct device *dev, struct i2c_target
 #endif /* CONFIG_I2C_TARGET */
 
 #ifdef CONFIG_I2C_BEE_BUS_RECOVERY
+/* GPIO pins carried by the pads the current default state routes to SCL/SDA */
+struct i2c_bee_recovery_io {
+	struct gpio_dt_spec scl;
+	struct gpio_dt_spec sda;
+};
+
 #if defined(CONFIG_SOC_SERIES_RTL8752H)
 /*
  * RTL8752H has no hardware open-drain output mode, so open-drain is emulated by
@@ -633,16 +651,16 @@ static void i2c_bee_bitbang_set_line(const struct gpio_dt_spec *gpio, int state)
 
 static void i2c_bee_bitbang_set_scl(void *io_context, int state)
 {
-	const struct i2c_bee_config *cfg = io_context;
+	const struct i2c_bee_recovery_io *io = io_context;
 
-	i2c_bee_bitbang_set_line(&cfg->scl_gpio, state);
+	i2c_bee_bitbang_set_line(&io->scl, state);
 }
 
 static void i2c_bee_bitbang_set_sda(void *io_context, int state)
 {
-	const struct i2c_bee_config *cfg = io_context;
+	const struct i2c_bee_recovery_io *io = io_context;
 
-	i2c_bee_bitbang_set_line(&cfg->sda_gpio, state);
+	i2c_bee_bitbang_set_line(&io->sda, state);
 }
 #else
 /*
@@ -653,24 +671,89 @@ static void i2c_bee_bitbang_set_sda(void *io_context, int state)
  */
 static void i2c_bee_bitbang_set_scl(void *io_context, int state)
 {
-	const struct i2c_bee_config *cfg = io_context;
+	const struct i2c_bee_recovery_io *io = io_context;
 
-	gpio_pin_set_dt(&cfg->scl_gpio, state);
+	gpio_pin_set_dt(&io->scl, state);
 }
 
 static void i2c_bee_bitbang_set_sda(void *io_context, int state)
 {
-	const struct i2c_bee_config *cfg = io_context;
+	const struct i2c_bee_recovery_io *io = io_context;
 
-	gpio_pin_set_dt(&cfg->sda_gpio, state);
+	gpio_pin_set_dt(&io->sda, state);
 }
 #endif
 
 static int i2c_bee_bitbang_get_sda(void *io_context)
 {
-	const struct i2c_bee_config *cfg = io_context;
+	const struct i2c_bee_recovery_io *io = io_context;
 
-	return gpio_pin_get_dt(&cfg->sda_gpio) != 0 ? 1 : 0;
+	return gpio_pin_get_dt(&io->sda) != 0 ? 1 : 0;
+}
+
+/*
+ * Find the SCL/SDA pads in the current default state, so recovery follows
+ * pins reassigned with pinctrl_update_states().
+ */
+static int i2c_bee_recovery_pads(const struct device *dev, uint8_t *scl_pad, uint8_t *sda_pad)
+{
+	const struct i2c_bee_config *cfg = dev->config;
+	const struct pinctrl_state *state;
+	int ret;
+
+	ret = pinctrl_lookup_state(cfg->pcfg, PINCTRL_STATE_DEFAULT, &state);
+	if (ret < 0) {
+		return ret;
+	}
+
+	*scl_pad = GPIO_BEE_PAD_NONE;
+	*sda_pad = GPIO_BEE_PAD_NONE;
+
+	for (uint8_t i = 0; i < state->pin_cnt; i++) {
+		const pinctrl_soc_pin_t *pin = &state->pins[i];
+
+		if (pin->sleep_hardware_state) {
+			continue;
+		}
+
+		if (BEE_I2C_FUN_IS_SCL(pin->fun)) {
+			*scl_pad = pin->pin;
+		} else if (BEE_I2C_FUN_IS_SDA(pin->fun)) {
+			*sda_pad = pin->pin;
+		}
+	}
+
+	if (*scl_pad == GPIO_BEE_PAD_NONE || *sda_pad == GPIO_BEE_PAD_NONE) {
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+/* Move a GPIO pin to the pad that carries the I2C line, saving its old pad */
+static int i2c_bee_recovery_line_get(uint8_t pad, struct gpio_dt_spec *gpio, uint8_t *prev_pad)
+{
+	int ret;
+
+	ret = gpio_bee_pad_to_pin(pad, &gpio->port, &gpio->pin);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (!device_is_ready(gpio->port)) {
+		return -ENODEV;
+	}
+
+	gpio->dt_flags = 0;
+
+	return gpio_bee_pin_remap(gpio->port, gpio->pin, pad, prev_pad);
+}
+
+/* Release the pad and give the GPIO pin its old pad back */
+static void i2c_bee_recovery_line_put(const struct gpio_dt_spec *gpio, uint8_t prev_pad)
+{
+	(void)gpio_pin_configure_dt(gpio, GPIO_DISCONNECTED | GPIO_PULL_UP);
+	(void)gpio_bee_pin_remap(gpio->port, gpio->pin, prev_pad, NULL);
 }
 
 static int i2c_bee_recover_bus(const struct device *dev)
@@ -682,18 +765,42 @@ static int i2c_bee_recover_bus(const struct device *dev)
 		.set_sda = i2c_bee_bitbang_set_sda,
 		.get_sda = i2c_bee_bitbang_get_sda,
 	};
+	struct i2c_bee_recovery_io io;
 	struct i2c_bitbang bitbang;
+	uint8_t scl_pad, sda_pad;
+	uint8_t scl_prev, sda_prev;
 	uint32_t dev_config;
 	int ret;
 
-	if (!gpio_is_ready_dt(&cfg->scl_gpio) || !gpio_is_ready_dt(&cfg->sda_gpio)) {
-		LOG_ERR("SCL/SDA recovery GPIO not available");
-		return -ENOSYS;
-	}
-
 	k_sem_take(&data->lock, K_FOREVER);
 
-	ret = 0;
+	ret = i2c_bee_recovery_pads(dev, &scl_pad, &sda_pad);
+	if (ret < 0) {
+		LOG_ERR("no SCL/SDA pad in the default state");
+		goto unlock;
+	}
+
+	/*
+	 * The GPIO pins must not be in use: gpio_bee_pin_remap() refuses a
+	 * connected pin, so a pin the application drives is never taken over.
+	 */
+	ret = i2c_bee_recovery_line_get(scl_pad, &io.scl, &scl_prev);
+	if (ret < 0) {
+		LOG_ERR("SCL pad %u has no free GPIO (%d)", scl_pad, ret);
+		goto unlock;
+	}
+
+	ret = i2c_bee_recovery_line_get(sda_pad, &io.sda, &sda_prev);
+	if (ret == 0 && io.sda.port == io.scl.port && io.sda.pin == io.scl.pin) {
+		(void)gpio_bee_pin_remap(io.sda.port, io.sda.pin, sda_prev, NULL);
+		ret = -ENOTSUP;
+	}
+	if (ret < 0) {
+		LOG_ERR("SDA pad %u has no free GPIO (%d)", sda_pad, ret);
+		(void)gpio_bee_pin_remap(io.scl.port, io.scl.pin, scl_prev, NULL);
+		goto unlock;
+	}
+
 #if !defined(CONFIG_SOC_SERIES_RTL8752H)
 	/*
 	 * Configure both lines once as open-drain outputs. The bit-bang helper
@@ -702,16 +809,15 @@ static int i2c_bee_recover_bus(const struct device *dev)
 	 * re-runs the full pad configuration, so the line does not glitch while
 	 * toggling between the driven-low and released states.
 	 */
-	ret = gpio_pin_configure_dt(&cfg->scl_gpio,
-				    GPIO_OUTPUT_HIGH | GPIO_OPEN_DRAIN | GPIO_PULL_UP);
+	ret = gpio_pin_configure_dt(&io.scl, GPIO_OUTPUT_HIGH | GPIO_OPEN_DRAIN | GPIO_PULL_UP);
 	if (ret == 0) {
-		ret = gpio_pin_configure_dt(&cfg->sda_gpio,
+		ret = gpio_pin_configure_dt(&io.sda,
 					    GPIO_OUTPUT_HIGH | GPIO_OPEN_DRAIN | GPIO_PULL_UP);
 	}
 #endif
 
 	if (ret == 0) {
-		i2c_bitbang_init(&bitbang, &bitbang_io, (void *)cfg);
+		i2c_bitbang_init(&bitbang, &bitbang_io, &io);
 
 		ret = i2c_bitbang_recover_bus(&bitbang);
 		if (ret < 0) {
@@ -721,11 +827,15 @@ static int i2c_bee_recover_bus(const struct device *dev)
 		LOG_ERR("failed to configure recovery GPIO (%d)", ret);
 	}
 
+	i2c_bee_recovery_line_put(&io.sda, sda_prev);
+	i2c_bee_recovery_line_put(&io.scl, scl_prev);
+
 	(void)i2c_bee_get_config(dev, &dev_config);
 	(void)pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 	(void)clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
 	(void)i2c_bee_do_configure(dev, dev_config);
 
+unlock:
 	k_sem_give(&data->lock);
 
 	return ret;
@@ -792,13 +902,40 @@ static int i2c_bee_init(const struct device *dev)
 	k_timer_user_data_set(&data->timeout_timer, (void *)dev);
 #endif
 
-	cfg->irq_cfg_func();
+	cfg->irq_cfg_func(true);
 
 	bitrate_cfg = i2c_map_dt_bitrate(cfg->bitrate);
 	i2c_bee_configure(dev, I2C_MODE_CONTROLLER | bitrate_cfg);
 
 	return 0;
 }
+
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static int i2c_bee_deinit(const struct device *dev)
+{
+	struct i2c_bee_data *data = dev->data;
+	const struct i2c_bee_config *cfg = dev->config;
+
+	/* Held until i2c_bee_init() sets the lock up again */
+	if (k_sem_take(&data->lock, K_NO_WAIT) != 0) {
+		return -EBUSY;
+	}
+
+#ifdef CONFIG_I2C_TARGET
+	if (data->target_attached) {
+		k_sem_give(&data->lock);
+		return -EBUSY;
+	}
+#endif
+
+	cfg->irq_cfg_func(false);
+	I2C_Cmd(cfg->reg, DISABLE);
+
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
+
+	return pinctrl_bee_release(cfg->pcfg);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
 
 static DEVICE_API(i2c, i2c_bee_driver_api) = {
 	.configure = i2c_bee_configure,
@@ -820,20 +957,16 @@ static DEVICE_API(i2c, i2c_bee_driver_api) = {
 };
 
 #define I2C_IRQ_FUNC_DEFINE(index)                                                                 \
-	static void i2c_bee_irq_cfg_func_##index(void)                                             \
+	static void i2c_bee_irq_cfg_func_##index(bool enable)                                      \
 	{                                                                                          \
+		if (!enable) {                                                                     \
+			irq_disable(DT_INST_IRQN(index));                                          \
+			return;                                                                    \
+		}                                                                                  \
 		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), i2c_bee_isr,        \
 			    DEVICE_DT_INST_GET(index), 0);                                         \
 		irq_enable(DT_INST_IRQN(index));                                                   \
 	}
-
-#ifdef CONFIG_I2C_BEE_BUS_RECOVERY
-#define I2C_BEE_RECOVERY_INIT(index)                                                               \
-	.scl_gpio = GPIO_DT_SPEC_INST_GET_OR(index, scl_gpios, {0}),                               \
-	.sda_gpio = GPIO_DT_SPEC_INST_GET_OR(index, sda_gpios, {0}),
-#else
-#define I2C_BEE_RECOVERY_INIT(index)
-#endif
 
 #define I2C_BEE_INIT(index)                                                                        \
 	PINCTRL_DT_INST_DEFINE(index);                                                             \
@@ -846,10 +979,9 @@ static DEVICE_API(i2c, i2c_bee_driver_api) = {
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
 		.irq_cfg_func = i2c_bee_irq_cfg_func_##index,                                      \
 		.transfer_timeout = I2C_DT_INST_TRANSFER_TIMEOUT(index),                           \
-		I2C_BEE_RECOVERY_INIT(index)                                                       \
 	};                                                                                         \
-	I2C_DEVICE_DT_INST_DEFINE(index, i2c_bee_init, NULL, &i2c_bee_data_##index,                \
-				  &i2c_bee_cfg_##index, POST_KERNEL, CONFIG_I2C_INIT_PRIORITY,     \
-				  &i2c_bee_driver_api);
+	I2C_DEVICE_DT_INST_DEINIT_DEFINE(index, i2c_bee_init, i2c_bee_deinit, NULL,                \
+					 &i2c_bee_data_##index, &i2c_bee_cfg_##index, POST_KERNEL, \
+					 CONFIG_I2C_INIT_PRIORITY, &i2c_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(I2C_BEE_INIT)

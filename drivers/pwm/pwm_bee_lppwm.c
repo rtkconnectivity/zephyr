@@ -94,6 +94,19 @@ static int pwm_bee_lppwm_init(const struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static int pwm_bee_lppwm_deinit(const struct device *dev)
+{
+	const struct pwm_bee_lppwm_config *config = dev->config;
+
+	LPPWM_Cmd(config->reg, DISABLE);
+
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
+
+	return pinctrl_bee_release(config->pcfg);
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
+
 static DEVICE_API(pwm, pwm_bee_lppwm_driver_api) = {
 	.set_cycles = pwm_bee_lppwm_set_cycles,
 	.get_cycles_per_sec = pwm_bee_lppwm_get_cycles_per_sec,
@@ -108,8 +121,8 @@ static DEVICE_API(pwm, pwm_bee_lppwm_driver_api) = {
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
 	};                                                                                         \
                                                                                                    \
-	DEVICE_DT_INST_DEFINE(index, &pwm_bee_lppwm_init, NULL, NULL,                              \
-			      &pwm_bee_lppwm_config_##index, POST_KERNEL, CONFIG_PWM_INIT_PRIORITY,\
-			      &pwm_bee_lppwm_driver_api);
+	DEVICE_DT_INST_DEINIT_DEFINE(index, &pwm_bee_lppwm_init, &pwm_bee_lppwm_deinit, NULL,      \
+				     NULL, &pwm_bee_lppwm_config_##index, POST_KERNEL,             \
+				     CONFIG_PWM_INIT_PRIORITY, &pwm_bee_lppwm_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(PWM_BEE_LPPWM_INIT)

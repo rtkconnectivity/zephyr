@@ -144,6 +144,61 @@ int pinctrl_configure_pins(const pinctrl_soc_pin_t *pins, uint8_t pin_cnt, uintp
 	return 0;
 }
 
+int pinctrl_bee_release_state(const struct pinctrl_dev_config *config, uint8_t id)
+{
+	const struct pinctrl_state *state;
+	int err;
+
+	err = pinctrl_lookup_state(config, id, &state);
+	if (err < 0) {
+		return err;
+	}
+
+	for (uint8_t i = 0U; i < state->pin_cnt; i++) {
+		pinctrl_soc_pin_t pin = state->pins[i];
+
+		if (pin.sleep_hardware_state) {
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+			Pad_LPConfig(pin.pin, PAD_PULL_NONE, DISABLE);
+#endif
+			continue;
+		}
+
+#if defined(CONFIG_SOC_SERIES_RTL87X2G)
+		if (pin.fun > BEE_SDHC1_D7_P4_7) {
+			/* The AON mux only ORs the selection in, so clear the field here */
+			AON_REG_WRITE(AON_REG3X_SYS, AON_REG_READ(AON_REG3X_SYS) &
+							     ~((pin.fun & 0xFFU) << (pin.fun >> 8)));
+		} else if (pin.fun > BEE_PWR_OFF) {
+			Pad_Dedicated_Config(pin.pin, DISABLE);
+		}
+#elif defined(CONFIG_SOC_SERIES_RTL87X2J)
+		/* An invalid pin number disables the PON function slot */
+		if (pin.fun > BEE_PWR_OFF) {
+			Pad_FunctionConfig(0xFF, pin.fun - BEE_LPPWM_CH0);
+		}
+#endif
+		/* Pinmux is per pad, so a released pad must not keep feeding the peripheral */
+		pin.fun = BEE_SW_MODE;
+		pin.dir = 0U;
+		pinctrl_configure_pin(&pin);
+	}
+
+	return 0;
+}
+
+int pinctrl_bee_release(const struct pinctrl_dev_config *config)
+{
+	int err;
+
+	err = pinctrl_apply_state(config, PINCTRL_STATE_SLEEP);
+	if (err != -ENOENT) {
+		return err;
+	}
+
+	return pinctrl_bee_release_state(config, PINCTRL_STATE_DEFAULT);
+}
+
 void pinctrl_bee_wakeup_enable(uint8_t pin, uint8_t polarity, uint8_t type)
 {
 #if defined(CONFIG_SOC_SERIES_RTL87X2J)

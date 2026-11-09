@@ -100,7 +100,7 @@ struct ir_bee_config {
 	IR_TypeDef *ir;
 	uint16_t clkid;
 	const struct pinctrl_dev_config *pcfg;
-	void (*irq_config_func)(const struct device *dev);
+	void (*irq_config_func)(const struct device *dev, bool enable);
 };
 
 struct ir_bee_data {
@@ -668,7 +668,7 @@ static int ir_bee_init(const struct device *dev)
 	IR_TypeDef *ir = config->ir;
 	int ret = 0;
 
-	config->irq_config_func(dev);
+	config->irq_config_func(dev, true);
 
 #if IR_HAS_TX_DMA
 	ret = ir_bee_claim_dma_channel(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
@@ -728,6 +728,55 @@ static int ir_bee_init(const struct device *dev)
 	return ret;
 }
 
+#ifdef CONFIG_DEVICE_DEINIT_SUPPORT
+static int ir_bee_deinit(const struct device *dev)
+{
+	const struct ir_bee_config *config = dev->config;
+	struct ir_bee_data *data = dev->data;
+	int err;
+
+	config->irq_config_func(dev, false);
+
+	/* ir_bee_init() claims the channels again */
+#if IR_HAS_TX_DMA
+	dma_stop(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+	dma_release_channel(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+#endif
+#if IR_HAS_RX_DMA
+	dma_stop(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
+	if (!ir_rx_shares_tx_channel(data)) {
+		dma_release_channel(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
+	}
+#endif
+
+	/* Gating the clock stops TX and RX; the next tx/rx init resets the block */
+	(void)clock_control_off(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&config->clkid);
+
+	k_free(data->rx_buf[0]);
+	data->rx_buf[0] = NULL;
+#if IR_HAS_RX_DMA
+	k_free(data->rx_buf[1]);
+	data->rx_buf[1] = NULL;
+#endif
+	data->rx_len = 0;
+	data->tx_len = 0;
+	data->cb = NULL;
+
+	/* Either state may be missing, and both may use the same pad */
+	err = pinctrl_bee_release_state(config->pcfg, PINCTRL_STATE_IR_TX);
+	if (err < 0 && err != -ENOENT) {
+		return err;
+	}
+
+	err = pinctrl_bee_release_state(config->pcfg, PINCTRL_STATE_IR_RX);
+	if (err < 0 && err != -ENOENT) {
+		return err;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_DEVICE_DEINIT_SUPPORT */
+
 static DEVICE_API(ir, ir_bee_driver_api) = {
 	.set_freq = ir_bee_set_freq,
 	.tx_enable = ir_bee_tx_enable,
@@ -737,8 +786,12 @@ static DEVICE_API(ir, ir_bee_driver_api) = {
 };
 
 #define BEE_IR_IRQ_HANDLER(index)                                                                  \
-	static void ir_bee_irq_config_func_##index(const struct device *dev)                       \
+	static void ir_bee_irq_config_func_##index(const struct device *dev, bool enable)          \
 	{                                                                                          \
+		if (!enable) {                                                                     \
+			irq_disable(DT_INST_IRQN(index));                                          \
+			return;                                                                    \
+		}                                                                                  \
 		IRQ_CONNECT(DT_INST_IRQN(index), DT_INST_IRQ(index, priority), ir_bee_isr,         \
 			    DEVICE_DT_INST_GET(index), 0);                                         \
 		irq_enable(DT_INST_IRQN(index));                                                   \
@@ -799,8 +852,8 @@ static DEVICE_API(ir, ir_bee_driver_api) = {
 		.src_clk = 40000000,                                                               \
 		.falling_trig = DT_INST_PROP_OR(index, rx_falling_edge_trig, 0),                   \
 		IR_DMA_INIT(index)};                                                               \
-	DEVICE_DT_INST_DEFINE(index, &ir_bee_init, NULL,                   \
-			      &ir_bee_data_##index, &ir_bee_cfg_##index, POST_KERNEL,              \
-			      CONFIG_IR_INIT_PRIORITY, &ir_bee_driver_api);
+	DEVICE_DT_INST_DEINIT_DEFINE(index, &ir_bee_init, &ir_bee_deinit, NULL,                    \
+				     &ir_bee_data_##index, &ir_bee_cfg_##index, POST_KERNEL,       \
+				     CONFIG_IR_INIT_PRIORITY, &ir_bee_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BEE_IR_INIT)

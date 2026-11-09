@@ -121,6 +121,35 @@ void pinctrl_bee_wakeup_config(uint8_t pin, uint8_t polarity, uint8_t type, bool
 
 /** @} */
 
+struct pinctrl_dev_config;
+
+/**
+ * @brief Release the pads of a pinctrl state back to software mode inputs.
+ *
+ * Each pad keeps its pull. A sleep-hardware-state group has its DLPS pull
+ * removed. Used by driver deinit so the pads can be reassigned.
+ *
+ * @param config Pin control configuration.
+ * @param id State ID to release.
+ *
+ * @retval 0 On success.
+ * @retval -ENOENT If the state is not found.
+ */
+int pinctrl_bee_release_state(const struct pinctrl_dev_config *config, uint8_t id);
+
+/**
+ * @brief Release the pads of a device on deinit.
+ *
+ * Applies the sleep state if there is one, otherwise releases the default
+ * state with pinctrl_bee_release_state().
+ *
+ * @param config Pin control configuration.
+ *
+ * @retval 0 On success.
+ * @retval -errno Negative errno code on failure.
+ */
+int pinctrl_bee_release(const struct pinctrl_dev_config *config);
+
 #ifdef __cplusplus
 }
 #endif
