@@ -1,0 +1,4 @@
+config IEEE802154_REALTEK_BEE
+	bool "bee series IEEE 802.15.4 Driver"
+	default y
+	depends on DT_HAS_REALTEK_BEE_IEEE802154_ENABLED

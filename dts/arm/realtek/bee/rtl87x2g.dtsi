@@ -638,6 +638,13 @@
 			min-bus-freq = <40000>;
 			status = "disabled";
 		};
+
+		ieee802154: ieee802154@4005c000 {
+			compatible = "realtek,bee-ieee802154";
+			reg = <0x4005c000 0x4000>;
+			interrupts = <4 1>;
+			status = "disabled";
+		};
 	};
 };
 
