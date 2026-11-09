@@ -872,6 +872,17 @@ __syscall void k_thread_abort(k_tid_t thread);
 k_ticks_t z_timeout_expires(const struct _timeout *timeout);
 k_ticks_t z_timeout_remaining(const struct _timeout *timeout);
 
+#ifdef CONFIG_SOC_FAMILY_REALTEK_BEE_TIMEOUT_PM_EXCLUDE
+/**
+ * @brief Exclude (or re-include) a timeout from the PM idle expiry calculation
+ *
+ * While excluded, z_get_next_timeout_expiry() skips this timeout and returns
+ * the ticks until the nearest non-excluded one. The timeout itself is still
+ * kept in the timeout list and fires normally whenever the CPU is awake.
+ */
+void z_timeout_set_pm_excluded(struct _timeout *timeout, bool excluded);
+#endif
+
 #ifdef CONFIG_SYS_CLOCK_EXISTS
 
 /**
