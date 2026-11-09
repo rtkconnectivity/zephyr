@@ -220,18 +220,45 @@ static uint32_t wrapper_os_timer_max_num_get_zephyr(void)
 	return max_num;
 }
 
+/*
+ * Mark/unmark an osif timer as excluded from the idle expiry calculation.
+ * z_get_next_timeout_expiry() skips excluded timers and returns the ticks to
+ * the nearest non-excluded timeout.
+ */
+static bool os_pm_excluded_handle_set(void **handle_ptr, PlatformExcludedHandleType type,
+				      bool excluded)
+{
+	if (type != PLATFORM_PM_EXCLUDED_TIMER) {
+		LOG_WRN("PM excluded handle type %d is not supported in Zephyr", type);
+		return false;
+	}
+
+	if (handle_ptr == NULL || *handle_ptr == NULL) {
+		LOG_ERR("%s: Invalid timer handle (NULL)", __func__);
+		return false;
+	}
+
+#ifdef CONFIG_SOC_FAMILY_REALTEK_BEE_TIMEOUT_PM_EXCLUDE
+	struct osif_timer *timer = (struct osif_timer *)*handle_ptr;
+
+	z_timeout_set_pm_excluded(&timer->ztimer.timeout, excluded);
+	return true;
+#else
+	LOG_WRN("PM excluded handle requires CONFIG_PM");
+	return false;
+#endif
+}
+
 static bool os_pm_excluded_handle_register_zephyr(void **handle_ptr,
 						  PlatformExcludedHandleType type)
 {
-	LOG_WRN("os_pm_excluded_handle_register() is invalid in Zephyr");
-	return false;
+	return os_pm_excluded_handle_set(handle_ptr, type, true);
 }
 
 static bool os_pm_excluded_handle_unregister_zephyr(void **handle_ptr,
 						    PlatformExcludedHandleType type)
 {
-	LOG_WRN("os_pm_excluded_handle_unregister() is invalid in Zephyr");
-	return false;
+	return os_pm_excluded_handle_set(handle_ptr, type, false);
 }
 
 void os_interface_update(T_OS_INTERFACE_INFO *os_interface)

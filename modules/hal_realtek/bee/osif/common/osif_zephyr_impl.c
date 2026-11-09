@@ -950,6 +950,10 @@ bool os_timer_delete_zephyr(void **handle_ptr)
 	timer = (struct osif_timer *)*handle_ptr;
 
 	k_timer_stop(&timer->ztimer);
+#ifdef CONFIG_SOC_FAMILY_REALTEK_BEE_TIMEOUT_PM_EXCLUDE
+	/* The pool slot may be reused; don't leak the exclusion flag */
+	z_timeout_set_pm_excluded(&timer->ztimer.timeout, false);
+#endif
 
 	key = irq_lock();
 	timer->allocated = false;

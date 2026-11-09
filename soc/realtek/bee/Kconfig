@@ -15,6 +15,14 @@ config SOC_FAMILY_REALTEK_BEE_IMAGE_HEADER
 	help
 	  This config will prepend bee_image_header on the zephyr binary.
 
+config SOC_FAMILY_REALTEK_BEE_TIMEOUT_PM_EXCLUDE
+	bool
+	default y if PM && USE_REALTEK_BEE_OS_INTERFACE
+	help
+	  Add a per-timeout flag that makes z_get_next_timeout_expiry() skip
+	  flagged timeouts, so OSIF timers registered via
+	  os_pm_excluded_handle_register() do not limit the low power state
+	  the system may enter from idle.
 
 config CRYPTO_BEE_PSA_ACCELERATOR
 	bool "Accelerate PSA cryptography using Realtek Bee hardware"

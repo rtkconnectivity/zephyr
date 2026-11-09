@@ -305,6 +305,10 @@ struct _timeout {
 #else
 	int32_t dticks;
 #endif
+#ifdef CONFIG_SOC_FAMILY_REALTEK_BEE_TIMEOUT_PM_EXCLUDE
+	/* Skipped by z_get_next_timeout_expiry() when computing idle time */
+	bool pm_excluded;
+#endif
 };
 
 typedef void (*k_thread_timeslice_fn_t)(struct k_thread *thread, void *data);

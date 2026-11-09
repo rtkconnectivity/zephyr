@@ -226,12 +226,42 @@ k_ticks_t z_timeout_expires(const struct _timeout *timeout)
 }
 EXPORT_SYMBOL(z_timeout_expires);
 
+#ifdef CONFIG_SOC_FAMILY_REALTEK_BEE_TIMEOUT_PM_EXCLUDE
+/* Like next_timeout(), but bypasses timeouts flagged as pm_excluded */
+static int32_t next_timeout_pm(int32_t ticks_elapsed)
+{
+	int64_t expiry = 0;
+
+	for (struct _timeout *t = first(); t != NULL; t = next(t)) {
+		expiry += t->dticks;
+		if (!t->pm_excluded) {
+			int64_t left = expiry - ticks_elapsed;
+
+			return (left > (int64_t)INT_MAX) ? SYS_CLOCK_MAX_WAIT : max(0, left);
+		}
+	}
+
+	return SYS_CLOCK_MAX_WAIT;
+}
+
+void z_timeout_set_pm_excluded(struct _timeout *timeout, bool excluded)
+{
+	K_SPINLOCK(&timeout_lock) {
+		timeout->pm_excluded = excluded;
+	}
+}
+#endif /* CONFIG_SOC_FAMILY_REALTEK_BEE_TIMEOUT_PM_EXCLUDE */
+
 int32_t z_get_next_timeout_expiry(void)
 {
 	int32_t ret = (int32_t) K_TICKS_FOREVER;
 
 	K_SPINLOCK(&timeout_lock) {
+#ifdef CONFIG_SOC_FAMILY_REALTEK_BEE_TIMEOUT_PM_EXCLUDE
+		ret = next_timeout_pm(elapsed());
+#else
 		ret = next_timeout(elapsed());
+#endif
 	}
 	return ret;
 }
