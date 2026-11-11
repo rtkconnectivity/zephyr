@@ -8,11 +8,11 @@ zephyr_library_sources(soc.c)
 zephyr_library_sources_ifdef(CONFIG_SOC_FAMILY_REALTEK_BEE_IMAGE_HEADER bee_image_header.c)
 
 zephyr_link_libraries_ifdef(CONFIG_BT
-  ${CMAKE_CURRENT_SOURCE_DIR}/libbtcontroller_cgmv3_lto_pl.a
+  ${CMAKE_CURRENT_SOURCE_DIR}/librtl87x2j_btcontroller.a
 )
 
 zephyr_link_libraries(
-  ${CMAKE_CURRENT_SOURCE_DIR}/librtl87x2j_platform_lib.a
+  ${CMAKE_CURRENT_SOURCE_DIR}/librtl87x2j_platform_v0.1.0.a
 )
 
 zephyr_linker_sources(SECTIONS trace_section.ld)
