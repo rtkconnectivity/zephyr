@@ -60,11 +60,7 @@ static void core_wdt_bee_isr(const struct device *dev)
 {
 	struct core_wdt_bee_data *data = dev->data;
 
-#ifdef CONFIG_SOC_SERIES_RTL87X2G
 	WDT_Disable();
-#elif CONFIG_SOC_SERIES_RTL87X2J
-	WDT_ClearINTPendingBit();
-#endif
 
 	if (data->callback) {
 		data->callback(dev, 0);
