@@ -1,0 +1,32 @@
+/*
+ * Copyright (c) 2024 Realtek Semiconductor Corp.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+
+&flash {
+	partitions {
+		/delete-node/ partition@2d000;
+		/delete-node/ partition@fc000;
+
+		app_partition: partition@2d000 {
+			label = "app-image";
+			reg = <0x2D000 DT_SIZE_K(812)>;
+		};
+		storage_partition: partition@f8000 {
+			label = "storage";
+			reg = <0xF8000 DT_SIZE_K(32)>;
+		};
+	};
+};
+
+&ieee802154 {
+	status = "okay";
+};
+
+/ {
+	chosen {
+		zephyr,ieee802154 = &ieee802154;
+	};
+};

@@ -1,0 +1,5 @@
+tests:
+  boards.realtek.ot-cli:
+    tags: realtek_ot-cli
+    platform_allow:
+      - rtl87x2g_evb_a/rtl8762gkh
