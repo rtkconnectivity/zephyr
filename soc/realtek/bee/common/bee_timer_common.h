@@ -75,6 +75,41 @@ struct bee_pwm_output_cfg {
 };
 
 /**
+ * @brief Bee latch count trigger edge.
+ *
+ * The values match the hardware trigger mode encoding on all supported SoCs.
+ */
+enum bee_latch_trigger_mode {
+	/** Latch on rising edge. */
+	BEE_LATCH_TRIGGER_RISING = 0,
+	/** Latch on falling edge. */
+	BEE_LATCH_TRIGGER_FALLING = 1,
+	/** Latch on both edges. */
+	BEE_LATCH_TRIGGER_BOTH = 2,
+};
+
+/**
+ * @brief Bee GPIO latch count configuration.
+ *
+ * Only the latch count channel that is triggered by a GPIO pad is used: latch
+ * count 0 on RTL87X2J (TIMER2_CH0 only) and RTL87X2G, latch count 2 on
+ * RTL8752H. It pushes the running counter value into a FIFO when the selected
+ * edge is seen on the trigger pad.
+ */
+struct bee_latch_cfg {
+	/** Latch trigger edge. */
+	enum bee_latch_trigger_mode trigger;
+	/** Pad number the latch triggers on (SoC `Pin_Number` encoding). */
+	uint16_t trigger_pad;
+	/** Enable the hardware debounce filter on the trigger input (RTL87X2J only). */
+	bool debounce_en;
+	/** Debounce clock divider select (RTL87X2J only). */
+	uint8_t debounce_div;
+	/** Debounce count limit (RTL87X2J only). */
+	uint16_t debounce_count;
+};
+
+/**
  * @brief Unified Timer Operations Structure.
  *
  * This structure holds function pointers to the specific HAL implementations.
@@ -162,6 +197,63 @@ struct bee_timer_ops {
 	 * @return true if interrupt is pending, false otherwise.
 	 */
 	bool (*int_status)(uint32_t reg);
+
+	/**
+	 * @brief Configure the GPIO latch count (trigger edge, pad, debounce).
+	 *
+	 * The latch is left disabled; use @ref bee_timer_ops.latch_enable to start it.
+	 *
+	 * @param reg Base address of the timer register.
+	 * @param cfg Latch configuration.
+	 * @return 0 on success, -ENOTSUP if the timer or the requested option has
+	 *         no latch support.
+	 */
+	int (*latch_configure)(uint32_t reg, const struct bee_latch_cfg *cfg);
+
+	/**
+	 * @brief Enable the GPIO latch count and its FIFO threshold interrupt.
+	 * @param reg Base address of the timer register.
+	 */
+	void (*latch_enable)(uint32_t reg);
+
+	/**
+	 * @brief Disable the GPIO latch count and its FIFO threshold interrupt.
+	 * @param reg Base address of the timer register.
+	 */
+	void (*latch_disable)(uint32_t reg);
+
+	/**
+	 * @brief Check if the latch FIFO threshold interrupt is pending.
+	 * @param reg Base address of the timer register.
+	 * @return true if interrupt is pending, false otherwise.
+	 */
+	bool (*latch_int_status)(uint32_t reg);
+
+	/**
+	 * @brief Clear the latch FIFO threshold interrupt pending status.
+	 * @param reg Base address of the timer register.
+	 */
+	void (*latch_int_clear)(uint32_t reg);
+
+	/**
+	 * @brief Get the number of latched values held in the FIFO.
+	 * @param reg Base address of the timer register.
+	 * @return Number of values currently held in the latch FIFO.
+	 */
+	uint8_t (*latch_get_fifo_len)(uint32_t reg);
+
+	/**
+	 * @brief Pop one latched counter value from the FIFO.
+	 * @param reg Base address of the timer register.
+	 * @return The latched counter value.
+	 */
+	uint32_t (*latch_read_fifo)(uint32_t reg);
+
+	/**
+	 * @brief Drop all latched values and the pending latch interrupt.
+	 * @param reg Base address of the timer register.
+	 */
+	void (*latch_clear)(uint32_t reg);
 };
 
 /**
