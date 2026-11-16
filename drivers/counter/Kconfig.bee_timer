@@ -7,5 +7,11 @@ config COUNTER_BEE_TIMER
 	depends on DT_HAS_REALTEK_BEE_COUNTER_TIMER_ENABLED
 	select HAL_REALTEK_BEE_TIM if DT_HAS_REALTEK_BEE_BASIC_TIMER_ENABLED
 	select HAL_REALTEK_BEE_ENHTIM if DT_HAS_REALTEK_BEE_ENHANCED_TIMER_ENABLED
+	select COUNTER_SUPPORTS_CAPTURE
+	select PINCTRL if COUNTER_CAPTURE
 	help
 	  This option enables the counter timer driver for Realtek Bee SoCs.
+
+	  The driver supports the counter capture API on timers with a GPIO
+	  latch count, with the trigger pad selected by the pinctrl-0 property
+	  of the counter node. One capture channel (0) is provided.
