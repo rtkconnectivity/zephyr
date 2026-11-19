@@ -4,30 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/ {
-	sram {
-		/delete-node/ memory@20012400;
-
-		sram: memory@20007000 {
-			device_type = "sram region";
-			reg = <0x20007000 DT_SIZE_K(60)>;
-		};
-
-		heap_sram: memory@20016000 {
-			device_type = "sram heap region";
-			reg = <0x20016000 DT_SIZE_K(8)>;
-		};
-	};
-};
-
-&gpioa {
-	status = "okay";
-	pinctrl-0 = <&gpioa_default>;
-	pinctrl-names = "default";
-	ngpios = <32>;
-	status = "okay";
-};
-
 &dma0 {
 	status = "okay";
 };
@@ -68,12 +44,6 @@
 				<BEE_PSEL(SPI0_SS_N_0_MASTER, P6_3)>;
 			output-disable;
 			bias-pull-up;
-		};
-	};
-
-	gpioa_default: gpioa_default {
-		group1 {
-			psels = <BEE_PSEL_GPIOA_25_P3_5>;
 		};
 	};
 };
