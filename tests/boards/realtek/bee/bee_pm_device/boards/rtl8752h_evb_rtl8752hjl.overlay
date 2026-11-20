@@ -8,10 +8,19 @@
 #include <zephyr/dt-bindings/led/led.h>
 #include <zephyr/dt-bindings/i2c/i2c.h>
 
+/* The tests reuse the board key pads, drop the keys with their pins */
+/delete-node/ &{/buttons};
+
+/ {
+	aliases {
+		/delete-property/ sw0;
+	};
+};
+
 /*
- *  P0_0 GPIO(TEST OUT)
- *  P0_1 GPIO(TEST IN)
- *  P0_2 PWM6
+ *  P0_0 GPIO(TEST OUT), GPIO(LATCH OUT)
+ *  P0_1 PWM6
+ *  P0_2 GPIO(TEST IN), TIMER7 LATCH TRIGGER
  *  P0_4 I2C0_CLK
  *  P0_5 I2C0_DAT
  *  P0_6 UART0_TX
@@ -41,17 +50,20 @@
 		compatible = "test-gpio-basic-api";
 		// P0_0
 		out-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
-		// P0_1
-		in-gpios = <&gpioa 1 GPIO_ACTIVE_HIGH>;
+		// P0_2
+		in-gpios = <&gpioa 2 GPIO_ACTIVE_HIGH>;
 	};
 
 	zephyr,user {
 		io-channels = <&adc 2>;
+		// P0_0
+		latch-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
 	};
 
 	aliases {
 		test-uart-dma = &uart0;
 		test-counter-timer = &counter5;
+		test-latch-counter = &counter7;
 		test-pwm = &pwm6;
 		test-rtc = &rtc;
 		test-qdec = &qdec;
@@ -112,7 +124,6 @@
 	prescaler = <1>;
 
 	counter5: counter {
-		compatible = "realtek,bee-counter-timer";
 		status = "okay";
 	};
 };
@@ -124,6 +135,17 @@
 	pwm6: pwm {
 		status = "okay";
 		pinctrl-0 = <&pwm6_default>;
+		pinctrl-names = "default";
+	};
+};
+
+&timer7 {
+	status = "okay";
+	prescaler = <1>;
+
+	counter7: counter {
+		status = "okay";
+		pinctrl-0 = <&latch_default>;
 		pinctrl-names = "default";
 	};
 };
@@ -202,8 +224,8 @@
 &pinctrl {
 	gpioa_default: gpioa_default {
 		group1 {
-			psels = <BEE_PSEL_GPIOA_0_P0_0>, //P0_0 GPIO(TEST OUT)
-				<BEE_PSEL_GPIOA_1_P0_1>; //P0_1 GPIO(TEST IN)
+			psels = <BEE_PSEL_GPIOA_0_P0_0>, //P0_0 GPIO(TEST OUT), GPIO(LATCH OUT)
+				<BEE_PSEL_GPIOA_2_P0_2>; //P0_2 GPIO(TEST IN)
 		};
 
 		group2 {
@@ -244,9 +266,18 @@
 		};
 	};
 
+	/* Latch trigger pad, driven by latch-gpios */
+	latch_default: latch_default {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P0_2)>;
+			output-disable;
+			bias-disable;
+		};
+	};
+
 	pwm6_default: pwm6_default {
 		group1 {
-			psels = <BEE_PSEL(ENPWM0, P0_2)>;
+			psels = <BEE_PSEL(ENPWM0, P0_1)>;
 			output-disable;
 			bias-disable;
 		};
