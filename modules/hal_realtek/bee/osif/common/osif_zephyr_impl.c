@@ -33,7 +33,7 @@ BUILD_ASSERT(CONFIG_NUM_METAIRQ_PRIORITIES == 1,
 /************************************************************
  * MEMORY MANAGEMENT
  ************************************************************/
-void *os_mem_alloc_intern_zephyr(RAM_TYPE ram_type, size_t size, const char *p_func,
+void *os_mem_alloc_zephyr(RAM_TYPE ram_type, size_t size, const char *p_func,
 				 uint32_t file_line)
 {
 	struct k_heap *h = get_heap_by_type(ram_type);
@@ -51,10 +51,10 @@ void *os_mem_alloc_intern_zephyr(RAM_TYPE ram_type, size_t size, const char *p_f
 	return ptr;
 }
 
-void *os_mem_zalloc_intern_zephyr(RAM_TYPE ram_type, size_t size, const char *p_func,
+void *os_mem_zalloc_zephyr(RAM_TYPE ram_type, size_t size, const char *p_func,
 				  uint32_t file_line)
 {
-	void *ptr = os_mem_alloc_intern_zephyr(ram_type, size, p_func, file_line);
+	void *ptr = os_mem_alloc_zephyr(ram_type, size, p_func, file_line);
 
 	if (ptr) {
 		memset(ptr, 0, size);
@@ -62,7 +62,7 @@ void *os_mem_zalloc_intern_zephyr(RAM_TYPE ram_type, size_t size, const char *p_
 	return ptr;
 }
 
-void *os_mem_aligned_alloc_intern_zephyr(RAM_TYPE ram_type, size_t size, uint8_t alignment,
+void *os_mem_aligned_alloc_zephyr(RAM_TYPE ram_type, size_t size, uint8_t alignment,
 					 const char *p_func, uint32_t file_line)
 {
 	struct k_heap *h = get_heap_by_type(ram_type);
@@ -719,7 +719,7 @@ bool os_mutex_give_zephyr(void *handle)
  ************************************************************/
 K_MEM_SLAB_DEFINE(osif_msgq_slab, sizeof(struct k_msgq), CONFIG_REALTEK_BEE_OSIF_MSGQ_MAX_COUNT, 4);
 
-bool os_msg_queue_create_intern_zephyr(void **handle_ptr, const char *name, uint32_t msg_num,
+bool os_msg_queue_create_zephyr(void **handle_ptr, const char *name, uint32_t msg_num,
 				       uint32_t msg_size, const char *func, uint32_t line)
 {
 	struct k_msgq *msgq;
@@ -755,7 +755,7 @@ bool os_msg_queue_create_intern_zephyr(void **handle_ptr, const char *name, uint
 	return true;
 }
 
-bool os_msg_queue_delete_intern_zephyr(void *handle, const char *func, uint32_t line)
+bool os_msg_queue_delete_zephyr(void *handle, const char *func, uint32_t line)
 {
 	struct k_msgq *msgq = (struct k_msgq *)handle;
 
@@ -776,7 +776,7 @@ bool os_msg_queue_delete_intern_zephyr(void *handle, const char *func, uint32_t 
 	return false;
 }
 
-bool os_msg_queue_peek_intern_zephyr(void *handle, uint32_t *msg_num, const char *func,
+bool os_msg_queue_peek_zephyr(void *handle, uint32_t *msg_num, const char *func,
 				     uint32_t line)
 {
 	ARG_UNUSED(func);
@@ -789,7 +789,7 @@ bool os_msg_queue_peek_intern_zephyr(void *handle, uint32_t *msg_num, const char
 	return false;
 }
 
-bool os_msg_send_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
+bool os_msg_send_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
 			       uint32_t line)
 {
 	ARG_UNUSED(func);
@@ -801,7 +801,7 @@ bool os_msg_send_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const 
 	return k_msgq_put((struct k_msgq *)handle, msg, OSIF_WAIT_TO_TICKS(wait_ms)) == 0;
 }
 
-bool os_msg_recv_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
+bool os_msg_recv_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
 			       uint32_t line)
 {
 	ARG_UNUSED(func);
@@ -813,7 +813,7 @@ bool os_msg_recv_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const 
 	return k_msgq_get((struct k_msgq *)handle, msg, OSIF_WAIT_TO_TICKS(wait_ms)) == 0;
 }
 
-bool os_msg_peek_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
+bool os_msg_peek_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
 			       uint32_t line)
 {
 	ARG_UNUSED(func);
