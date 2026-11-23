@@ -22,13 +22,4 @@
 			bias-pull-up;
 		};
 	};
-
-	can_default: can_default {
-		group1 {
-			psels = <BEE_PSEL(CAN_TX, P7_0)>,
-				<BEE_PSEL(CAN_RX, P7_1)>;
-			output-disable;
-			bias-disable;
-		};
-	};
 };

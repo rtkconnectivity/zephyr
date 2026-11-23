@@ -4,6 +4,9 @@
 description: |
   Bee CAN controller.
 
+  pinctrl-0 can be left out when the controller only runs in internal
+  loopback mode and needs no pads.
+
 compatible: "realtek,bee-can"
 
 include: [can-controller.yaml, pinctrl-device.yaml]
@@ -16,12 +19,6 @@ properties:
     required: true
 
   clocks:
-    required: true
-
-  pinctrl-0:
-    required: true
-
-  pinctrl-names:
     required: true
 
   rx-timestamp-prescaler:

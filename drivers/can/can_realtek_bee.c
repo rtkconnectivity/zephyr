@@ -957,9 +957,12 @@ static int can_bee_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
-	if (ret < 0) {
-		return ret;
+	/* Internal loopback needs no pads */
+	if (cfg->pcfg != NULL) {
+		ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
+		if (ret < 0) {
+			return ret;
+		}
 	}
 
 	clock_control_on(BEE_CLOCK_CONTROLLER, (clock_control_subsys_t)&cfg->clkid);
@@ -1038,13 +1041,14 @@ static DEVICE_API(can, can_bee_driver_api) = {
 	}
 
 #define CAN_BEE_CONFIG_INST(index)                                                                 \
-	PINCTRL_DT_INST_DEFINE(index);                                                             \
+	IF_ENABLED(DT_INST_PINCTRL_HAS_IDX(index, 0), (PINCTRL_DT_INST_DEFINE(index);))            \
 	static const struct can_bee_config can_bee_cfg_##index = {                                 \
 		.common = CAN_DT_DRIVER_CONFIG_INST_GET(                                           \
 			index, 0, DT_INST_CAN_TRANSCEIVER_MAX_BITRATE(index, 1000000)),            \
 		.can = (CAN_TypeDef *)DT_INST_REG_ADDR(index),                                     \
 		.clkid = DT_INST_CLOCKS_CELL(index, id),                                           \
-		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(index),                                     \
+		.pcfg = COND_CODE_1(DT_INST_PINCTRL_HAS_IDX(index, 0),                             \
+				    (PINCTRL_DT_INST_DEV_CONFIG_GET(index)), (NULL)),              \
 		.irq_config_func = config_can_##index##_irq,                                       \
 		.rx_timestamp_prescaler = DT_INST_PROP_OR(index, rx_timestamp_prescaler, 1),       \
 	};
