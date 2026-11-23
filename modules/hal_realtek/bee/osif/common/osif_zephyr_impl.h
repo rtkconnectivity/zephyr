@@ -74,13 +74,13 @@ struct osif_task_delete_context {
 /************************************************************
  * MEMORY MANAGEMENT - Internal APIs
  ************************************************************/
-void *os_mem_alloc_intern_zephyr(RAM_TYPE ram_type, size_t size, const char *p_func,
+void *os_mem_alloc_zephyr(RAM_TYPE ram_type, size_t size, const char *p_func,
 				 uint32_t file_line);
 
-void *os_mem_zalloc_intern_zephyr(RAM_TYPE ram_type, size_t size, const char *p_func,
+void *os_mem_zalloc_zephyr(RAM_TYPE ram_type, size_t size, const char *p_func,
 				  uint32_t file_line);
 
-void *os_mem_aligned_alloc_intern_zephyr(RAM_TYPE ram_type, size_t size, uint8_t alignment,
+void *os_mem_aligned_alloc_zephyr(RAM_TYPE ram_type, size_t size, uint8_t alignment,
 					 const char *p_func, uint32_t file_line);
 void os_mem_free_zephyr(void *block);
 
@@ -154,16 +154,16 @@ bool os_mutex_give_zephyr(void *handle);
 /************************************************************
  * MESSAGE QUEUE - Internal APIs
  ************************************************************/
-bool os_msg_queue_create_intern_zephyr(void **handle_ptr, const char *name, uint32_t msg_num,
+bool os_msg_queue_create_zephyr(void **handle_ptr, const char *name, uint32_t msg_num,
 				       uint32_t msg_size, const char *func, uint32_t line);
-bool os_msg_queue_delete_intern_zephyr(void *handle, const char *func, uint32_t line);
-bool os_msg_queue_peek_intern_zephyr(void *handle, uint32_t *msg_num, const char *func,
+bool os_msg_queue_delete_zephyr(void *handle, const char *func, uint32_t line);
+bool os_msg_queue_peek_zephyr(void *handle, uint32_t *msg_num, const char *func,
 				     uint32_t line);
-bool os_msg_send_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
+bool os_msg_send_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
 			       uint32_t line);
-bool os_msg_recv_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
+bool os_msg_recv_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
 			       uint32_t line);
-bool os_msg_peek_intern_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
+bool os_msg_peek_zephyr(void *handle, void *msg, uint32_t wait_ms, const char *func,
 			       uint32_t line);
 
 /************************************************************

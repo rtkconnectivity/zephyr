@@ -112,7 +112,7 @@ void os_mem_peek_printf_zephyr(void)
 /*
  * RTL87x2J specific allocator.
  *
- * Unlike the generic os_mem_alloc_intern_zephyr() in osif_zephyr_impl.c, a
+ * Unlike the generic os_mem_alloc_zephyr() in osif_zephyr_impl.c, a
  * RAM_TYPE_DATA_ON request falls back to buffer_on_heap when data_on_heap is
  * exhausted. RAM_TYPE_BUFFER_ON never falls back to data_on_heap.
  *
@@ -129,7 +129,7 @@ static void *heap_alloc_rtl87x2j(struct k_heap *h, size_t size, bool aligned, ui
 	return k_heap_alloc(h, size, K_NO_WAIT);
 }
 
-static void *os_mem_alloc_intern_rtl87x2j(RAM_TYPE ram_type, size_t size, bool aligned,
+static void *os_mem_alloc_rtl87x2j(RAM_TYPE ram_type, size_t size, bool aligned,
 					  uint8_t alignment, const char *p_func,
 					  uint32_t file_line)
 {
@@ -159,14 +159,14 @@ static void *os_mem_alloc_intern_rtl87x2j(RAM_TYPE ram_type, size_t size, bool a
 }
 
 /* Memory - wrappers to ignore func/line parameters */
-static void *wrapper_os_mem_alloc_intern(RAM_TYPE ram_type, size_t size)
+static void *wrapper_os_mem_alloc(RAM_TYPE ram_type, size_t size)
 {
-	return os_mem_alloc_intern_rtl87x2j(ram_type, size, false, 0, __func__, __LINE__);
+	return os_mem_alloc_rtl87x2j(ram_type, size, false, 0, __func__, __LINE__);
 }
 
-static void *wrapper_os_mem_zalloc_intern(RAM_TYPE ram_type, size_t size)
+static void *wrapper_os_mem_zalloc(RAM_TYPE ram_type, size_t size)
 {
-	void *ptr = os_mem_alloc_intern_rtl87x2j(ram_type, size, false, 0, __func__, __LINE__);
+	void *ptr = os_mem_alloc_rtl87x2j(ram_type, size, false, 0, __func__, __LINE__);
 
 	if (ptr != NULL) {
 		memset(ptr, 0, size);
@@ -175,42 +175,42 @@ static void *wrapper_os_mem_zalloc_intern(RAM_TYPE ram_type, size_t size)
 	return ptr;
 }
 
-static void *wrapper_os_mem_aligned_alloc_intern(RAM_TYPE ram_type, size_t size, uint8_t alignment)
+static void *wrapper_os_mem_aligned_alloc(RAM_TYPE ram_type, size_t size, uint8_t alignment)
 {
-	return os_mem_alloc_intern_rtl87x2j(ram_type, size, true, alignment, __func__, __LINE__);
+	return os_mem_alloc_rtl87x2j(ram_type, size, true, alignment, __func__, __LINE__);
 }
 
 /* Message Queue - wrappers to ignore func/line parameters */
-static bool wrapper_os_msg_queue_create_intern(void **handle_ptr, const char *name,
+static bool wrapper_os_msg_queue_create(void **handle_ptr, const char *name,
 					       uint32_t msg_num, uint32_t msg_size)
 {
-	return os_msg_queue_create_intern_zephyr(handle_ptr, name, msg_num, msg_size, __func__,
+	return os_msg_queue_create_zephyr(handle_ptr, name, msg_num, msg_size, __func__,
 						 __LINE__);
 }
 
-static bool wrapper_os_msg_queue_delete_intern(void *handle)
+static bool wrapper_os_msg_queue_delete(void *handle)
 {
-	return os_msg_queue_delete_intern_zephyr(handle, __func__, __LINE__);
+	return os_msg_queue_delete_zephyr(handle, __func__, __LINE__);
 }
 
-static bool wrapper_os_msg_queue_peek_intern(void *handle, uint32_t *msg_num)
+static bool wrapper_os_msg_queue_peek(void *handle, uint32_t *msg_num)
 {
-	return os_msg_queue_peek_intern_zephyr(handle, msg_num, __func__, __LINE__);
+	return os_msg_queue_peek_zephyr(handle, msg_num, __func__, __LINE__);
 }
 
-static bool wrapper_os_msg_send_intern(void *handle, void *msg, uint32_t wait_ms)
+static bool wrapper_os_msg_send(void *handle, void *msg, uint32_t wait_ms)
 {
-	return os_msg_send_intern_zephyr(handle, msg, wait_ms, __func__, __LINE__);
+	return os_msg_send_zephyr(handle, msg, wait_ms, __func__, __LINE__);
 }
 
-static bool wrapper_os_msg_recv_intern(void *handle, void *msg, uint32_t wait_ms)
+static bool wrapper_os_msg_recv(void *handle, void *msg, uint32_t wait_ms)
 {
-	return os_msg_recv_intern_zephyr(handle, msg, wait_ms, __func__, __LINE__);
+	return os_msg_recv_zephyr(handle, msg, wait_ms, __func__, __LINE__);
 }
 
-static bool wrapper_os_msg_peek_intern(void *handle, void *msg, uint32_t wait_ms)
+static bool wrapper_os_msg_peek(void *handle, void *msg, uint32_t wait_ms)
 {
-	return os_msg_peek_intern_zephyr(handle, msg, wait_ms, __func__, __LINE__);
+	return os_msg_peek_zephyr(handle, msg, wait_ms, __func__, __LINE__);
 }
 
 static uint32_t wrapper_os_timer_max_num_get_zephyr(void)
@@ -263,22 +263,22 @@ static bool os_pm_excluded_handle_unregister_zephyr(void **handle_ptr,
 
 void os_interface_update(T_OS_INTERFACE_INFO *os_interface)
 {
-	os_interface->os_mem_alloc_intern = wrapper_os_mem_alloc_intern;
-	os_interface->os_mem_zalloc_intern = wrapper_os_mem_zalloc_intern;
-	os_interface->os_mem_aligned_alloc_intern = wrapper_os_mem_aligned_alloc_intern;
-	/* os_interface->os_mem_realloc_intern = wrapper_os_mem_alloc_intern; */
+	os_interface->os_mem_alloc = wrapper_os_mem_alloc;
+	os_interface->os_mem_zalloc = wrapper_os_mem_zalloc;
+	os_interface->os_mem_aligned_alloc = wrapper_os_mem_aligned_alloc;
+	/* os_interface->os_mem_realloc = wrapper_os_mem_alloc; */
 	os_interface->os_mem_free = os_mem_free_zephyr;
 	os_interface->os_mem_aligned_free = os_mem_aligned_free_zephyr;
 	os_interface->os_mem_peek = os_mem_peek_zephyr;
 	os_interface->os_mem_peek_max_free_block = os_mem_peek_zephyr;
 	os_interface->os_mem_check_heap_usage = os_mem_peek_printf_zephyr;
 
-	os_interface->os_msg_queue_create = wrapper_os_msg_queue_create_intern;
-	os_interface->os_msg_queue_delete_intern = wrapper_os_msg_queue_delete_intern;
-	os_interface->os_msg_queue_peek_intern = wrapper_os_msg_queue_peek_intern;
-	os_interface->os_msg_peek_intern = wrapper_os_msg_peek_intern;
-	os_interface->os_msg_send_intern = wrapper_os_msg_send_intern;
-	os_interface->os_msg_recv_intern = wrapper_os_msg_recv_intern;
+	os_interface->os_msg_queue_create = wrapper_os_msg_queue_create;
+	os_interface->os_msg_queue_delete = wrapper_os_msg_queue_delete;
+	os_interface->os_msg_queue_peek = wrapper_os_msg_queue_peek;
+	os_interface->os_msg_peek = wrapper_os_msg_peek;
+	os_interface->os_msg_send = wrapper_os_msg_send;
+	os_interface->os_msg_recv = wrapper_os_msg_recv;
 
 	os_interface->os_alloc_secure_ctx = os_alloc_secure_ctx_zephyr;
 	os_interface->os_task_create = os_task_create_zephyr;

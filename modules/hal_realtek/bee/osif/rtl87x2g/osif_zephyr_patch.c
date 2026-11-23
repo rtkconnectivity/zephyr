@@ -111,9 +111,9 @@ void os_mem_peek_printf_zephyr(void)
 void os_zephyr_patch_init(void)
 {
 	/* Memory Management */
-	os_mem_alloc_intern = os_mem_alloc_intern_zephyr;
-	os_mem_zalloc_intern = os_mem_zalloc_intern_zephyr;
-	os_mem_aligned_alloc_intern = os_mem_aligned_alloc_intern_zephyr;
+	os_mem_alloc_intern = os_mem_alloc_zephyr;
+	os_mem_zalloc_intern = os_mem_zalloc_zephyr;
+	os_mem_aligned_alloc_intern = os_mem_aligned_alloc_zephyr;
 	os_mem_free = os_mem_free_zephyr;
 	os_mem_aligned_free = os_mem_aligned_free_zephyr;
 	os_mem_peek = os_mem_peek_zephyr;
@@ -121,11 +121,11 @@ void os_zephyr_patch_init(void)
 	os_mem_check_heap_usage = os_mem_peek_printf_zephyr;
 
 	/* Message Queue */
-	os_msg_queue_create_intern = os_msg_queue_create_intern_zephyr;
-	os_msg_queue_delete_intern = os_msg_queue_delete_intern_zephyr;
-	os_msg_queue_peek_intern = os_msg_queue_peek_intern_zephyr;
-	os_msg_send_intern = os_msg_send_intern_zephyr;
-	os_msg_recv_intern = os_msg_recv_intern_zephyr;
+	os_msg_queue_create_intern = os_msg_queue_create_zephyr;
+	os_msg_queue_delete_intern = os_msg_queue_delete_zephyr;
+	os_msg_queue_peek_intern = os_msg_queue_peek_zephyr;
+	os_msg_send_intern = os_msg_send_zephyr;
+	os_msg_recv_intern = os_msg_recv_zephyr;
 
 	/* Scheduler */
 	os_delay = os_delay_zephyr;

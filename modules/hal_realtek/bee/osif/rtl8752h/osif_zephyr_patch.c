@@ -108,21 +108,21 @@ static void os_mem_check_heap_usage_zephyr(void)
 static bool wrapper_os_mem_alloc_intern(RAM_TYPE ram_type, size_t size, const char *p_func,
 					uint32_t file_line, void **pp)
 {
-	*pp = os_mem_alloc_intern_zephyr(ram_type, size, p_func, file_line);
+	*pp = os_mem_alloc_zephyr(ram_type, size, p_func, file_line);
 	return true;
 }
 
 static bool wrapper_os_mem_zalloc_intern(RAM_TYPE ram_type, size_t size, const char *p_func,
 					 uint32_t file_line, void **pp)
 {
-	*pp = os_mem_zalloc_intern_zephyr(ram_type, size, p_func, file_line);
+	*pp = os_mem_zalloc_zephyr(ram_type, size, p_func, file_line);
 	return true;
 }
 
 static bool wrapper_os_mem_aligned_alloc_intern(RAM_TYPE ram_type, size_t size, uint8_t alignment,
 						const char *p_func, uint32_t file_line, void **pp)
 {
-	*pp = os_mem_aligned_alloc_intern_zephyr(ram_type, size, alignment, p_func, file_line);
+	*pp = os_mem_aligned_alloc_zephyr(ram_type, size, alignment, p_func, file_line);
 	return true;
 }
 
@@ -151,7 +151,7 @@ static bool wrapper_os_msg_queue_create_intern(void **pp_handle, uint32_t msg_nu
 					       uint32_t msg_size, const char *p_func,
 					       uint32_t file_line, bool *p_result)
 {
-	*p_result = os_msg_queue_create_intern_zephyr(pp_handle, "MSGQ", msg_num, msg_size, p_func,
+	*p_result = os_msg_queue_create_zephyr(pp_handle, "MSGQ", msg_num, msg_size, p_func,
 						      file_line);
 	return true;
 }
@@ -159,28 +159,28 @@ static bool wrapper_os_msg_queue_create_intern(void **pp_handle, uint32_t msg_nu
 static bool wrapper_os_msg_queue_delete_intern(void *p_handle, const char *p_func,
 					       uint32_t file_line, bool *p_result)
 {
-	*p_result = os_msg_queue_delete_intern_zephyr(p_handle, p_func, file_line);
+	*p_result = os_msg_queue_delete_zephyr(p_handle, p_func, file_line);
 	return true;
 }
 
 static bool wrapper_os_msg_queue_peek_intern(void *p_handle, uint32_t *p_msg_num,
 					     const char *p_func, uint32_t file_line, bool *p_result)
 {
-	*p_result = os_msg_queue_peek_intern_zephyr(p_handle, p_msg_num, p_func, file_line);
+	*p_result = os_msg_queue_peek_zephyr(p_handle, p_msg_num, p_func, file_line);
 	return true;
 }
 
 static bool wrapper_os_msg_send_intern(void *p_handle, void *p_msg, uint32_t wait_ms,
 				       const char *p_func, uint32_t file_line, bool *p_result)
 {
-	*p_result = os_msg_send_intern_zephyr(p_handle, p_msg, wait_ms, p_func, file_line);
+	*p_result = os_msg_send_zephyr(p_handle, p_msg, wait_ms, p_func, file_line);
 	return true;
 }
 
 static bool wrapper_os_msg_recv_intern(void *p_handle, void *p_msg, uint32_t wait_ms,
 				       const char *p_func, uint32_t file_line, bool *p_result)
 {
-	*p_result = os_msg_recv_intern_zephyr(p_handle, p_msg, wait_ms, p_func, file_line);
+	*p_result = os_msg_recv_zephyr(p_handle, p_msg, wait_ms, p_func, file_line);
 	return true;
 }
 
