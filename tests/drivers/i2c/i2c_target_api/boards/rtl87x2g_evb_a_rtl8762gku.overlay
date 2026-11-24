@@ -11,7 +11,7 @@
  * (SCL0-SCL1 and SDA0-SDA1 shorted, the "i2c_bus_short" fixture).
  *
  * i2c0: SCL = P2_2, SDA = P2_3
- * i2c1: SCL = P2_4, SDA = P2_5
+ * i2c1: SCL = P3_4, SDA = P3_5
  */
 
 &i2c0 {
@@ -53,8 +53,8 @@
 
 	i2c1_default: i2c1_default {
 		group1 {
-			psels = <BEE_PSEL(I2C1_CLK, P2_4)>,
-				<BEE_PSEL(I2C1_DAT, P2_5)>;
+			psels = <BEE_PSEL(I2C1_CLK, P3_4)>,
+				<BEE_PSEL(I2C1_DAT, P3_5)>;
 			output-enable;
 			output-high;
 			bias-pull-up;
