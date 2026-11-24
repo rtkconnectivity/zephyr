@@ -6,3 +6,4 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(bee_pm_device)
 
 target_sources(app PRIVATE src/main.c)
+target_sources_ifdef(CONFIG_PINCTRL_DYNAMIC app PRIVATE src/pin_shell.c)
