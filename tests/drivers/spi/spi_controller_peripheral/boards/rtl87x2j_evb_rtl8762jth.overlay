@@ -40,12 +40,6 @@ dut_spis: &spi0_slave {
 	pinctrl-names = "default";
 };
 
-&gpioa {
-	pinctrl-0 = <&gpioa_default>;
-	pinctrl-names = "default";
-	status = "okay";
-};
-
 &dma0 {
 	status = "okay";
 };
@@ -53,10 +47,10 @@ dut_spis: &spi0_slave {
 &pinctrl {
 	spi1_default: spi1_default {
 		group1 {
-			psels = <BEE_PSEL(SPI1_CLK_MASTER, P4_0)>,
-				<BEE_PSEL(SPI1_MO_MASTER, P4_1)>,
-				<BEE_PSEL(SPI1_MI_MASTER, P4_2)>,
-				<BEE_PSEL(SPI1_SS_N_0_MASTER, P4_3)>;
+			psels = <BEE_PSEL(SPI1_CLK_MASTER, P0_0)>,
+				<BEE_PSEL(SPI1_MO_MASTER, P2_3)>,
+				<BEE_PSEL(SPI1_MI_MASTER, P2_4)>,
+				<BEE_PSEL(SPI1_SS_N_0_MASTER, P6_1)>;
 			output-disable;
 			bias-pull-up;
 		};
@@ -64,18 +58,12 @@ dut_spis: &spi0_slave {
 
 	spi0_slave_default: spi0_slave_default {
 		group1 {
-			psels = <BEE_PSEL(SPI0_CLK_SLAVE, P0_4)>,
-				<BEE_PSEL(SPI0_SI_SLAVE, P0_5)>,
-				<BEE_PSEL(SPI0_SO_SLAVE, P0_6)>,
-				<BEE_PSEL(SPI0_SS_N_0_SLAVE, P0_7)>;
+			psels = <BEE_PSEL(SPI0_CLK_SLAVE, P0_1)>,
+				<BEE_PSEL(SPI0_SI_SLAVE, P7_0)>,
+				<BEE_PSEL(SPI0_SO_SLAVE, P7_1)>,
+				<BEE_PSEL(SPI0_SS_N_0_SLAVE, P6_2)>;
 			output-disable;
 			bias-pull-up;
-		};
-	};
-
-	gpioa_default: gpioa_default {
-		group1 {
-			psels = <BEE_PSEL_GPIOA_30_P4_3>;
 		};
 	};
 };

@@ -96,6 +96,10 @@ struct spi_dma_stream {
 struct spi_bee_data {
 	struct spi_context ctx;
 	uint32_t datasize;
+	/* Frames of the transfer not written to the TX FIFO yet */
+	size_t frames_left;
+	/* Frames of the transfer not read from the RX FIFO yet */
+	size_t rx_frames_left;
 	bool initialized;
 #ifdef CONFIG_SPI_BEE_DMA
 	struct spi_dma_stream dma_rx;
@@ -113,18 +117,18 @@ struct spi_bee_config {
 #endif
 };
 
-static bool spi_bee_tx_fifo_not_full(const struct spi_bee_config *cfg)
+static uint32_t spi_bee_tx_fifo_size(const struct spi_bee_config *cfg)
 {
 #if defined(CONFIG_SOC_SERIES_RTL87X2G) || defined(CONFIG_SOC_SERIES_RTL87X2J)
-	return SPI_GetTxFIFOLen((SPI_TypeDef *)cfg->reg) <
-	       (cfg->is_slave ? SPI0_SLAVE_TX_FIFO_SIZE : SPI_TX_FIFO_SIZE);
+	return cfg->is_slave ? SPI0_SLAVE_TX_FIFO_SIZE : SPI_TX_FIFO_SIZE;
 #elif defined(CONFIG_SOC_SERIES_RTL8752H)
-	if ((SPI_TypeDef *)cfg->reg == SPI1) {
-		return SPI_GetTxFIFOLen((SPI_TypeDef *)cfg->reg) < 16;
-	} else {
-		return SPI_GetTxFIFOLen((SPI_TypeDef *)cfg->reg) < 64;
-	}
+	return (SPI_TypeDef *)cfg->reg == SPI1 ? 16 : 64;
 #endif
+}
+
+static bool spi_bee_tx_fifo_not_full(const struct spi_bee_config *cfg)
+{
+	return SPI_GetTxFIFOLen((SPI_TypeDef *)cfg->reg) < spi_bee_tx_fifo_size(cfg);
 }
 
 static bool spi_bee_rx_fifo_not_full(const struct spi_bee_config *cfg)
@@ -163,11 +167,22 @@ static bool spi_bee_hw_ongoing(const struct device *dev)
 	const struct spi_bee_config *config = dev->config;
 
 	return !SPI_GetFlagState((SPI_TypeDef *)config->reg, SPI_FLAG_TFE) ||
-	       (!config->is_slave && SPI_GetFlagState((SPI_TypeDef *)config->reg, SPI_FLAG_BUSY));
+	       SPI_GetFlagState((SPI_TypeDef *)config->reg, SPI_FLAG_BUSY);
 }
 
 static bool spi_bee_transfer_ongoing(const struct device *dev)
 {
+	const struct spi_bee_config *config = dev->config;
+	struct spi_bee_data *data = dev->data;
+
+	/*
+	 * A slave is done once every frame is received, the frames clocked
+	 * while its TX FIFO underflowed leave the FIFO never empty.
+	 */
+	if (config->is_slave) {
+		return data->rx_frames_left != 0;
+	}
+
 	return spi_bee_context_ongoing(dev) || spi_bee_hw_ongoing(dev);
 }
 
@@ -217,6 +232,7 @@ static inline void spi_bee_rx(struct spi_bee_data *data, SPI_TypeDef *spi, int d
 	}
 
 	spi_context_update_rx(&data->ctx, dfs, MIN(data->ctx.rx_len, 1));
+	data->rx_frames_left--;
 }
 
 static int spi_bee_frame_exchange(const struct device *dev)
@@ -227,18 +243,26 @@ static int spi_bee_frame_exchange(const struct device *dev)
 	struct spi_context *ctx = &data->ctx;
 	int dfs = SPI_DATASIZE_TO_BYTE(data->datasize);
 
-	while (spi_bee_tx_fifo_not_full(dev_config) && spi_bee_rx_fifo_not_full(dev_config)) {
-		if (ctx->tx_len) {
-			spi_bee_tx(data, spi, dfs);
-		} else if (SPI_GetTxFIFOLen(spi) + SPI_GetRxFIFOLen(spi) < ctx->rx_len) {
-			SPI_SendData(spi, 0);
-		} else {
-			break;
-		}
+	while (data->rx_frames_left && !spi_bee_rx_fifo_empty(dev_config)) {
+		spi_bee_rx(data, spi, dfs);
 	}
 
-	while (!spi_bee_rx_fifo_empty(dev_config)) {
-		spi_bee_rx(data, spi, dfs);
+	/*
+	 * Count the frames instead of comparing with the FIFO levels, the frame
+	 * in the shift register is in neither FIFO.
+	 */
+	while (data->frames_left && spi_bee_tx_fifo_not_full(dev_config) &&
+	       spi_bee_rx_fifo_not_full(dev_config)) {
+		if (ctx->tx_len) {
+			spi_bee_tx(data, spi, dfs);
+		} else {
+			SPI_SendData(spi, 0);
+		}
+		data->frames_left--;
+	}
+
+	if (!data->frames_left) {
+		SPI_INTConfig(spi, SPI_INT_TXE, DISABLE);
 	}
 
 	return spi_bee_get_err(dev_config);
@@ -340,6 +364,110 @@ static int spi_bee_dma_buf_alloc(struct spi_bee_data *data, size_t chunk_len)
 	return 0;
 }
 
+/*
+ * The slave cannot stop the clock of the master between two buffers, so the
+ * whole transfer is done with one DMA block through bounce buffers: TX is
+ * gathered before the start, RX is scattered back when it completes.
+ */
+static int spi_bee_start_dma_slave(const struct device *dev)
+{
+	const struct spi_bee_config *cfg = dev->config;
+	struct spi_bee_data *data = dev->data;
+	struct spi_context *ctx = &data->ctx;
+	const size_t len = MAX(spi_context_total_tx_len(ctx), spi_context_total_rx_len(ctx));
+	uint8_t *tx;
+	int ret;
+
+	if (len == 0) {
+		spi_bee_complete(dev, 0);
+		return 0;
+	}
+
+	if (len > CONFIG_SPI_BEE_DMA_BUF_SIZE) {
+		LOG_ERR("DMA transfer length %d exceeds slab size %d", len,
+			CONFIG_SPI_BEE_DMA_BUF_SIZE);
+		return -EINVAL;
+	}
+
+	ret = k_mem_slab_alloc(&spi_dma_slab, &data->dma_rx.dma_tmp_buf, K_NO_WAIT);
+	if (ret < 0) {
+		LOG_ERR("spi rx dma slab alloc fail");
+		return -ENOMEM;
+	}
+
+	ret = k_mem_slab_alloc(&spi_dma_slab, &data->dma_tx.dma_tmp_buf, K_NO_WAIT);
+	if (ret < 0) {
+		LOG_ERR("spi tx dma slab alloc fail");
+		k_mem_slab_free(&spi_dma_slab, data->dma_rx.dma_tmp_buf);
+		data->dma_rx.dma_tmp_buf = NULL;
+		return -ENOMEM;
+	}
+
+	tx = data->dma_tx.dma_tmp_buf;
+	memset(tx, 0, len);
+	for (size_t i = 0; i < ctx->tx_count; i++) {
+		if (ctx->current_tx[i].buf != NULL) {
+			memcpy(tx, ctx->current_tx[i].buf, ctx->current_tx[i].len);
+		}
+		tx += ctx->current_tx[i].len;
+	}
+
+	data->dma_rx.blk_cfg.dest_address = (uint32_t)(uintptr_t)data->dma_rx.dma_tmp_buf;
+	data->dma_rx.blk_cfg.block_size = len;
+	data->dma_tx.blk_cfg.source_address = (uint32_t)(uintptr_t)data->dma_tx.dma_tmp_buf;
+	data->dma_tx.blk_cfg.block_size = len;
+
+	SPI_Cmd((SPI_TypeDef *)cfg->reg, DISABLE);
+	SPI_Cmd((SPI_TypeDef *)cfg->reg, ENABLE);
+
+	ret = dma_config(data->dma_rx.dma_dev, data->dma_rx.dma_channel, &data->dma_rx.dma_cfg);
+	if (ret == 0) {
+		ret = dma_start(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
+	}
+	if (ret == 0) {
+		ret = dma_config(data->dma_tx.dma_dev, data->dma_tx.dma_channel,
+				 &data->dma_tx.dma_cfg);
+	}
+	if (ret == 0) {
+		ret = dma_start(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+	}
+
+	if (ret < 0) {
+		dma_stop(data->dma_rx.dma_dev, data->dma_rx.dma_channel);
+		dma_stop(data->dma_tx.dma_dev, data->dma_tx.dma_channel);
+		k_mem_slab_free(&spi_dma_slab, data->dma_rx.dma_tmp_buf);
+		data->dma_rx.dma_tmp_buf = NULL;
+		k_mem_slab_free(&spi_dma_slab, data->dma_tx.dma_tmp_buf);
+		data->dma_tx.dma_tmp_buf = NULL;
+	}
+
+	return ret;
+}
+
+static void spi_bee_dma_slave_done(const struct device *dev)
+{
+	struct spi_bee_data *data = dev->data;
+	struct spi_context *ctx = &data->ctx;
+	int dfs = SPI_DATASIZE_TO_BYTE(data->datasize);
+	const uint8_t *rx = data->dma_rx.dma_tmp_buf;
+
+	while (spi_context_rx_on(ctx)) {
+		size_t frames = ctx->rx_len;
+
+		if (ctx->rx_buf != NULL) {
+			memcpy(ctx->rx_buf, rx, frames * dfs);
+		}
+		rx += frames * dfs;
+		spi_context_update_rx(ctx, dfs, frames);
+	}
+
+	while (spi_context_tx_on(ctx)) {
+		spi_context_update_tx(ctx, dfs, ctx->tx_len);
+	}
+
+	spi_bee_complete(dev, 0);
+}
+
 static int spi_bee_start_dma_transceive(const struct device *dev)
 {
 	const struct spi_bee_config *cfg = dev->config;
@@ -349,6 +477,10 @@ static int spi_bee_start_dma_transceive(const struct device *dev)
 	int ret = 0;
 	uint8_t dma_datasize = SPI_DATASIZE_TO_BYTE(data->datasize);
 	const size_t chunk_len = spi_context_max_continuous_chunk(&data->ctx) * dma_datasize;
+
+	if (cfg->is_slave) {
+		return spi_bee_start_dma_slave(dev);
+	}
 
 	if (chunk_len == 0) {
 		spi_bee_complete(dev, 0);
@@ -443,6 +575,11 @@ void spi_bee_dma_rx_cb(const struct device *dev, void *user_data, uint32_t chann
 	if (status < 0) {
 		LOG_ERR("dma:%p ch:%d callback gets error: %d", dma_dev, channel, status);
 		spi_bee_complete(spi_dev, status);
+		return;
+	}
+
+	if (((const struct spi_bee_config *)spi_dev->config)->is_slave) {
+		spi_bee_dma_slave_done(spi_dev);
 		return;
 	}
 
@@ -556,7 +693,11 @@ static int spi_bee_configure(const struct device *dev, const struct spi_config *
 		spi_cfg->operation & SPI_MODE_CPOL ? BEE_SPI_CPOL_HIGH : BEE_SPI_CPOL_LOW;
 	spi_init_struct.SPI_CPHA =
 		spi_cfg->operation & SPI_MODE_CPHA ? BEE_SPI_CPHA_2EDGE : BEE_SPI_CPHA_1EDGE;
-	spi_init_struct.SPI_TxThresholdLevel = 0;
+	/*
+	 * Refill at half the TX FIFO, a slave runs dry if it waits for the FIFO
+	 * to be empty as the master keeps clocking during the interrupt latency.
+	 */
+	spi_init_struct.SPI_TxThresholdLevel = spi_bee_tx_fifo_size(config) / 2;
 	spi_init_struct.SPI_RxThresholdLevel = 0;
 #ifdef CONFIG_SPI_BEE_DMA
 	dma_datasize = SPI_DATASIZE_TO_BYTE(SPI_WORD_SIZE_GET(spi_cfg->operation));
@@ -617,6 +758,10 @@ static int spi_bee_transceive_impl(const struct device *dev, const struct spi_co
 
 	spi_context_buffers_setup(&data->ctx, tx_bufs, rx_bufs,
 				  SPI_DATASIZE_TO_BYTE(data->datasize));
+	data->frames_left = MAX(spi_context_total_tx_len(&data->ctx),
+				spi_context_total_rx_len(&data->ctx)) /
+			    SPI_DATASIZE_TO_BYTE(data->datasize);
+	data->rx_frames_left = data->frames_left;
 
 	if (!config->is_slave) {
 		spi_context_cs_control(&data->ctx, true);
