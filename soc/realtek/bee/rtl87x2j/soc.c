@@ -14,6 +14,7 @@
 #include <cmsis_core.h>
 
 #include <osif_zephyr.h>
+#include <rtl_pinmux.h>
 #include <system_init.h>
 #include <sys_reset.h>
 
@@ -79,6 +80,15 @@ void soc_early_init_hook(void)
 	patch_ram_vector_table_update = zephyr_ram_vector_table_update;
 
 	rtl87x2j_platform_early_init();
+
+#ifdef CONFIG_PINCTRL_BEE
+	/*
+	 * Pads left muxed to SPI1 at boot keep feeding its input next to the
+	 * pads picked by pinctrl, release them.
+	 */
+	Pinmux_Deinit(P3_4);
+	Pinmux_Deinit(P3_5);
+#endif
 #endif
 }
 
