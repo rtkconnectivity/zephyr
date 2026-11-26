@@ -9,7 +9,7 @@
 / {
 	resources {
 		compatible = "test-gpio-basic-api";
-		out-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+		out-gpios = <&gpioa 1 GPIO_ACTIVE_HIGH>;
 		in-gpios = <&gpioa 2 GPIO_ACTIVE_HIGH>;
 	};
 };
@@ -23,7 +23,7 @@
 &pinctrl {
 	gpioa_default: gpioa_default {
 		group1 {
-			psels = <BEE_PSEL_GPIOA_0_P0_0>,
+			psels = <BEE_PSEL_GPIOA_1_P0_1>,
 				<BEE_PSEL_GPIOA_2_P0_2>;
 		};
 	};

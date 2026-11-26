@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/delete-node/ &button2;
-
 &keyscan {
 	pinctrl-0 = <&keyscan_default>;
 	pinctrl-names = "default";
@@ -21,16 +19,16 @@
 &pinctrl {
 	keyscan_default: keyscan_default {
 		group1 {
-			psels = <BEE_PSEL(KEY_COL_0, P2_4)>,
-				<BEE_PSEL(KEY_COL_1, P2_5)>;
+			psels = <BEE_PSEL(KEY_COL_0, P3_2)>,
+				<BEE_PSEL(KEY_COL_1, P3_3)>;
 			output-enable;
 			output-low;
 			bias-disable;
 		};
 
 		group2 {
-			psels = <BEE_PSEL(KEY_ROW_0, P2_6)>,
-				<BEE_PSEL(KEY_ROW_1, P2_7)>;
+			psels = <BEE_PSEL(KEY_ROW_0, P0_0)>,
+				<BEE_PSEL(KEY_ROW_1, P4_3)>;
 			output-disable;
 			bias-pull-up;
 			bias-pull-strong;

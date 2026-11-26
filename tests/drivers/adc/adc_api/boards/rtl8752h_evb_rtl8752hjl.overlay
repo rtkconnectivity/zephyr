@@ -6,7 +6,7 @@
 
 / {
 	zephyr,user {
-		io-channels = <&adc 2>, <&adc 8>;
+		io-channels = <&adc 0>, <&adc 8>;
 	};
 };
 
@@ -17,8 +17,8 @@
 	#size-cells = <0>;
 	status = "okay";
 
-	channel@2 {
-		reg = <2>;
+	channel@0 {
+		reg = <0>;
 		zephyr,gain = "ADC_GAIN_1";
 		zephyr,reference = "ADC_REF_INTERNAL";
 		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
@@ -37,7 +37,7 @@
 &pinctrl {
 	adc_default: adc_default {
 		group1 {
-			psels = <BEE_PSEL(SW_MODE, P2_2)>;
+			psels = <BEE_PSEL(SW_MODE, P2_0)>;
 			output-disable;
 			bias-pull-down;
 		};

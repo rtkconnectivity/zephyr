@@ -19,8 +19,8 @@
 &pinctrl {
 	i2c0_default: i2c0_default {
 		group1 {
-			psels = <BEE_PSEL(I2C0_CLK, P0_4)>,
-				<BEE_PSEL(I2C0_DAT, P0_5)>;
+			psels = <BEE_PSEL(I2C0_CLK, P2_4)>,
+				<BEE_PSEL(I2C0_DAT, P2_5)>;
 			output-enable;
 			output-high;
 			bias-pull-up;

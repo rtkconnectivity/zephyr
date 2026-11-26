@@ -19,16 +19,16 @@
 &pinctrl {
 	keyscan_default: keyscan_default {
 		group1 {
-			psels = <BEE_PSEL(KEY_COL_0, P0_0)>,
-				<BEE_PSEL(KEY_COL_1, P0_1)>;
+			psels = <BEE_PSEL(KEY_COL_0, P3_4)>,
+				<BEE_PSEL(KEY_COL_1, P3_5)>;
 			output-enable;
 			output-low;
 			bias-disable;
 		};
 
 		group2 {
-			psels = <BEE_PSEL(KEY_ROW_0, P2_6)>,
-				<BEE_PSEL(KEY_ROW_1, P2_7)>;
+			psels = <BEE_PSEL(KEY_ROW_0, P3_6)>,
+				<BEE_PSEL(KEY_ROW_1, P3_7)>;
 			output-disable;
 			bias-pull-up;
 			bias-pull-strong;
