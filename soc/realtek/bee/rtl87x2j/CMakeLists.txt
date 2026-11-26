@@ -12,7 +12,11 @@ zephyr_link_libraries_ifdef(CONFIG_BT
 )
 
 zephyr_link_libraries(
-  ${CMAKE_CURRENT_SOURCE_DIR}/librtl87x2j_platform_v0.1.0.a
+  ${CMAKE_CURRENT_SOURCE_DIR}/librtl87x2j_platform_v0.1.2.a
+)
+
+zephyr_link_libraries(
+   ${ZEPHYR_HAL_REALTEK_MODULE_DIR}/bee/ld/rtl87x2j/libdriver.a
 )
 
 zephyr_linker_sources(SECTIONS trace_section.ld)
