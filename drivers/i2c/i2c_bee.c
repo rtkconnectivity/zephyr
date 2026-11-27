@@ -83,12 +83,18 @@ extern I2C_Status I2C_CheckAbortStatus(I2C_TypeDef *I2Cx);
 #define BEE_I2C_FUN_IS_SDA(fun) ((fun) == BEE_I2C0_DAT || (fun) == BEE_I2C1_DAT)
 #endif
 
+/* Controller mode interrupts, the STOP ends every transfer */
+#define I2C_BEE_CONTROLLER_INTS                                                                    \
+	(I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY | I2C_INT_STOP_DET)
+
 struct i2c_bee_context {
 	struct i2c_msg *msgs;
 	uint8_t num_msgs;
 	uint8_t msg_idx;
 	uint16_t tx_idx;
 	uint16_t rx_idx;
+	/* STOPs queued but not yet detected on the bus */
+	uint8_t pending_stops;
 };
 
 struct i2c_bee_config {
@@ -151,10 +157,13 @@ static int i2c_bee_do_tx(const struct device *dev)
 	bool send_stop;
 
 	if (msg == NULL) {
+		/* Every command is queued, wait for the STOP */
+		I2C_INTConfig(i2c, I2C_INT_TX_EMPTY, DISABLE);
 		return 0;
 	}
 
-	stop_f = i2c_is_stop_op(msg);
+	/* Always end the transfer with a STOP, so that STOP_DET completes it */
+	stop_f = i2c_is_stop_op(msg) || (ctx->msg_idx == ctx->num_msgs - 1U);
 
 	if (!i2c_is_read_op(msg)) {
 		if (ctx->tx_idx >= msg->len) {
@@ -170,6 +179,7 @@ static int i2c_bee_do_tx(const struct device *dev)
 		send_stop = stop_f;
 
 		if (last_byte) {
+			ctx->pending_stops += stop_f ? 1U : 0U;
 			i2c->IC_DATA_CMD = msg->buf[ctx->tx_idx] | (stop_f ? BIT9 : 0);
 			ctx->tx_idx++;
 			i2c_bee_advance_msg(ctx);
@@ -179,6 +189,8 @@ static int i2c_bee_do_tx(const struct device *dev)
 		}
 	} else {
 		if (ctx->tx_idx >= msg->len) {
+			/* TX_EMPTY is level triggered, mask it until the data is read */
+			I2C_INTConfig(i2c, I2C_INT_TX_EMPTY, DISABLE);
 			return 0;
 		}
 
@@ -189,6 +201,7 @@ static int i2c_bee_do_tx(const struct device *dev)
 		last_byte = (ctx->tx_idx >= msg->len - 1U);
 		send_stop = last_byte && stop_f;
 
+		ctx->pending_stops += send_stop ? 1U : 0U;
 		i2c->IC_DATA_CMD = BIT8 | (send_stop ? BIT9 : 0);
 
 		ctx->tx_idx++;
@@ -218,14 +231,31 @@ static int i2c_bee_do_rx(const struct device *dev)
 		return 0;
 	}
 
-	msg->buf[ctx->rx_idx] = (uint8_t)i2c->IC_DATA_CMD;
-	ctx->rx_idx++;
+	while ((ctx->rx_idx < msg->len) && (i2c->IC_STATUS & I2C_FLAG_RFNE)) {
+		msg->buf[ctx->rx_idx] = (uint8_t)i2c->IC_DATA_CMD;
+		ctx->rx_idx++;
+	}
 
 	if (ctx->rx_idx >= msg->len) {
 		i2c_bee_advance_msg(ctx);
+		if (i2c_bee_next_msg_available(ctx)) {
+			I2C_INTConfig(i2c, I2C_INT_TX_EMPTY, ENABLE);
+		}
 	}
 
 	return 0;
+}
+
+/* The controller cannot address a target without moving a data byte */
+static bool i2c_bee_msgs_supported(const struct i2c_msg *msgs, uint8_t num_msgs)
+{
+	for (uint8_t i = 0U; i < num_msgs; i++) {
+		if (msgs[i].len == 0U) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 static void i2c_bee_log_err(struct i2c_bee_data *data)
@@ -265,12 +295,15 @@ static void i2c_bee_start(const struct device *dev, struct i2c_msg *msgs, uint8_
 	data->ctx.msg_idx = 0U;
 	data->ctx.tx_idx = 0U;
 	data->ctx.rx_idx = 0U;
+	data->ctx.pending_stops = 0U;
 	data->errs = BEE_I2C_SUCCESS;
 
 	I2C_Cmd(i2c, ENABLE);
 	I2C_SetSlaveAddress(i2c, addr);
 
-	I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, ENABLE);
+	/* Drop the STOP left by the previous transfer */
+	I2C_ClearINTPendingBit(i2c, I2C_INT_STOP_DET);
+	I2C_INTConfig(i2c, I2C_BEE_CONTROLLER_INTS, ENABLE);
 
 	i2c_bee_do_tx(dev);
 }
@@ -281,7 +314,7 @@ static void i2c_bee_complete(const struct device *dev, int result)
 	const struct i2c_bee_config *cfg = dev->config;
 	I2C_TypeDef *i2c = (I2C_TypeDef *)cfg->reg;
 
-	I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, DISABLE);
+	I2C_INTConfig(i2c, I2C_BEE_CONTROLLER_INTS, DISABLE);
 	I2C_Cmd(i2c, DISABLE);
 
 #ifdef CONFIG_I2C_CALLBACK
@@ -317,6 +350,10 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 		return 0;
 	}
 
+	if (!i2c_bee_msgs_supported(msgs, num_msgs)) {
+		return -ENOTSUP;
+	}
+
 	k_sem_take(&data->lock, K_FOREVER);
 
 #ifdef CONFIG_I2C_TARGET
@@ -335,7 +372,7 @@ static int i2c_bee_transfer(const struct device *dev, struct i2c_msg *msgs, uint
 	i2c_bee_start(dev, msgs, num_msgs, addr);
 
 	if (k_sem_take(&data->sync_sem, cfg->transfer_timeout) != 0) {
-		I2C_INTConfig(i2c, I2C_INT_TX_ABRT | I2C_INT_RX_FULL | I2C_INT_TX_EMPTY, DISABLE);
+		I2C_INTConfig(i2c, I2C_BEE_CONTROLLER_INTS, DISABLE);
 		I2C_Cmd(i2c, DISABLE);
 		k_sem_give(&data->lock);
 		LOG_ERR("transfer timed out");
@@ -369,6 +406,10 @@ static int i2c_bee_transfer_cb(const struct device *dev, struct i2c_msg *msgs, u
 
 	if (cb == NULL) {
 		return -EINVAL;
+	}
+
+	if (!i2c_bee_msgs_supported(msgs, num_msgs)) {
+		return -ENOTSUP;
 	}
 
 	/* The bus lock is released from the ISR when the transfer completes. */
@@ -847,6 +888,7 @@ static void i2c_bee_isr(const struct device *dev)
 	struct i2c_bee_data *data = dev->data;
 	const struct i2c_bee_config *cfg = dev->config;
 	I2C_TypeDef *i2c = cfg->reg;
+	bool stop_det;
 
 #ifdef CONFIG_I2C_TARGET
 	if (data->target_attached) {
@@ -864,6 +906,9 @@ static void i2c_bee_isr(const struct device *dev)
 		return;
 	}
 
+	/* Sampled before draining RX, so the data received before the STOP is read */
+	stop_det = I2C_GetINTStatus(i2c, I2C_INT_STOP_DET);
+
 	if (I2C_GetINTStatus(i2c, I2C_INT_RX_FULL)) {
 		i2c_bee_do_rx(dev);
 		I2C_ClearINTPendingBit(i2c, I2C_INT_RX_FULL);
@@ -874,8 +919,15 @@ static void i2c_bee_isr(const struct device *dev)
 		I2C_ClearINTPendingBit(i2c, I2C_INT_TX_EMPTY);
 	}
 
-	if (!i2c_bee_next_msg_available(&data->ctx) && !I2C_GetFlagState(i2c, I2C_FLAG_ACTIVITY)) {
-		i2c_bee_complete(dev, 0);
+	if (stop_det) {
+		I2C_ClearINTPendingBit(i2c, I2C_INT_STOP_DET);
+		if (data->ctx.pending_stops > 0U) {
+			data->ctx.pending_stops--;
+		}
+		/* A STOP between messages does not end the transfer */
+		if (!i2c_bee_next_msg_available(&data->ctx) && (data->ctx.pending_stops == 0U)) {
+			i2c_bee_complete(dev, 0);
+		}
 	}
 }
 

@@ -1,0 +1,407 @@
+/*
+ * Copyright (c) 2026, Realtek Semiconductor Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/gpio/realtek-bee-gpio.h>
+#include <zephyr/dt-bindings/led/led.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+
+/* The tests reuse the board key pads, drop the keys with their pins */
+/delete-node/ &{/gpio_keys};
+
+/*
+ *  P0_1 PWM6
+ *  P0_4 GPIO(LATCH OUT)
+ *  P0_5 TIMER8 LATCH TRIGGER
+ *  P0_6 GPIO(TEST OUT)
+ *  P1_0 GPIO(TEST QDECX)
+ *  P1_1 GPIO(TEST QDECX)
+ *  P1_2 GPIO(TEST IN)
+ *  P2_2 ADC
+ *  P2_3 I2C0_CLK
+ *  P2_4 I2C0_DAT
+ *  P2_5 IR_TX/IR_RX
+ *  P2_6 AMIC
+ *  P2_7 AMIC
+ *  P3_0 UART2_TX
+ *  P3_1 UART2_RX
+ *  P3_2 I2C1_CLK
+ *  P3_3 I2C1_DAT
+ *  P3_4 KSCAN_C0
+ *  P3_5 KSCAN_C1
+ *  P3_6 KSCAN_R0
+ *  P3_7 KSCAN_R1
+ *  P4_0 SPI0_CLK
+ *  P4_1 SPI0_MO
+ *  P4_2 SPI0_MI
+ *  P4_3 GPIO(SPI0_CS)
+ *  P9_0 QDECX_A
+ *  P9_1 QDECX_B
+ *  MICBIAS MICBIAS
+ */
+
+/ {
+	resources {
+		compatible = "test-gpio-basic-api";
+		// P0_6
+		out-gpios = <&gpioa 6 GPIO_ACTIVE_HIGH>;
+		// P1_2
+		in-gpios = <&gpioa 10 GPIO_ACTIVE_HIGH>;
+	};
+
+	zephyr,user {
+		io-channels = <&adc 2>;
+		// P0_4
+		latch-gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;
+	};
+
+	aliases {
+		test-counter-timer = &counter5;
+		test-latch-counter = &counter8;
+		test-pwm = &pwm6;
+		test-rtc = &rtc;
+		test-qdec = &qdec;
+		test-qenca = &phase_a;
+		test-qencb = &phase_b;
+		test-i2c = &i2c1;
+		test-can = &can;
+		test-ir = &ir;
+		test-i2s = &i2s0;
+		test-codec = &codec;
+	};
+
+	encoder-emulate {
+		compatible = "gpio-leds";
+
+		phase_a: phase_a {
+			// P1_0
+			gpios = <&gpioa 8 GPIO_ACTIVE_HIGH>;
+		};
+
+		phase_b: phase_b {
+			// P1_1
+			gpios = <&gpioa 9 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&dma0 {
+	status = "okay";
+};
+
+&gpioa {
+	pinctrl-0 = <&gpioa_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&gpiob {
+	pinctrl-0 = <&gpiob_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&timer5 {
+	status = "okay";
+	prescaler = <1>;
+
+	counter5: counter {
+		status = "okay";
+	};
+};
+
+&timer6 {
+	status = "okay";
+	prescaler = <1>;
+
+	pwm6: pwm {
+		status = "okay";
+		pinctrl-0 = <&pwm6_default>;
+		pinctrl-names = "default";
+	};
+};
+
+&timer8 {
+	status = "okay";
+	prescaler = <1>;
+
+	counter8: counter {
+		status = "okay";
+		pinctrl-0 = <&latch_default>;
+		pinctrl-names = "default";
+	};
+};
+
+&spi0 {
+	status = "okay";
+	pinctrl-0 = <&spi0_default>;
+	pinctrl-names = "default";
+	// P4_3
+	cs-gpios = <&gpiob 8 GPIO_ACTIVE_LOW>;
+
+	test-spi@0 {
+		compatible = "test-spi-loopback";
+		reg = <0>;
+		spi-max-frequency = <500000>;
+	};
+};
+
+/* Target of the i2c test, SCL/SDA wired to those of i2c1 */
+&i2c0 {
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-names = "default";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	status = "okay";
+
+	eeprom@51 {
+		compatible = "zephyr,i2c-target-eeprom";
+		reg = <0x51>;
+		size = <256>;
+	};
+};
+
+&i2c1 {
+	pinctrl-0 = <&i2c1_default>;
+	pinctrl-names = "default";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	status = "okay";
+};
+
+&rtc_counter {
+	prescaler = <1>;
+	status = "okay";
+
+	rtc: rtc {
+		compatible = "zephyr,rtc-counter";
+		alarms-count = <4>;
+		status = "okay";
+	};
+};
+
+&qdec {
+	x-enable;
+	x-counts-per-revolution = <4>;
+	x-debounce-time-ms = <5>;
+	pinctrl-0 = <&qdec_default>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+/* TX and RX share the pad and the DMA channel, the board only sends or
+ * receives at a time
+ */
+&ir {
+	pinctrl-0 = <&ir_tx>;
+	pinctrl-1 = <&ir_rx>;
+	pinctrl-names = "ir-tx", "ir-rx";
+	dmas = <&dma0 0 39 0x26a1>, <&dma0 0 40 0x268a>;
+	dma-names = "tx", "rx";
+	status = "okay";
+};
+
+/* Internal codec, records the amic */
+&i2s0 {
+	dmas = <&dma0 1 42 0x648a>;
+	dma-names = "rx";
+	status = "okay";
+
+	codec: codec@0 {
+		compatible = "realtek,bee-codec";
+		reg = <0>;
+		clocks = <&cctl APB_CLK(CODEC)>;
+		channel-sequence = "l_r";
+		mic-bias = "1_8";
+		mic-bst-gain = "30dB";
+		mic-bst-mode = "differential";
+		mic-type = "amic";
+		dmic-data-latch = "rising_latch";
+		ad-gain = <0x2f>;
+		boost-gain = "0dB";
+		pinctrl-0 = <&codec_default>;
+		pinctrl-names = "default";
+		status = "okay";
+	};
+};
+
+&keyscan {
+	pinctrl-0 = <&keyscan_default>;
+	pinctrl-names = "default";
+	row-size = <2>;
+	col-size = <2>;
+	debounce-down-ms = <10>;
+	debounce-up-ms = <10>;
+	poll-period-us = <50000>;
+	release-time-us = <5000>;
+	status = "okay";
+};
+
+&adc {
+	pinctrl-0 = <&adc_default>;
+	pinctrl-names = "default";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	channel@2 {
+		reg = <2>;
+		zephyr,gain = "ADC_GAIN_1";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+};
+
+&pinctrl {
+	/* Replaces the LED and key pins of the board */
+	gpioa_default: gpioa_default {
+		group1 {
+			psels = <BEE_PSEL_GPIOA_4_P0_4>, //P0_4 GPIO(LATCH OUT)
+				<BEE_PSEL_GPIOA_6_P0_6>, //P0_6 GPIO(TEST OUT)
+				<BEE_PSEL_GPIOA_10_P1_2>; //P1_2 GPIO(TEST IN)
+		};
+
+		group2 {
+			psels = <BEE_PSEL_GPIOA_8_P1_0>, //P1_0 GPIO(TEST QDECX)
+				<BEE_PSEL_GPIOA_9_P1_1>; //P1_1 GPIO(TEST QDECX)
+		};
+	};
+
+	gpiob_default: gpiob_default {
+		group1 {
+			psels = <BEE_PSEL_GPIOB_8_P4_3>; //P4_3 GPIO(SPI0_CS)
+		};
+	};
+
+	uart2_default: uart2_default {
+		group1 {
+			psels = <BEE_PSEL(UART2_TX, P3_0)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(UART2_RX, P3_1)>;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+
+	spi0_default: spi0_default {
+		group1 {
+			psels = <BEE_PSEL(SPI0_CLK_MASTER, P4_0)>,
+				<BEE_PSEL(SPI0_MO_MASTER, P4_1)>,
+				<BEE_PSEL(SPI0_MI_MASTER, P4_2)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	/* Latch trigger pad, driven by latch-gpios */
+	latch_default: latch_default {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P0_5)>;
+			output-disable;
+			bias-disable;
+		};
+	};
+
+	pwm6_default: pwm6_default {
+		group1 {
+			psels = <BEE_PSEL(TIMER_PWM6, P0_1)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	qdec_default: qdec_default {
+		group1 {
+			psels = <BEE_PSEL(QDPH0_IN_P9_0_P9_1, P9_0)>,
+				<BEE_PSEL(QDPH0_IN_P9_0_P9_1, P9_1)>;
+			output-disable;
+			bias-disable;
+		};
+	};
+
+	i2c0_default: i2c0_default {
+		group1 {
+			psels = <BEE_PSEL(I2C0_CLK, P2_3)>,
+				<BEE_PSEL(I2C0_DAT, P2_4)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	i2c1_default: i2c1_default {
+		group1 {
+			psels = <BEE_PSEL(I2C1_CLK, P3_2)>,
+				<BEE_PSEL(I2C1_DAT, P3_3)>;
+			output-enable;
+			output-high;
+			bias-pull-up;
+		};
+	};
+
+	keyscan_default: keyscan_default {
+		group1 {
+			psels = <BEE_PSEL(KEY_COL_0, P3_4)>,
+				<BEE_PSEL(KEY_COL_1, P3_5)>;
+			output-enable;
+			output-low;
+			bias-disable;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(KEY_ROW_0, P3_6)>,
+				<BEE_PSEL(KEY_ROW_1, P3_7)>;
+			output-disable;
+			bias-pull-up;
+			bias-pull-strong;
+		};
+	};
+
+	adc_default: adc_default {
+		group1 {
+			psels = <BEE_PSEL(SW_MODE, P2_2)>;
+			output-disable;
+			bias-pull-down;
+		};
+	};
+	ir_tx: ir_tx {
+		group1 {
+			psels = <BEE_PSEL(IRDA_TX, P2_5)>;
+			output-enable;
+			output-low;
+			bias-disable;
+		};
+	};
+
+	ir_rx: ir_rx {
+		group1 {
+			psels = <BEE_PSEL(IRDA_RX, P2_5)>;
+			output-disable;
+			bias-disable;
+		};
+	};
+
+	codec_default: codec_default {
+		group1 {
+			psels = <BEE_PSEL(PWR_OFF, P2_6)>,
+				<BEE_PSEL(PWR_OFF, P2_7)>;
+			output-disable;
+			bias-disable;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, MICBIAS)>;
+			output-enable;
+			output-high;
+			bias-disable;
+		};
+	};
+};

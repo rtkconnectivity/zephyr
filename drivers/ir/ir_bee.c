@@ -113,6 +113,9 @@ struct ir_bee_data {
 	uint32_t rx_len;
 #if !(IR_HAS_RX_DMA)
 	uint32_t cur_rx_len;
+#else
+	/* Words of the current block already given by IR_RX_STOPPED */
+	uint32_t rx_offset;
 #endif
 	uint32_t rx_idle_cnt;
 	ir_callback_t cb;
@@ -158,8 +161,11 @@ static void ir_bee_dma_rx_cb(const struct device *dma_dev, void *user_data, uint
 		data->rx_buf_index = 0;
 	}
 
+	/* The cyclic DMA goes on in the block after IR_RX_STOPPED, skip what it gave */
 	evt.type = IR_RX_RECEIVED;
-	evt.data.rx.len = data->rx_len;
+	evt.data.rx.buf += data->rx_offset;
+	evt.data.rx.len = data->rx_len - data->rx_offset;
+	data->rx_offset = 0;
 
 	if (data->cb) {
 		data->cb(dev, &evt, data->cb_usr_data);
@@ -445,6 +451,7 @@ static int ir_bee_rx_enable(const struct device *dev, ir_callback_t callback, vo
 
 #if IR_HAS_RX_DMA
 	data->rx_buf_index = 0;
+	data->rx_offset = 0;
 	data->dma_rx.blk_cfg[0].block_size = rx_len * data->dma_rx.dma_cfg.source_data_size;
 	data->dma_rx.blk_cfg[0].dest_address = (uint32_t)data->rx_buf[0];
 	data->dma_rx.blk_cfg[1].block_size = rx_len * data->dma_rx.dma_cfg.source_data_size;
@@ -486,7 +493,8 @@ static int ir_bee_rx_disable(const struct device *dev, struct ir_event_rx *rx_da
 			rx_data->buf = data->rx_buf[1];
 		}
 
-		rx_data->len = data->rx_len - stat.pending_length / 4;
+		rx_data->buf += data->rx_offset;
+		rx_data->len = data->rx_len - stat.pending_length / 4 - data->rx_offset;
 
 		remain_rx_len = IR_GetRxDataLen();
 		IR_ReceiveBuf(&rx_data->buf[rx_data->len], remain_rx_len);
@@ -571,6 +579,7 @@ static void ir_bee_isr(const struct device *dev)
 #if IR_HAS_RX_DMA
 		struct dma_status stat;
 		uint8_t remain_rx_len;
+		uint32_t rx_done;
 
 		dma_get_status(data->dma_rx.dma_dev, data->dma_rx.dma_channel, &stat);
 
@@ -580,11 +589,15 @@ static void ir_bee_isr(const struct device *dev)
 			evt.data.rx.buf = data->rx_buf[1];
 		}
 
+		rx_done = data->rx_len - stat.pending_length / 4;
 		evt.type = IR_RX_STOPPED;
-		evt.data.rx.len = data->rx_len - stat.pending_length / 4;
+		evt.data.rx.buf += data->rx_offset;
+		evt.data.rx.len = rx_done - data->rx_offset;
 		remain_rx_len = IR_GetRxDataLen();
 		IR_ReceiveBuf(&evt.data.rx.buf[evt.data.rx.len], remain_rx_len);
 		evt.data.rx.len += remain_rx_len;
+		/* DMA goes on from rx_done, over the FIFO words read here */
+		data->rx_offset = rx_done;
 
 		if (data->cb) {
 			data->cb(dev, &evt, data->cb_usr_data);

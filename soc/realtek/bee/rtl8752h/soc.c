@@ -18,6 +18,7 @@
 #include "system_rtl876x.h"
 #include "vector_table.h"
 #include "rtl876x_aon_reg.h"
+#include "rtl876x_pinmux.h"
 #include "sys_reset.h"
 
 extern void _isr_wrapper(void);
@@ -149,6 +150,17 @@ void soc_early_init_hook(void)
 	power_manager_master_init();
 	power_manager_slave_init();
 	platform_pm_init();
+
+	/*
+	 * Pads left muxed to UART1 and SPI0 slave at boot keep feeding those
+	 * peripheral inputs next to the pads picked by pinctrl, release them.
+	 */
+	Pinmux_Deinit(P3_0);
+	Pinmux_Deinit(P3_1);
+	Pinmux_Deinit(P4_0);
+	Pinmux_Deinit(P4_1);
+	Pinmux_Deinit(P4_2);
+	Pinmux_Deinit(P4_3);
 }
 
 void soc_late_init_hook(void)

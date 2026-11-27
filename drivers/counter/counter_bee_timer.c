@@ -10,6 +10,7 @@
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/clock_control/bee_clock_control.h>
 #include <zephyr/drivers/counter.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/irq.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
@@ -33,11 +34,23 @@ struct counter_bee_alarm_data {
 	void *user_data;
 };
 
+#ifdef CONFIG_COUNTER_CAPTURE
+struct counter_bee_capture {
+	counter_capture_cb_t callback;
+	void *user_data;
+	counter_capture_flags_t flags;
+	bool enabled;
+};
+#endif
+
 struct counter_bee_data {
 	struct counter_bee_top_data top;
 	struct counter_bee_alarm_data alarm;
 	uint32_t freq;
 	const struct bee_timer_ops *ops;
+#ifdef CONFIG_COUNTER_CAPTURE
+	struct counter_bee_capture capture;
+#endif
 };
 
 struct counter_bee_config {
@@ -47,6 +60,13 @@ struct counter_bee_config {
 	bool enhanced;
 	uint8_t prescaler;
 	uint8_t clock_div;
+#ifdef CONFIG_COUNTER_CAPTURE
+	/* NULL if the counter has no pinctrl-0 selecting the latch trigger pad. */
+	const struct pinctrl_dev_config *pcfg;
+	bool latch_debounce;
+	uint8_t latch_debounce_div;
+	uint16_t latch_debounce_count;
+#endif
 	void (*irq_config)(const struct device *dev);
 #if defined(CONFIG_SOC_SERIES_RTL8752H)
 	void (*shared_irq_config)(const struct device *dev);
@@ -219,6 +239,148 @@ static uint32_t counter_bee_timer_get_freq(const struct device *dev)
 	return data->freq;
 }
 
+#ifdef CONFIG_COUNTER_CAPTURE
+/* Capture channel 0 is backed by the latch count triggered by a GPIO pad. */
+static int counter_bee_capture_configure(const struct device *dev, uint8_t chan_id,
+					 counter_capture_flags_t flags, counter_capture_cb_t cb,
+					 void *user_data)
+{
+	ARG_UNUSED(chan_id);
+
+	const struct counter_bee_config *cfg = dev->config;
+	struct counter_bee_data *data = dev->data;
+	struct bee_latch_cfg latch_cfg;
+	const struct pinctrl_state *state;
+	uint32_t edge_flags = flags & COUNTER_CAPTURE_BOTH_EDGES;
+	int ret;
+
+	if (data->ops->latch_configure == NULL || cfg->pcfg == NULL) {
+		LOG_ERR("Capture is not supported on this timer");
+		return -ENOTSUP;
+	}
+
+	if (cb == NULL || edge_flags == 0U) {
+		return -EINVAL;
+	}
+
+	if (data->capture.enabled) {
+		LOG_ERR("Capture is already enabled");
+		return -EBUSY;
+	}
+
+	if (edge_flags == COUNTER_CAPTURE_BOTH_EDGES) {
+		latch_cfg.trigger = BEE_LATCH_TRIGGER_BOTH;
+	} else if (edge_flags & COUNTER_CAPTURE_FALLING_EDGE) {
+		latch_cfg.trigger = BEE_LATCH_TRIGGER_FALLING;
+	} else {
+		latch_cfg.trigger = BEE_LATCH_TRIGGER_RISING;
+	}
+
+	/* The trigger pad is the one pad of the default state, so it follows
+	 * pinctrl_update_states().
+	 */
+	ret = pinctrl_lookup_state(cfg->pcfg, PINCTRL_STATE_DEFAULT, &state);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (state->pin_cnt != 1U) {
+		LOG_ERR("Capture needs exactly one trigger pad");
+		return -EINVAL;
+	}
+
+	ret = pinctrl_apply_state_direct(cfg->pcfg, state);
+	if (ret < 0) {
+		return ret;
+	}
+
+	latch_cfg.trigger_pad = state->pins[0].pin;
+	latch_cfg.debounce_en = cfg->latch_debounce;
+	latch_cfg.debounce_div = cfg->latch_debounce_div;
+	latch_cfg.debounce_count = cfg->latch_debounce_count;
+
+	ret = data->ops->latch_configure(cfg->reg, &latch_cfg);
+	if (ret < 0) {
+		LOG_ERR("Invalid latch configuration (%d)", ret);
+		return ret;
+	}
+
+	data->capture.callback = cb;
+	data->capture.user_data = user_data;
+	data->capture.flags = flags;
+
+	return 0;
+}
+
+static int counter_bee_capture_enable(const struct device *dev, uint8_t chan_id)
+{
+	ARG_UNUSED(chan_id);
+
+	const struct counter_bee_config *cfg = dev->config;
+	struct counter_bee_data *data = dev->data;
+
+	if (data->ops->latch_enable == NULL) {
+		return -ENOTSUP;
+	}
+
+	if (data->capture.callback == NULL) {
+		LOG_ERR("Capture is not configured");
+		return -EINVAL;
+	}
+
+	/* Drop values latched before the capture was enabled. */
+	data->ops->latch_clear(cfg->reg);
+	data->capture.enabled = true;
+	data->ops->latch_enable(cfg->reg);
+
+	return 0;
+}
+
+static int counter_bee_capture_disable(const struct device *dev, uint8_t chan_id)
+{
+	ARG_UNUSED(chan_id);
+
+	const struct counter_bee_config *cfg = dev->config;
+	struct counter_bee_data *data = dev->data;
+
+	if (data->ops->latch_disable == NULL) {
+		return -ENOTSUP;
+	}
+
+	data->ops->latch_disable(cfg->reg);
+	data->capture.enabled = false;
+	data->capture.callback = NULL;
+
+	return 0;
+}
+
+static void counter_bee_capture_isr(const struct device *dev)
+{
+	const struct counter_bee_config *cfg = dev->config;
+	struct counter_bee_data *data = dev->data;
+	struct counter_bee_capture *cap = &data->capture;
+
+	while (cap->enabled && data->ops->latch_get_fifo_len(cfg->reg) > 0U) {
+		uint32_t ticks = data->ops->latch_read_fifo(cfg->reg);
+		counter_capture_cb_t cb = cap->callback;
+		void *user_data = cap->user_data;
+		counter_capture_flags_t flags = cap->flags;
+
+		if (flags & COUNTER_CAPTURE_SINGLE_SHOT) {
+			counter_bee_capture_disable(dev, 0);
+			data->ops->latch_clear(cfg->reg);
+			cb(dev, 0, flags, ticks, user_data);
+			return;
+		}
+
+		cb(dev, 0, flags, ticks, user_data);
+	}
+
+	/* The FIFO is empty now, so the threshold interrupt can be cleared. */
+	data->ops->latch_int_clear(cfg->reg);
+}
+#endif /* CONFIG_COUNTER_CAPTURE */
+
 static int counter_bee_timer_init(const struct device *dev)
 {
 	const struct counter_bee_config *cfg = dev->config;
@@ -257,6 +419,17 @@ static void irq_handler(const struct device *dev)
 {
 	struct counter_bee_data *data = dev->data;
 	const struct counter_bee_config *cfg = dev->config;
+
+#ifdef CONFIG_COUNTER_CAPTURE
+	/* The latch interrupt shares the timer IRQ line. */
+	if (data->capture.enabled && data->ops->latch_int_status(cfg->reg)) {
+		counter_bee_capture_isr(dev);
+	}
+
+	if (!data->ops->int_status(cfg->reg)) {
+		return;
+	}
+#endif
 
 	data->ops->int_clear(cfg->reg);
 
@@ -311,6 +484,11 @@ static DEVICE_API(counter, counter_bee_timer_driver_api) = {
 	.cancel_alarm = counter_bee_timer_cancel_alarm,
 	.get_freq = counter_bee_timer_get_freq,
 	.get_pending_int = counter_bee_timer_get_pending_int,
+#ifdef CONFIG_COUNTER_CAPTURE
+	.capture_configure = counter_bee_capture_configure,
+	.enable_capture = counter_bee_capture_enable,
+	.disable_capture = counter_bee_capture_disable,
+#endif
 };
 
 #define PARENT_NODE(n) DT_INST_PARENT(n)
@@ -364,8 +542,30 @@ static DEVICE_API(counter, counter_bee_timer_driver_api) = {
 #define TIMER_IRQ_CONFIG(index) .irq_config = irq_config_##index
 #endif
 
+#ifdef CONFIG_COUNTER_CAPTURE
+#if defined(CONFIG_SOC_SERIES_RTL87X2J)
+#define BEE_LATCH_DEBOUNCE_DIV_CONFIG(index)                                                       \
+	.latch_debounce_div =                                                                      \
+		CONCAT(TIMER_CLOCK_DIV_, DT_INST_PROP(index, latch_debounce_div))
+#else
+#define BEE_LATCH_DEBOUNCE_DIV_CONFIG(index) .latch_debounce_div = 0
+#endif
+#define BEE_CAPTURE_PINCTRL_DEFINE(index)                                                          \
+	IF_ENABLED(DT_INST_PINCTRL_HAS_IDX(index, 0), (PINCTRL_DT_INST_DEFINE(index);))
+#define BEE_CAPTURE_CONFIG(index)                                                                  \
+	.pcfg = COND_CODE_1(DT_INST_PINCTRL_HAS_IDX(index, 0),                                     \
+			    (PINCTRL_DT_INST_DEV_CONFIG_GET(index)), (NULL)),                      \
+	.latch_debounce = DT_INST_PROP(index, latch_debounce),                                     \
+	BEE_LATCH_DEBOUNCE_DIV_CONFIG(index),                                                      \
+	.latch_debounce_count = DT_INST_PROP(index, latch_debounce_count),
+#else
+#define BEE_CAPTURE_PINCTRL_DEFINE(index)
+#define BEE_CAPTURE_CONFIG(index)
+#endif
+
 #define BEE_COUNTER_TIMER_INIT(index)                                                              \
 	TIMER_IRQ_CONFIG_FUNC(index);                                                              \
+	BEE_CAPTURE_PINCTRL_DEFINE(index)                                                          \
 	static struct timer_data_##index {                                                         \
 		struct counter_bee_data data;                                                      \
 		struct counter_bee_alarm_data alarm;                                               \
@@ -383,6 +583,7 @@ static DEVICE_API(counter, counter_bee_timer_driver_api) = {
 		.enhanced = DT_NODE_HAS_COMPAT(PARENT_NODE(index), realtek_bee_enhanced_timer),    \
 		.prescaler = DT_PROP_OR(PARENT_NODE(index), prescaler, 1),                         \
 		TIMER_DIV_CONFIG(index),                                                           \
+		BEE_CAPTURE_CONFIG(index)                                                          \
 		TIMER_IRQ_CONFIG(index),                                                           \
 		.get_irq_pending = get_irq_pending_##index,                                        \
 	};                                                                                         \

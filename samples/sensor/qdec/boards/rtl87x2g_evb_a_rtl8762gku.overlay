@@ -42,8 +42,8 @@
 &pinctrl {
 	qdec_default: qdec_default {
 		group1 {
-			psels = <BEE_PSEL(QDPH0_IN_P1_3_P1_4, P1_3)>,
-				<BEE_PSEL(QDPH0_IN_P1_3_P1_4, P1_4)>;
+			psels = <BEE_PSEL(QDPH0_IN_P9_0_P9_1, P9_0)>,
+				<BEE_PSEL(QDPH0_IN_P9_0_P9_1, P9_1)>;
 			output-disable;
 			bias-pull-up;
 		};

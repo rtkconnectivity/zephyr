@@ -285,7 +285,11 @@ static int gpio_bee_pin_configure(const struct device *port, gpio_pin_t pin, gpi
 
 	LOG_DBG("port=%s, pin=%d, flags=0x%x, line%d", port->name, pin, flags, __LINE__);
 
-	__ASSERT(pad_pin < TOTAL_PIN_NUM, "gpio port or pin error");
+	/* The HAL pad APIs do not range check, a pin without a pad must stop here */
+	if (pad_pin >= TOTAL_PIN_NUM) {
+		LOG_ERR("%s pin %d has no pad in pinctrl", port->name, pin);
+		return -EINVAL;
+	}
 
 	if ((flags & GPIO_SINGLE_ENDED) != 0 && (flags & GPIO_LINE_OPEN_DRAIN) == 0) {
 		return -ENOTSUP;
@@ -450,6 +454,12 @@ static int gpio_bee_pin_interrupt_configure(const struct device *port, gpio_pin_
 
 	LOG_DBG("port=%s, pin=%d, mode=0x%x, trig=0x%x, line%d", port->name, pin, mode, trig,
 		__LINE__);
+
+	/* The HAL wakeup APIs do not range check, a pin without a pad must stop here */
+	if (data->array[pin].pad_num >= TOTAL_PIN_NUM) {
+		LOG_ERR("%s pin %d has no pad in pinctrl", port->name, pin);
+		return -EINVAL;
+	}
 
 	trig = (enum gpio_int_trig)(trig & ~GPIO_INT_TRIG_WAKE);
 

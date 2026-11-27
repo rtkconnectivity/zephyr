@@ -5,4 +5,42 @@ description: Realtek Bee Timer implemented as Counter
 
 compatible: "realtek,bee-counter-timer"
 
-include: base.yaml
+include: [base.yaml, pinctrl-device.yaml]
+
+properties:
+  pinctrl-0:
+    description: |
+      Selects the pad that triggers the GPIO latch count, used as counter
+      capture channel 0. The default state must hold exactly one pad, and
+      the pad must have its input enabled, e.g. BEE_PSEL(SW_MODE, P0_1)
+      with output-disable. The pad number is read from the default state
+      on every counter_capture_configure() call, so the trigger pad can be
+      switched at runtime with pinctrl_update_states().
+      Capture is unsupported on counters without this property.
+      Only the following timers implement the GPIO latch count:
+      For RTL87X2J series: TIMER2_CH0.
+      For RTL87X2G series: all enhanced timers.
+      For RTL8752H series: all enhanced timers.
+      On RTL87X2G and RTL8752H series the GPIO latch trigger is routed to
+      one enhanced timer at a time, so only one timer should use capture.
+
+  latch-debounce:
+    type: boolean
+    description: |
+      Enable the hardware debounce filter on the capture trigger pad.
+      Only supported on RTL87X2J series.
+
+  latch-debounce-div:
+    type: int
+    default: 1
+    description: |
+      Division factor of the 32 kHz latch debounce clock.
+      Only supported on RTL87X2J series.
+    enum: [1, 2, 4, 8, 16, 32, 40, 64]
+
+  latch-debounce-count:
+    type: int
+    default: 1
+    description: |
+      Latch debounce count limit in debounce clock cycles (0..65535).
+      Only supported on RTL87X2J series.

@@ -11,16 +11,19 @@
 #include <zephyr/dt-bindings/i2c/i2c.h>
 #include <zephyr/dt-bindings/adc/adc.h>
 
+/* The tests reuse the board key pads, drop the keys with their pins */
+/delete-node/ &{/gpio_keys};
+
 /*
- *  P0_0
- *  P0_1
- *  P0_2 PWM9
- *  P0_4 GPIO(TEST LPQDECX)
- *  P0_5 GPIO(TEST LPQDECX)
+ *  P0_0 GPIO(LATCH OUT)
+ *  P0_1 TIMER9 LATCH TRIGGER
+ *  P0_2 PWM7
+ *  P0_4 IR_TX/IR_RX
+ *  P0_5 LPPWM
  *  P0_6 KSCAN_R0
  *  P0_7 KSCAN_R1
- *  P1_0 LPPWM
- *  P1_1
+ *  P1_0 GPIO(TEST LPQDECX)
+ *  P1_1 GPIO(TEST LPQDECX)
  *  P1_6 QACTIVE
  *  P1_7 QACTIVE
  *  P2_0 KSCAN_C0
@@ -29,10 +32,10 @@
  *  P2_3 I2C0_CLK
  *  P2_4 I2C0_DAT
  *  P2_5 PON_PPU
- *  P3_0 MP_DOWNLOAD
- *  P3_1 MP_DOWNLOAD
- *  P3_2 UART2_TX
- *  P3_3 UART2_RX
+ *  P2_6 AMIC
+ *  P2_7 AMIC
+ *  P3_0 UART2_TX
+ *  P3_1 UART2_RX
  *  P3_4 LPQDECX_A
  *  P3_5 LPQDECX_B
  *  P3_6 KSCAN_C1
@@ -47,9 +50,9 @@
  *  P6_2 SPI0_MI
  *  P6_3 GPIO(SPI0_CS)
  *  P6_4 GPIO(TEST IN)
- *  P7_0 CAN_TX
- *  P7_1 CAN_RX
- *  MICBIAS PON_PPU
+ *  P7_0 I2C1_CLK
+ *  P7_1 I2C1_DAT
+ *  MICBIAS PON_PPU/MICBIAS
  */
 
 / {
@@ -63,32 +66,38 @@
 
 	zephyr,user {
 		io-channels = <&adc 2>;
+		// P0_0
+		latch-gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
 	};
 
 	aliases {
 		test-uart-dma = &uart0;
 		test-counter-timer = &counter8;
-		test-pwm = &pwm9;
+		test-latch-counter = &counter9;
+		test-pwm = &pwm7;
 		test-lppwm = &lppwm;
 		test-rtc = &rtc;
 		test-qdec = &qdec;
 		test-qenca = &phase_a;
 		test-qencb = &phase_b;
-		test-i2c = &i2c0;
+		test-i2c = &i2c1;
 		test-can = &can;
+		test-ir = &ir;
+		test-i2s = &i2s0;
+		test-codec = &codec;
 	};
 
 	encoder-emulate {
 		compatible = "gpio-leds";
 
 		phase_a: phase_a {
-			// P0_4
-			gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;
+			// P1_0
+			gpios = <&gpioa 8 GPIO_ACTIVE_HIGH>;
 		};
 
 		phase_b: phase_b {
-			// P0_5
-			gpios = <&gpioa 5 GPIO_ACTIVE_HIGH>;
+			// P1_1
+			gpios = <&gpioa 9 GPIO_ACTIVE_HIGH>;
 		};
 	};
 };
@@ -96,7 +105,7 @@
 &uart2 {
 	pinctrl-0 = <&uart2_default>;
 	pinctrl-names = "default";
-	current-speed = <2000000>;
+	current-speed = <115200>;
 	parity = "none";
 	stop-bits = "1";
 	data-bits = <8>;
@@ -120,7 +129,7 @@
 };
 
 &dma0 {
-	status = "disabled";
+	status = "okay";
 };
 
 &gpioa {
@@ -145,13 +154,25 @@
 	};
 };
 
+&timer7 {
+	prescaler = <1>;
+	status = "okay";
+
+	pwm7: pwm {
+		status = "okay";
+		pinctrl-0 = <&pwm7_default>;
+		pinctrl-names = "default";
+	};
+};
+
+/* Only TIMER2_CH0 (timer9) has the GPIO latch count */
 &timer9 {
 	prescaler = <1>;
 	status = "okay";
 
-	pwm9: pwm {
+	counter9: counter {
 		status = "okay";
-		pinctrl-0 = <&pwm9_default>;
+		pinctrl-0 = <&latch_default>;
 		pinctrl-names = "default";
 	};
 };
@@ -174,8 +195,22 @@
 	};
 };
 
+/* Target of the i2c test, SCL/SDA wired to those of i2c1 */
 &i2c0 {
 	pinctrl-0 = <&i2c0_default>;
+	pinctrl-names = "default";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+	status = "okay";
+
+	eeprom@51 {
+		compatible = "zephyr,i2c-target-eeprom";
+		reg = <0x51>;
+		size = <256>;
+	};
+};
+
+&i2c1 {
+	pinctrl-0 = <&i2c1_default>;
 	pinctrl-names = "default";
 	clock-frequency = <I2C_BITRATE_STANDARD>;
 	status = "okay";
@@ -202,9 +237,43 @@
 };
 
 &can {
-	pinctrl-0 = <&can_default>;
-	pinctrl-names = "default";
 	status = "okay";
+};
+
+/* TX and RX share the pad and the DMA channel, the board only sends or
+ * receives at a time
+ */
+&ir {
+	pinctrl-0 = <&ir_tx>;
+	pinctrl-1 = <&ir_rx>;
+	pinctrl-names = "ir-tx", "ir-rx";
+	dmas = <&dma0 0 27 0x26a1>, <&dma0 0 28 0x268a>;
+	dma-names = "tx", "rx";
+	status = "okay";
+};
+
+/* Internal codec, records the amic */
+&i2s0 {
+	dmas = <&dma0 1 17 0x648a>;
+	dma-names = "rx";
+	status = "okay";
+
+	codec: codec@0 {
+		compatible = "realtek,bee-codec";
+		reg = <0>;
+		clocks = <&cctl APB_CLK(CODEC)>;
+		channel-sequence = "l_r";
+		mic-bias = "1_8";
+		mic-bst-gain = "30dB";
+		mic-bst-mode = "differential";
+		mic-type = "amic";
+		dmic-data-latch = "rising_latch";
+		ad-gain = <0x2f>;
+		boost-gain = "0dB";
+		pinctrl-0 = <&codec_default>;
+		pinctrl-names = "default";
+		status = "okay";
+	};
 };
 
 &keyscan {
@@ -240,12 +309,13 @@
 &pinctrl {
 	gpioa_default: gpioa_default {
 		group1 {
-			psels = <BEE_PSEL_GPIOA_30_P4_3>; //P4_3 GPIO(TEST OUT)
+			psels = <BEE_PSEL_GPIOA_0_P0_0>, //P0_0 GPIO(LATCH OUT)
+				<BEE_PSEL_GPIOA_30_P4_3>; //P4_3 GPIO(TEST OUT)
 		};
 
 		group2 {
-			psels = <BEE_PSEL_GPIOA_4_P0_4>, //P0_4 GPIO(TEST LPQDECX)
-				<BEE_PSEL_GPIOA_5_P0_5>; //P0_5 GPIO(TEST LPQDECX)
+			psels = <BEE_PSEL_GPIOA_8_P1_0>, //P1_0 GPIO(TEST LPQDECX)
+				<BEE_PSEL_GPIOA_9_P1_1>; //P1_1 GPIO(TEST LPQDECX)
 		};
 	};
 
@@ -257,8 +327,8 @@
 
 	uart2_default: uart2_default {
 		group1 {
-			psels = <BEE_PSEL(UART2_TX, P3_2)>,
-				<BEE_PSEL(UART2_RX, P3_3)>;
+			psels = <BEE_PSEL(UART2_TX, P3_0)>,
+				<BEE_PSEL(UART2_RX, P3_1)>;
 			output-disable;
 			bias-pull-up;
 		};
@@ -284,9 +354,18 @@
 		};
 	};
 
-	pwm9_default: pwm9_default {
+	/* Latch trigger pad, driven by latch-gpios */
+	latch_default: latch_default {
 		group1 {
-			psels = <BEE_PSEL(PWM9_P, P0_2)>;
+			psels = <BEE_PSEL(SW_MODE, P0_1)>;
+			output-disable;
+			bias-disable;
+		};
+	};
+
+	pwm7_default: pwm7_default {
+		group1 {
+			psels = <BEE_PSEL(PWM7_P, P0_2)>;
 			output-disable;
 			bias-disable;
 		};
@@ -294,7 +373,7 @@
 
 	lppwm_default: lppwm_default {
 		group1 {
-			psels = <BEE_PSEL(LPPWM_CH0, P1_0)>;
+			psels = <BEE_PSEL(LPPWM_CH0, P0_5)>;
 			output-disable;
 			bias-disable;
 		};
@@ -313,6 +392,15 @@
 		group1 {
 			psels = <BEE_PSEL(I2C0_CLK, P2_3)>,
 				<BEE_PSEL(I2C0_DAT, P2_4)>;
+			output-disable;
+			bias-pull-up;
+		};
+	};
+
+	i2c1_default: i2c1_default {
+		group1 {
+			psels = <BEE_PSEL(I2C1_CLK, P7_0)>,
+				<BEE_PSEL(I2C1_DAT, P7_1)>;
 			output-disable;
 			bias-pull-up;
 		};
@@ -344,11 +432,35 @@
 		};
 	};
 
-	can_default: can_default {
+	ir_tx: ir_tx {
 		group1 {
-			psels = <BEE_PSEL(CAN_TX, P7_0)>,
-				<BEE_PSEL(CAN_RX, P7_1)>;
+			psels = <BEE_PSEL(IRDA_TX, P0_4)>;
+			output-enable;
+			output-low;
+			bias-disable;
+		};
+	};
+
+	ir_rx: ir_rx {
+		group1 {
+			psels = <BEE_PSEL(IRDA_RX, P0_4)>;
 			output-disable;
+			bias-disable;
+		};
+	};
+
+	codec_default: codec_default {
+		group1 {
+			psels = <BEE_PSEL(PWR_OFF, P2_6)>,
+				<BEE_PSEL(PWR_OFF, P2_7)>;
+			output-disable;
+			bias-disable;
+		};
+
+		group2 {
+			psels = <BEE_PSEL(SW_MODE, MICBIAS)>;
+			output-enable;
+			output-high;
 			bias-disable;
 		};
 	};

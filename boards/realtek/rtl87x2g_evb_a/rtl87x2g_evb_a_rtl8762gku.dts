@@ -35,8 +35,6 @@
 };
 
 &can {
-	pinctrl-0 = <&can_default>;
-	pinctrl-names = "default";
 	status = "okay";
 };
 

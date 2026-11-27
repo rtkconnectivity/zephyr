@@ -489,6 +489,7 @@ static void uart_bee_irq_rx_enable(const struct device *dev)
 	struct uart_bee_data *data = dev->data;
 
 	data->rx_int_en = true;
+	uart_bee_int_config(dev, UART_INT_RX_IDLE, DISABLE);
 	uart_bee_int_config(dev, UART_INT_RD_AVA, ENABLE);
 	uart_bee_int_config(dev, UART_INT_RX_IDLE, ENABLE);
 

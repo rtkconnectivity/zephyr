@@ -22,7 +22,7 @@
 &pinctrl {
 	ir_tx: ir_tx {
 		group1 {
-			psels = <BEE_PSEL(IRDA_TX, P0_0)>;
+			psels = <BEE_PSEL(IRDA_TX, P0_4)>;
 			output-enable;
 			output-low;
 			bias-disable;
@@ -31,7 +31,7 @@
 
 	ir_rx: ir_rx {
 		group1 {
-			psels = <BEE_PSEL(IRDA_RX, P0_1)>;
+			psels = <BEE_PSEL(IRDA_RX, P0_5)>;
 			output-disable;
 			bias-disable;
 		};

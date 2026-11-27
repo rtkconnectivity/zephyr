@@ -5,6 +5,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <zephyr/pm/device_runtime.h>
 #include <zephyr/shell/shell.h>
 
@@ -61,6 +62,20 @@
 #ifdef CONFIG_CAN
 #include <zephyr/drivers/can.h>
 #endif
+
+#ifdef CONFIG_IR
+#include <zephyr/drivers/ir.h>
+#endif
+
+#ifdef CONFIG_I2S
+#include <zephyr/drivers/i2s.h>
+#endif
+
+#ifdef CONFIG_AUDIO_CODEC
+#include <zephyr/audio/codec.h>
+#endif
+
+#include "pm_test.h"
 
 /* Without PCK-600 the platform power manager takes the whole SoC into DLPS at
  * once, but only once every registered check callback agrees, and it calls the
@@ -126,17 +141,19 @@ static const struct device *uart_dma_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_u
 static const struct device *counter_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_counter_timer));
 #endif
 
+#ifdef CONFIG_COUNTER_CAPTURE
+static const struct device *latch_counter_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_latch_counter));
 #ifdef CONFIG_GPIO
-#define DEV_OUT DT_GPIO_CTLR(DT_INST(0, test_gpio_basic_api), out_gpios)
-#define DEV_IN  DT_GPIO_CTLR(DT_INST(0, test_gpio_basic_api), in_gpios)
+static const struct gpio_dt_spec gpio_latch_out =
+	GPIO_DT_SPEC_GET(DT_PATH(zephyr_user), latch_gpios);
+#endif
+#endif
 
-#define PIN_OUT       DT_GPIO_PIN(DT_INST(0, test_gpio_basic_api), out_gpios)
-#define PIN_OUT_FLAGS DT_GPIO_FLAGS(DT_INST(0, test_gpio_basic_api), out_gpios)
-#define PIN_IN        DT_GPIO_PIN(DT_INST(0, test_gpio_basic_api), in_gpios)
-#define PIN_IN_FLAGS  DT_GPIO_FLAGS(DT_INST(0, test_gpio_basic_api), in_gpios)
+#ifdef CONFIG_GPIO
+#define PM_TEST_GPIO_NODE DT_INST(0, test_gpio_basic_api)
 
-static const struct device *const dev_in = DEVICE_DT_GET_OR_NULL(DEV_IN);
-static const struct device *const dev_out = DEVICE_DT_GET_OR_NULL(DEV_OUT);
+struct gpio_dt_spec gpio_test_out = GPIO_DT_SPEC_GET(PM_TEST_GPIO_NODE, out_gpios);
+struct gpio_dt_spec gpio_test_in = GPIO_DT_SPEC_GET(PM_TEST_GPIO_NODE, in_gpios);
 #endif
 
 #ifdef CONFIG_PWM
@@ -162,16 +179,20 @@ static __aligned(32) char spi_rx_buf[BUF_SIZE];
 #ifdef CONFIG_RTC
 static const struct device *rtc_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_rtc));
 static uint64_t current_sys_time_ms;
+static uint32_t rtc_timeout_ms;
 #endif
 
 #if defined(CONFIG_SENSOR) && defined(CONFIG_QDEC_BEE)
 static const struct device *qdec_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_qdec));
-static const struct gpio_dt_spec phase_a = GPIO_DT_SPEC_GET(DT_ALIAS(test_qenca), gpios);
-static const struct gpio_dt_spec phase_b = GPIO_DT_SPEC_GET(DT_ALIAS(test_qencb), gpios);
+struct gpio_dt_spec phase_a = GPIO_DT_SPEC_GET(DT_ALIAS(test_qenca), gpios);
+struct gpio_dt_spec phase_b = GPIO_DT_SPEC_GET(DT_ALIAS(test_qencb), gpios);
 #endif
 
 #ifdef CONFIG_I2C
-static const struct device *i2c_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(i2c0));
+static const struct device *i2c_dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(i2c1));
+/* Target EEPROM on i2c0, its bus is wired to i2c1 */
+#define PM_TEST_I2C_TARGET DT_COMPAT_GET_ANY_STATUS_OKAY(zephyr_i2c_target_eeprom)
+static const struct device *i2c_target_dev = DEVICE_DT_GET(PM_TEST_I2C_TARGET);
 #endif
 
 #if defined(CONFIG_SDMMC_STACK) || defined(CONFIG_SDIO_STACK)
@@ -188,6 +209,15 @@ static uint8_t sdmmc_rbuf[512];
 
 #ifdef CONFIG_CAN
 static const struct device *can_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_can));
+#endif
+
+#ifdef CONFIG_IR
+static const struct device *ir_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_ir));
+#endif
+
+#if defined(CONFIG_I2S) && defined(CONFIG_AUDIO_CODEC)
+static const struct device *i2s_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_i2s));
+static const struct device *codec_dev = DEVICE_DT_GET_OR_NULL(DT_ALIAS(test_codec));
 #endif
 
 /* PM state */
@@ -267,7 +297,7 @@ int main(void)
 #endif
 
 #ifdef CONFIG_GPIO
-	gpio_pin_configure(dev_out, PIN_OUT, GPIO_OUTPUT_HIGH | PIN_OUT_FLAGS);
+	gpio_pin_configure_dt(&gpio_test_out, GPIO_OUTPUT_HIGH);
 #endif
 
 #ifdef CONFIG_SENSOR
@@ -459,6 +489,7 @@ static int shell_pm_test_uart_dma(const struct shell *sh, size_t argc, char **ar
 
 #ifdef CONFIG_COUNTER
 static struct k_sem pm_counter_sem;
+static int64_t pm_counter_elapsed_ms;
 
 static void counter_top_cb(const struct device *dev, void *user_data)
 {
@@ -466,6 +497,8 @@ static void counter_top_cb(const struct device *dev, void *user_data)
 
 	uint64_t *pre_sys_time_ms = (uint64_t *)user_data;
 	uint64_t now_ms = k_uptime_get();
+
+	pm_counter_elapsed_ms = now_ms - *pre_sys_time_ms;
 
 	printf("top_handler\n");
 	pm_test_print_wakeup_count();
@@ -497,6 +530,7 @@ static int shell_pm_test_counter(const struct shell *sh, size_t argc, char **arg
 	}
 
 	k_sem_init(&pm_counter_sem, 0, 1);
+	pm_counter_elapsed_ms = -1;
 
 	timeout_ms = strtoul(argv[1], NULL, 10);
 
@@ -505,11 +539,12 @@ static int shell_pm_test_counter(const struct shell *sh, size_t argc, char **arg
 	top_cfg.callback = counter_top_cb;
 	top_cfg.flags = 0;
 	top_cfg.ticks = counter_us_to_ticks(counter_dev, timeout_ms * 1000);
-	pre_sys_time_ms = k_uptime_get();
 	top_cfg.user_data = &pre_sys_time_ms;
 
-	printf("[%lld] wait %lldms to trigger handler\n", pre_sys_time_ms, timeout_ms);
+	printf("[%lld] wait %lldms to trigger handler\n", k_uptime_get(), timeout_ms);
 
+	/* Taken after the printf, it blocks for ms on a 115200 console */
+	pre_sys_time_ms = k_uptime_get();
 	counter_set_top_value(counter_dev, &top_cfg);
 
 #if defined(BEE_PM_TEST_DLPS_CB)
@@ -517,11 +552,117 @@ static int shell_pm_test_counter(const struct shell *sh, size_t argc, char **arg
 	k_sem_init(&pm_app_sem, 0, 1);
 	k_sem_take(&pm_app_sem, K_FOREVER);
 #else
-	k_sem_take(&pm_counter_sem, K_FOREVER);
+	k_sem_take(&pm_counter_sem, K_MSEC(timeout_ms + 1000));
 #endif
 
 	counter_stop(counter_dev);
+
+	/* -1ms means the callback never came */
+	printf("[%lld] counter test %s: %lldms, %lldms expected\n", k_uptime_get(),
+	       pm_counter_elapsed_ms >= 0 && llabs(pm_counter_elapsed_ms - (int64_t)timeout_ms) <= 1
+		       ? "PASS"
+		       : "FAIL",
+	       pm_counter_elapsed_ms, timeout_ms);
 #endif /* CONFIG_COUNTER */
+
+	return 0;
+}
+
+/* Latch count capture test */
+
+#if defined(CONFIG_COUNTER_CAPTURE) && defined(CONFIG_GPIO)
+#define PM_LATCH_MAX_EDGES 32
+
+static uint32_t pm_latch_ticks[PM_LATCH_MAX_EDGES];
+static atomic_t pm_latch_count;
+
+static void pm_latch_capture_cb(const struct device *dev, uint8_t chan_id,
+				counter_capture_flags_t flags, uint32_t ticks, void *user_data)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(chan_id);
+	ARG_UNUSED(flags);
+	ARG_UNUSED(user_data);
+
+	atomic_val_t idx = atomic_inc(&pm_latch_count);
+
+	if (idx < PM_LATCH_MAX_EDGES) {
+		pm_latch_ticks[idx] = ticks;
+	}
+}
+#endif /* CONFIG_COUNTER_CAPTURE && CONFIG_GPIO */
+
+static int shell_pm_test_latch(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(sh);
+
+	pm_test_print_wakeup_count();
+
+#if defined(CONFIG_COUNTER_CAPTURE) && defined(CONFIG_GPIO)
+	int toggles = argc > 1 ? (int)strtoul(argv[1], NULL, 10) : 10;
+	uint32_t interval_ms = argc > 2 ? (uint32_t)strtoul(argv[2], NULL, 10) : 200;
+	int count;
+	int ret;
+
+	if (latch_counter_dev == NULL) {
+		printf("no test-latch-counter alias\n");
+		return 0;
+	}
+
+	toggles = CLAMP(toggles, 1, PM_LATCH_MAX_EDGES);
+
+	/* latch-gpios drives the trigger pad, which the counter pinctrl takes
+	 * over when the capture is configured.
+	 */
+	gpio_pin_configure_dt(&gpio_latch_out, GPIO_OUTPUT_LOW);
+	k_msleep(10);
+
+	atomic_set(&pm_latch_count, 0);
+	counter_start(latch_counter_dev);
+
+	ret = counter_capture_configure(latch_counter_dev, 0, COUNTER_CAPTURE_BOTH_EDGES,
+					pm_latch_capture_cb, NULL);
+	if (ret == 0) {
+		ret = counter_enable_capture(latch_counter_dev, 0);
+	}
+	if (ret < 0) {
+		printf("capture setup failed (%d)\n", ret);
+		counter_stop(latch_counter_dev);
+		return 0;
+	}
+
+	printf("[%lld] connect output pin to input pin, toggle %d times every %ums\n",
+	       k_uptime_get(), toggles, interval_ms);
+
+	for (int i = 0; i < toggles; i++) {
+		k_msleep(interval_ms);
+		gpio_pin_toggle_dt(&gpio_latch_out);
+	}
+	k_msleep(interval_ms);
+
+	counter_disable_capture(latch_counter_dev, 0);
+	counter_stop(latch_counter_dev);
+
+	count = (int)atomic_get(&pm_latch_count);
+
+	for (int i = 0; i < MIN(count, toggles); i++) {
+		uint32_t delta = 0;
+
+		/* The counting direction differs between timer types. */
+		if (i > 0) {
+			delta = pm_latch_ticks[i] - pm_latch_ticks[i - 1];
+			if ((int32_t)delta < 0) {
+				delta = -delta;
+			}
+		}
+
+		printf("edge %d: ticks=%u (+%uus)\n", i, pm_latch_ticks[i],
+		       (uint32_t)counter_ticks_to_us(latch_counter_dev, delta));
+	}
+
+	printf("[%lld] latch test %s: %d edges captured, %d expected\n", k_uptime_get(),
+	       count == toggles ? "PASS" : "FAIL", count, toggles);
+#endif /* CONFIG_COUNTER_CAPTURE && CONFIG_GPIO */
 
 	return 0;
 }
@@ -532,14 +673,13 @@ static int shell_pm_test_counter(const struct shell *sh, size_t argc, char **arg
 
 static struct gpio_callback pm_gpio_cb;
 static struct k_sem pm_gpio_sem;
+static uint8_t irq_count;
 
 static void pm_gpio_irq_cb(const struct device *dev_in, struct gpio_callback *cb, uint32_t pins)
 {
 	ARG_UNUSED(dev_in);
 	ARG_UNUSED(cb);
 	ARG_UNUSED(pins);
-
-	static uint8_t irq_count;
 
 #if defined(BEE_PM_TEST_DLPS_CB)
 	pm_dlps_check_flag = PM_TEST_CHECK_FAIL;
@@ -552,24 +692,34 @@ static void pm_gpio_irq_cb(const struct device *dev_in, struct gpio_callback *cb
 	irq_count++;
 }
 
-static void pm_gpio_do_one_round(const char *hint)
+/* Returns false if no edge came within the timeout */
+static bool pm_gpio_do_one_round(const char *hint, k_timeout_t timeout)
 {
+	int ret;
+
 #if defined(BEE_PM_TEST_DLPS_CB)
 	printf("[%lld] before enter dlps\n", k_uptime_get());
 	printf("[%lld] %s\n", k_uptime_get(), hint);
 
 	pm_dlps_check_flag = PM_TEST_CHECK_PASS;
 	k_sem_init(&pm_app_sem, 0, 1);
-	k_sem_take(&pm_app_sem, K_FOREVER);
+	ret = k_sem_take(&pm_app_sem, timeout);
 	pm_dlps_check_flag = PM_TEST_CHECK_FAIL;
 
 	printf("[%lld] after exit dlps\n", k_uptime_get());
 #else
 	printf("[%lld] %s\n", k_uptime_get(), hint);
-	k_sem_take(&pm_gpio_sem, K_FOREVER);
+	ret = k_sem_take(&pm_gpio_sem, timeout);
 #endif
 
+	if (ret < 0) {
+		printf("[%lld] no edge\n", k_uptime_get());
+		return false;
+	}
+
 	k_busy_wait(100000);
+
+	return true;
 }
 
 #endif /* CONFIG_GPIO */
@@ -581,39 +731,47 @@ static int shell_pm_test_gpio(const struct shell *sh, size_t argc, char **argv)
 	pm_test_print_wakeup_count();
 
 	int debounce_ms = argc > 1 ? (int)strtoul(argv[1], NULL, 10) : 8;
+	uint32_t timeout_ms = argc > 2 ? (uint32_t)strtoul(argv[2], NULL, 10) : 0;
 
 #ifdef CONFIG_GPIO
-	k_sem_init(&pm_gpio_sem, 0, 1);
+	/* 0 waits for each edge forever */
+	k_timeout_t timeout = timeout_ms ? K_MSEC(timeout_ms) : K_FOREVER;
+	int rounds = 0;
 
-	gpio_pin_configure(dev_out, PIN_OUT, GPIO_OUTPUT_LOW | PIN_OUT_FLAGS);
+	k_sem_init(&pm_gpio_sem, 0, 1);
+	irq_count = 0;
+
+	gpio_pin_configure_dt(&gpio_test_out, GPIO_OUTPUT_LOW);
 
 #if defined(CONFIG_GPIO_BEE)
-	gpio_pin_configure(dev_in, PIN_IN,
+	gpio_pin_configure(gpio_test_in.port, gpio_test_in.pin,
 			   GPIO_INPUT | GPIO_PULL_UP | BEE_GPIO_INPUT_DEBOUNCE_MS(debounce_ms));
 #endif
 
-	gpio_init_callback(&pm_gpio_cb, pm_gpio_irq_cb, BIT(PIN_IN));
-	gpio_add_callback(dev_in, &pm_gpio_cb);
+	gpio_init_callback(&pm_gpio_cb, pm_gpio_irq_cb, BIT(gpio_test_in.pin));
+	gpio_add_callback_dt(&gpio_test_in, &pm_gpio_cb);
 
 	/* Falling edge */
-	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_FALLING | GPIO_INT_WAKEUP);
-	pm_gpio_do_one_round("connect input pin to output pin to wakeup");
+	gpio_pin_interrupt_configure_dt(&gpio_test_in, GPIO_INT_EDGE_FALLING | GPIO_INT_WAKEUP);
+	rounds += pm_gpio_do_one_round("connect input pin to output pin to wakeup", timeout);
 
 	/* Rising edge */
-	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_RISING | GPIO_INT_WAKEUP);
-	pm_gpio_do_one_round("disconnect input pin to output pin to wakeup");
+	gpio_pin_interrupt_configure_dt(&gpio_test_in, GPIO_INT_EDGE_RISING | GPIO_INT_WAKEUP);
+	rounds += pm_gpio_do_one_round("disconnect input pin to output pin to wakeup", timeout);
 
 	/* Both edges */
-	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_EDGE_BOTH | GPIO_INT_WAKEUP);
-	pm_gpio_do_one_round("connect input pin to output pin to wakeup");
-	pm_gpio_do_one_round("disconnect input pin to output pin to wakeup");
+	gpio_pin_interrupt_configure_dt(&gpio_test_in, GPIO_INT_EDGE_BOTH | GPIO_INT_WAKEUP);
+	rounds += pm_gpio_do_one_round("connect input pin to output pin to wakeup", timeout);
+	rounds += pm_gpio_do_one_round("disconnect input pin to output pin to wakeup", timeout);
 
-	gpio_remove_callback(dev_in, &pm_gpio_cb);
-	gpio_pin_interrupt_configure(dev_in, PIN_IN, GPIO_INT_DISABLE);
+	gpio_remove_callback_dt(&gpio_test_in, &pm_gpio_cb);
+	gpio_pin_interrupt_configure_dt(&gpio_test_in, GPIO_INT_DISABLE);
+
+	printf("[%lld] gpio test %s: %d callbacks, %d rounds woken, 4 expected\n", k_uptime_get(),
+	       rounds == 4 && irq_count == 4 ? "PASS" : "FAIL", irq_count, rounds);
 
 #if defined(CONFIG_GPIO_BEE)
-	gpio_pin_configure(dev_in, PIN_IN,
-			   (GPIO_INPUT | GPIO_PULL_UP | PIN_IN_FLAGS));
+	gpio_pin_configure_dt(&gpio_test_in, GPIO_INPUT | GPIO_PULL_UP);
 #endif
 
 #endif /* CONFIG_GPIO */
@@ -820,6 +978,7 @@ static int shell_pm_test_spi(const struct shell *sh, size_t argc, char **argv)
 
 	if (spi_complete_loop(&spi_spec) < 0) {
 		printf("[%lld] loopback test fail\n", k_uptime_get());
+		printf("[%lld] spi test FAIL: 0 loops matched, 2 expected\n", k_uptime_get());
 		return 0;
 	}
 
@@ -829,8 +988,11 @@ static int shell_pm_test_spi(const struct shell *sh, size_t argc, char **argv)
 
 	if (spi_complete_loop(&spi_spec) < 0) {
 		printf("[%lld] loopback test fail\n", k_uptime_get());
+		printf("[%lld] spi test FAIL: 1 loops matched, 2 expected\n", k_uptime_get());
 		return 0;
 	}
+
+	printf("[%lld] spi test PASS: 2 loops matched, 2 expected\n", k_uptime_get());
 
 #endif /* CONFIG_SPI */
 
@@ -862,9 +1024,15 @@ static void test_rtc_alarm_cb(const struct device *dev, uint16_t id, void *user_
 	uint64_t *pre_sys_time_ms = (uint64_t *)user_data;
 	uint64_t now_ms = k_uptime_get();
 
+	int64_t elapsed_ms = now_ms - *pre_sys_time_ms;
+
 	pm_test_print_wakeup_count();
-	printf("[%lld] trigger handler after %lldms\n", now_ms,
-	       now_ms - (*(uint64_t *)pre_sys_time_ms));
+	printf("[%lld] trigger handler after %lldms\n", now_ms, elapsed_ms);
+
+	/* The alarm only has second resolution */
+	printf("[%lld] rtc test %s: %lldms, %ums expected\n", now_ms,
+	       llabs(elapsed_ms - (int64_t)(rtc_timeout_ms / 1000 * 1000)) <= 5 ? "PASS" : "FAIL",
+	       elapsed_ms, rtc_timeout_ms / 1000 * 1000);
 
 #if defined(BEE_PM_TEST_DLPS_CB)
 	k_sem_give(&pm_app_sem);
@@ -892,6 +1060,7 @@ __maybe_unused static int shell_pm_test_rtc(const struct shell *sh, size_t argc,
 		timeout_ms = strtoul(argv[1], NULL, 10);
 	}
 	printf("Setting RTC alarm for %u ms\n", timeout_ms);
+	rtc_timeout_ms = timeout_ms;
 	rtc_alarm_set_callback(rtc_dev, 0, NULL, NULL);
 	rtc_set_time(rtc_dev, &test_rtc_time_set);
 
@@ -921,7 +1090,16 @@ __maybe_unused static int shell_pm_test_rtc(const struct shell *sh, size_t argc,
 }
 
 #if defined(CONFIG_SENSOR) && defined(CONFIG_QDEC_BEE)
+/* waveform_qdec steps 10 forward, 20 back and 10 forward again */
+#define PM_QDEC_STEPS 40
+
 static int qdec_cb_count;
+static int qdec_positions[PM_QDEC_STEPS];
+
+static int qdec_expected_position(int step)
+{
+	return step < 10 ? step + 1 : step < 30 ? 19 - step : step - 39;
+}
 
 static void qdec_data_ready_cb(const struct device *dev, const struct sensor_trigger *trig)
 {
@@ -930,6 +1108,10 @@ static void qdec_data_ready_cb(const struct device *dev, const struct sensor_tri
 	ARG_UNUSED(trig);
 	sensor_sample_fetch(dev);
 	sensor_channel_get(dev, SENSOR_CHAN_QDEC_X_COUNT, &val);
+
+	if (qdec_cb_count < PM_QDEC_STEPS) {
+		qdec_positions[qdec_cb_count] = val.val1;
+	}
 
 	pm_test_print_wakeup_count();
 	printf("Position[%d] = %d degrees\n", qdec_cb_count++, val.val1);
@@ -1002,10 +1184,25 @@ static int shell_pm_test_qdec(const struct shell *sh, size_t argc, char **argv)
 			.chan = (enum sensor_channel)SENSOR_CHAN_QDEC_X_COUNT,
 		};
 
+		int matched = 0;
+		int mirrored = 0;
+
 		qdec_cb_count = 0;
 		sensor_trigger_set(qdec_dev, &trig, qdec_data_ready_cb);
 		k_sleep(K_SECONDS(10));
 		sensor_trigger_set(qdec_dev, &trig, NULL);
+
+		/* The sign depends on which wire goes to phase A, accept either */
+		for (int i = 0; i < MIN(qdec_cb_count, PM_QDEC_STEPS); i++) {
+			matched += qdec_positions[i] == qdec_expected_position(i);
+			mirrored += qdec_positions[i] == -qdec_expected_position(i);
+		}
+		matched = MAX(matched, mirrored);
+
+		printf("[%lld] qdec test %s: %d callbacks, %d positions matched, %d expected\n",
+		       k_uptime_get(),
+		       qdec_cb_count == PM_QDEC_STEPS && matched == PM_QDEC_STEPS ? "PASS" : "FAIL",
+		       qdec_cb_count, matched, PM_QDEC_STEPS);
 	}
 #endif
 #endif
@@ -1023,25 +1220,25 @@ static int shell_pm_test_generate_waveform_gpio(const struct shell *sh, size_t a
 	uint32_t pulse_us = argc > 2 ? (uint32_t)strtoul(argv[2], NULL, 10) : 100;
 
 #ifdef CONFIG_GPIO
-	gpio_pin_configure(dev_out, PIN_OUT, GPIO_OUTPUT_HIGH | PIN_OUT_FLAGS);
+	gpio_pin_configure_dt(&gpio_test_out, GPIO_OUTPUT_HIGH);
 
 	for (int i = 0; i < 6; i++) {
 		int level = (i % 2 == 0) ? 1 : 0;
 
-		gpio_pin_set(dev_out, PIN_OUT, level);
+		gpio_pin_set_dt(&gpio_test_out, level);
 		k_busy_wait(debounce_ms * USEC_PER_MSEC);
-		gpio_pin_set(dev_out, PIN_OUT, !level);
+		gpio_pin_set_dt(&gpio_test_out, !level);
 		k_busy_wait(pulse_us);
 
-		gpio_pin_set(dev_out, PIN_OUT, level);
+		gpio_pin_set_dt(&gpio_test_out, level);
 		k_busy_wait(500000);
-		gpio_pin_set(dev_out, PIN_OUT, !level);
+		gpio_pin_set_dt(&gpio_test_out, !level);
 		k_busy_wait(debounce_ms * USEC_PER_MSEC);
-		gpio_pin_set(dev_out, PIN_OUT, level);
+		gpio_pin_set_dt(&gpio_test_out, level);
 		k_busy_wait(500000);
 	}
 
-	gpio_pin_configure(dev_out, PIN_OUT, GPIO_OUTPUT_HIGH | PIN_OUT_FLAGS);
+	gpio_pin_configure_dt(&gpio_test_out, GPIO_OUTPUT_HIGH);
 #endif
 
 	return 0;
@@ -1083,6 +1280,46 @@ static int shell_pm_test_generate_waveform_qdec(const struct shell *sh, size_t a
 
 /* I2C PM test */
 
+#ifdef CONFIG_I2C
+
+/* Write one byte at offset 0 of the target EEPROM and read it back. The
+ * target is only registered around the transfers, so it does not keep i2c0
+ * out of DLPS.
+ */
+static int i2c_target_loop(uint8_t val)
+{
+	uint16_t addr = DT_REG_ADDR(PM_TEST_I2C_TARGET);
+	uint8_t write_buf[2] = {0x00, val};
+	uint8_t read_buf = 0;
+	int ret;
+
+	ret = i2c_target_driver_register(i2c_target_dev);
+	if (ret) {
+		printf("i2c_target_driver_register failed: %d\n", ret);
+		return ret;
+	}
+
+	ret = i2c_write(i2c_dev, write_buf, sizeof(write_buf), addr);
+	if (ret) {
+		printf("i2c_write failed: %d\n", ret);
+		goto out;
+	}
+
+	ret = i2c_write_read(i2c_dev, addr, write_buf, 1, &read_buf, 1);
+	if (ret) {
+		printf("i2c_write_read failed: %d\n", ret);
+		goto out;
+	}
+
+	ret = read_buf;
+
+out:
+	i2c_target_driver_unregister(i2c_target_dev);
+	return ret;
+}
+
+#endif /* CONFIG_I2C */
+
 static int shell_pm_test_i2c(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(sh);
@@ -1092,39 +1329,36 @@ static int shell_pm_test_i2c(const struct shell *sh, size_t argc, char **argv)
 	pm_test_print_wakeup_count();
 
 #ifdef CONFIG_I2C
-	uint8_t icm20618_addr = 0x68;
-	uint8_t write_buf[6];
-	uint8_t read_buf[12];
-	int write_len;
-	int read_len;
+	int val_before;
+	int val_after;
 
-	memset(write_buf, 0, sizeof(write_buf));
-	memset(read_buf, 0, sizeof(read_buf));
+	printf("[%lld] connect SCL/SDA of i2c0 to SCL/SDA of i2c1\n", k_uptime_get());
 
-	/* Read ID before DLPS */
-	write_buf[0] = 0x00;
-	write_len = 1;
-	read_len = 1;
-
-	i2c_write_read(i2c_dev, icm20618_addr, write_buf, write_len, read_buf, read_len);
-
-	printf("icm20618 addr:0x%x reg:0x%x = 0x%x\n", icm20618_addr, write_buf[0], read_buf[0]);
+	val_before = i2c_target_loop(0x5a);
+	if (val_before >= 0) {
+		printf("I2C read before dlps: 0x%x\n", val_before);
+	} else {
+		printf("I2C read before dlps failed: %d\n", val_before);
+	}
 
 #if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
+#else
+	/* Longer than the shell UART keep active timeout, so idle enters DLPS */
+	k_sleep(K_SECONDS(2));
+	pm_test_print_wakeup_count();
 #endif
 
-	/* Read ID after DLPS */
-	memset(write_buf, 0, sizeof(write_buf));
-	memset(read_buf, 0, sizeof(read_buf));
+	val_after = i2c_target_loop(0xa5);
+	if (val_after >= 0) {
+		printf("I2C read after dlps: 0x%x\n", val_after);
+	} else {
+		printf("I2C read after dlps failed: %d\n", val_after);
+	}
 
-	write_buf[0] = 0x00;
-	write_len = 1;
-	read_len = 1;
-
-	i2c_write_read(i2c_dev, icm20618_addr, write_buf, write_len, read_buf, read_len);
-
-	printf("icm20618 addr:0x%x reg:0x%x = 0x%x\n", icm20618_addr, write_buf[0], read_buf[0]);
+	/* 0x5a and 0xa5 are the bytes written before and after DLPS */
+	printf("[%lld] i2c test %s: 0x%x 0x%x, 0x5a 0xa5 expected\n", k_uptime_get(),
+	       val_before == 0x5a && val_after == 0xa5 ? "PASS" : "FAIL", val_before, val_after);
 
 #endif /* CONFIG_I2C */
 
@@ -1219,6 +1453,10 @@ static int shell_pm_test_adc(const struct shell *sh, size_t argc, char **argv)
 
 #if defined(BEE_PM_TEST_DLPS_CB)
 	pm_test_enter_dlps_forever();
+#else
+	/* Longer than the shell UART keep active timeout, so idle enters DLPS */
+	k_sleep(K_SECONDS(2));
+	pm_test_print_wakeup_count();
 #endif
 
 	ret = do_single_adc_read(&adc_channels[0], &val_after);
@@ -1227,6 +1465,12 @@ static int shell_pm_test_adc(const struct shell *sh, size_t argc, char **argv)
 	} else {
 		printf("ADC sample after dlps failed: %d\n", ret);
 	}
+
+	/* The channel pad is tied to GND, INVALID_ADC_VALUE marks a failed read */
+	printf("[%lld] adc test %s: %d %d, 0..499 expected\n", k_uptime_get(),
+	       val_before >= 0 && val_before < 500 && val_after >= 0 && val_after < 500 ? "PASS"
+											: "FAIL",
+	       val_before, val_after);
 
 #endif /* CONFIG_ADC */
 
@@ -1330,6 +1574,7 @@ static struct k_sem can_rx_sem;
 static uint8_t can_tx_data[8];
 static uint8_t can_rx_data[8];
 static int rx_count;
+static int can_errors;
 
 static void can_tx_cb(const struct device *dev, int error, void *user_data)
 {
@@ -1400,6 +1645,7 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 	k_sem_init(&can_tx_sem, 0, 1);
 	k_sem_init(&can_rx_sem, 0, 1);
 	rx_count = 0;
+	can_errors = 0;
 
 	filter.id = 0x123;
 	filter.mask = 0x7FF;
@@ -1413,9 +1659,11 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 	}
 	if (k_sem_take(&can_tx_sem, K_MSEC(200)) != 0) {
 		printf("tx timeout\n");
+		can_errors++;
 	}
 	if (k_sem_take(&can_rx_sem, K_MSEC(200)) != 0) {
 		printf("rx timeout\n");
+		can_errors++;
 	}
 
 	/* Verify RX data matches TX */
@@ -1423,6 +1671,7 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 		printf("tx/rx match\n");
 	} else {
 		printf("tx/rx mismatch\n");
+		can_errors++;
 		printf("  rx_count: %d\n", rx_count);
 		printf("  tx_data:");
 		for (int i = 0; i < 8; i++) {
@@ -1448,6 +1697,7 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 
 	if (rx_count != 0) {
 		printf("unexpected rx\n");
+		can_errors++;
 	}
 
 	/* Test 3: Add filter, enter DLPS, TX, check RX */
@@ -1463,15 +1713,18 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 	ret = can_send(can_dev, &frame, K_MSEC(100), can_tx_cb, NULL);
 	if (k_sem_take(&can_tx_sem, K_MSEC(200)) != 0) {
 		printf("tx timeout after DLPS\n");
+		can_errors++;
 	}
 	if (k_sem_take(&can_rx_sem, K_MSEC(200)) != 0) {
 		printf("rx timeout after DLPS\n");
+		can_errors++;
 	}
 
 	if (rx_count == 1 && memcmp(can_tx_data, can_rx_data, 8) == 0) {
 		printf("tx/rx match\n");
 	} else {
 		printf("tx/rx mismatch\n");
+		can_errors++;
 		printf("  rx_count: %d\n", rx_count);
 		printf("  tx_data:");
 		for (int i = 0; i < 8; i++) {
@@ -1497,11 +1750,424 @@ static int shell_pm_test_can(const struct shell *sh, size_t argc, char **argv)
 
 	if (rx_count != 0) {
 		printf("unexpected rx\n");
+		can_errors++;
 	}
 
 	can_stop(can_dev);
 
+	printf("[%lld] can test %s: %d errors, 0 expected\n", k_uptime_get(),
+	       can_errors == 0 ? "PASS" : "FAIL", can_errors);
+
 #endif /* CONFIG_CAN */
+
+	return 0;
+}
+
+/* IR PM test, one board sends NEC like frames, the other demodulates them */
+
+#ifdef CONFIG_IR
+
+/* RX samples at 40 MHz, TX sends a 38 kHz carrier of 1/3 duty */
+#define IR_RX_FREQ      40000000U
+#define IR_TX_FREQ      38000U
+#define IR_DUTY         3U
+#define IR_COUNT_PER_US 40U
+/* Spaces up to 75 us sit between the carrier periods of one mark */
+#define IR_GAP_CNT      3000U
+/* A frame ends after 20 ms without carrier */
+#define IR_IDLE_CNT     800000U
+#define IR_RX_LEN       64U
+/* DMA sends the whole frame in one ir_tx */
+#define IR_TX_LEN       100U
+/* Leader mark and space, then 560 us marks and spaces, the last space is lost
+ * in the idle gap
+ */
+#define IR_FRAME_SYMS   (IR_TX_LEN - 1U)
+#define IR_SYM_MAX      128U
+#define IR_FRAME_GAP_MS 2000
+
+static uint32_t ir_tx_buf[IR_TX_LEN];
+static uint32_t ir_tx_sent;
+static struct k_sem ir_tx_sem;
+
+static struct {
+	uint32_t us;
+	bool mark;
+} ir_syms[IR_SYM_MAX];
+static uint32_t ir_sym_cnt;
+static uint32_t ir_mark_cnt;
+static uint32_t ir_space_cnt;
+static bool ir_in_mark;
+/* Set once a frame is complete, nothing is kept until it is checked */
+static volatile bool ir_frame_ready;
+static struct k_sem ir_rx_sem;
+
+static void ir_build_frame(void)
+{
+	/* Word counts are carrier periods, bit 31 sends the carrier */
+	ir_tx_buf[0] = BIT(31) | 342; /* 9 ms */
+	ir_tx_buf[1] = 171;           /* 4.5 ms */
+	for (uint32_t i = 2; i < IR_TX_LEN; i += 2) {
+		ir_tx_buf[i] = BIT(31) | 21; /* 560 us */
+		ir_tx_buf[i + 1] = 21;
+	}
+	ir_tx_buf[IR_TX_LEN - 1] |= BIT(30);
+}
+
+static void ir_tx_cb(const struct device *dev, struct ir_event *evt, void *user_data)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(user_data);
+
+	ir_tx_sent = evt->data.tx.len;
+	k_sem_give(&ir_tx_sem);
+}
+
+static void ir_emit(bool mark, uint32_t cnt)
+{
+	if (ir_sym_cnt < IR_SYM_MAX) {
+		ir_syms[ir_sym_cnt].us = cnt / IR_COUNT_PER_US;
+		ir_syms[ir_sym_cnt].mark = mark;
+		ir_sym_cnt++;
+	}
+}
+
+/* Merge the carrier periods into marks, a longer space ends the mark */
+static void ir_rx_cb(const struct device *dev, struct ir_event *evt, void *user_data)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(user_data);
+
+	if (ir_frame_ready) {
+		return;
+	}
+
+	for (uint32_t i = 0; i < evt->data.rx.len; i++) {
+		uint32_t cnt = evt->data.rx.buf[i] & ~BIT(31);
+
+		if (evt->data.rx.buf[i] & BIT(31)) {
+			ir_mark_cnt += cnt + ir_space_cnt;
+			ir_space_cnt = 0;
+			ir_in_mark = true;
+		} else if (cnt <= IR_GAP_CNT) {
+			ir_space_cnt += cnt;
+		} else {
+			if (ir_in_mark) {
+				ir_emit(true, ir_mark_cnt);
+				ir_mark_cnt = 0;
+				ir_in_mark = false;
+			}
+			ir_emit(false, cnt);
+			ir_space_cnt = 0;
+		}
+	}
+
+	if (evt->type == IR_RX_STOPPED) {
+		if (ir_in_mark) {
+			ir_emit(true, ir_mark_cnt);
+		}
+		ir_mark_cnt = 0;
+		ir_space_cnt = 0;
+		ir_in_mark = false;
+		ir_frame_ready = true;
+		k_sem_give(&ir_rx_sem);
+	}
+}
+
+/* Mismatched symbols of the frame received, within 25% of what was sent */
+static int ir_check_frame(void)
+{
+	int errors = 0;
+
+	if (ir_sym_cnt < IR_FRAME_SYMS) {
+		return IR_FRAME_SYMS - ir_sym_cnt;
+	}
+
+	for (uint32_t i = 0; i < IR_FRAME_SYMS; i++) {
+		uint32_t us = i == 0 ? 9000 : (i == 1 ? 4500 : 560);
+
+		if (ir_syms[i].mark != !(i & 1) || ir_syms[i].us < us * 3 / 4 ||
+		    ir_syms[i].us > us * 5 / 4) {
+			if (errors++ < 4) {
+				printf("  symbol %u: %s %u us, %s %u us expected\n", i,
+				       ir_syms[i].mark ? "mark" : "space", ir_syms[i].us,
+				       (i & 1) ? "space" : "mark", us);
+			}
+		}
+	}
+
+	return errors;
+}
+
+#endif /* CONFIG_IR */
+
+static int shell_pm_test_ir_tx(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(sh);
+
+#ifdef CONFIG_IR
+	int frames = argc > 1 ? (int)strtoul(argv[1], NULL, 10) : 3;
+	int sent = 0;
+	int ret;
+
+	pm_test_print_wakeup_count();
+
+	if (!ir_dev) {
+		printf("IR device not found\n");
+		return 0;
+	}
+
+	ir_build_frame();
+	ret = ir_set_freq(ir_dev, IR_TX_FREQ, IR_DUTY);
+	if (ret == 0) {
+		ret = ir_tx_enable(ir_dev, ir_tx_cb, NULL);
+	}
+	if (ret != 0) {
+		printf("IR tx setup failed: %d\n", ret);
+		return ret;
+	}
+
+	for (int i = 0; i < frames; i++) {
+		/* Wait between frames, so the receiver sees one frame per group */
+		k_sleep(K_MSEC(IR_FRAME_GAP_MS));
+		pm_test_print_wakeup_count();
+
+		ir_tx_sent = 0;
+		k_sem_init(&ir_tx_sem, 0, 1);
+		ret = ir_tx(ir_dev, ir_tx_buf, IR_TX_LEN);
+		if (ret == 0 && k_sem_take(&ir_tx_sem, K_MSEC(500)) == 0 &&
+		    ir_tx_sent == IR_TX_LEN) {
+			sent++;
+		} else {
+			printf("frame %d not sent: %d, %u words out\n", i, ret, ir_tx_sent);
+		}
+	}
+
+	printf("[%lld] ir_tx test %s: %d frames sent, %d expected\n", k_uptime_get(),
+	       sent == frames ? "PASS" : "FAIL", sent, frames);
+#endif /* CONFIG_IR */
+
+	return 0;
+}
+
+static int shell_pm_test_ir_rx(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(sh);
+
+#ifdef CONFIG_IR
+	int frames = argc > 1 ? (int)strtoul(argv[1], NULL, 10) : 3;
+	int matched = 0;
+	int ret;
+
+	pm_test_print_wakeup_count();
+
+	if (!ir_dev) {
+		printf("IR device not found\n");
+		return 0;
+	}
+
+	ir_sym_cnt = 0;
+	ir_frame_ready = false;
+	k_sem_init(&ir_rx_sem, 0, 1);
+	ret = ir_set_freq(ir_dev, IR_RX_FREQ, IR_DUTY);
+	if (ret == 0) {
+		ret = ir_rx_enable(ir_dev, ir_rx_cb, NULL, IR_RX_LEN, IR_IDLE_CNT);
+	}
+	if (ret != 0) {
+		printf("IR rx setup failed: %d\n", ret);
+		return ret;
+	}
+
+	for (int i = 0; i < frames; i++) {
+		int errors;
+
+		if (k_sem_take(&ir_rx_sem, K_SECONDS(10)) != 0) {
+			printf("frame %d timeout\n", i);
+			break;
+		}
+
+		errors = ir_check_frame();
+		pm_test_print_wakeup_count();
+		printf("frame %d: %u symbols, %d mismatched\n", i, ir_sym_cnt, errors);
+		matched += errors == 0;
+
+		ir_sym_cnt = 0;
+		ir_frame_ready = false;
+	}
+
+	ir_rx_disable(ir_dev, NULL);
+
+	printf("[%lld] ir_rx test %s: %d frames matched, %d expected\n", k_uptime_get(),
+	       matched == frames ? "PASS" : "FAIL", matched, frames);
+#endif /* CONFIG_IR */
+
+	return 0;
+}
+
+/* I2S PM test, the internal codec records the mic and the samples go out on the
+ * shell UART at a higher baud, to be imported as raw audio on the PC
+ */
+
+#if defined(CONFIG_I2S) && defined(CONFIG_AUDIO_CODEC) &&                                          \
+	defined(CONFIG_UART_USE_RUNTIME_CONFIGURE) && defined(CONFIG_UART_INTERRUPT_DRIVEN)
+#define BEE_PM_TEST_I2S_RX 1
+#endif
+
+#if defined(BEE_PM_TEST_I2S_RX)
+
+#define I2S_RX_RATE        16000U
+#define I2S_RX_BLOCK_SIZE  256U
+/* 16 bit mono */
+#define I2S_RX_BYTES_PER_S (I2S_RX_RATE * 2U)
+#define I2S_DUMP_BAUD      2000000U
+
+K_MEM_SLAB_DEFINE_STATIC(i2s_rx_slab, I2S_RX_BLOCK_SIZE, 4, 32);
+
+static int i2s_rx_record(uint32_t seconds, uint32_t *sent, const struct device *uart)
+{
+	struct audio_codec_cfg codec_cfg = {0};
+	audio_property_value_t val = {.vol = 0x2f};
+	int64_t end;
+	int ret;
+
+	codec_cfg.mclk_freq = 2500000;
+	codec_cfg.dai_type = AUDIO_DAI_TYPE_I2S;
+	codec_cfg.dai_cfg.i2s.frame_clk_freq = I2S_RX_RATE;
+	codec_cfg.dai_cfg.i2s.word_size = 16;
+	codec_cfg.dai_cfg.i2s.channels = 1;
+	codec_cfg.dai_cfg.i2s.format = I2S_FMT_DATA_FORMAT_I2S | I2S_FMT_DATA_ORDER_MSB;
+	codec_cfg.dai_cfg.i2s.options = I2S_OPT_BIT_CLK_CONT | I2S_OPT_BIT_CLK_CONTROLLER |
+					I2S_OPT_FRAME_CLK_CONTROLLER | I2S_OPT_PINGPONG;
+	codec_cfg.dai_cfg.i2s.block_size = I2S_RX_BLOCK_SIZE;
+	codec_cfg.dai_cfg.i2s.mem_slab = &i2s_rx_slab;
+	codec_cfg.dai_cfg.i2s.timeout = 1000;
+
+	ret = audio_codec_configure(codec_dev, &codec_cfg);
+	if (ret == 0) {
+		ret = audio_codec_set_property(codec_dev, AUDIO_PROPERTY_OUTPUT_VOLUME,
+					       AUDIO_CHANNEL_ALL, val);
+	}
+	if (ret == 0) {
+		ret = audio_codec_apply_properties(codec_dev);
+	}
+	if (ret != 0) {
+		return ret;
+	}
+
+	audio_codec_start_output(codec_dev);
+
+	ret = i2s_configure(i2s_dev, I2S_DIR_RX, &codec_cfg.dai_cfg.i2s);
+	if (ret == 0) {
+		ret = i2s_trigger(i2s_dev, I2S_DIR_RX, I2S_TRIGGER_START);
+	}
+
+	/* Record for the time asked, the PC checks the bytes against it */
+	end = k_uptime_get() + seconds * MSEC_PER_SEC;
+	while (ret == 0 && k_uptime_get() < end) {
+		void *block;
+		size_t size;
+
+		ret = i2s_read(i2s_dev, &block, &size);
+		if (ret != 0) {
+			break;
+		}
+
+		for (size_t i = 0; i < size; i++) {
+			uart_poll_out(uart, ((uint8_t *)block)[i]);
+		}
+		*sent += size;
+		k_mem_slab_free(&i2s_rx_slab, block);
+	}
+
+	(void)i2s_trigger(i2s_dev, I2S_DIR_RX, I2S_TRIGGER_DROP);
+	/* A zero frame clock gates the I2S clock */
+	codec_cfg.dai_cfg.i2s.frame_clk_freq = 0;
+	(void)i2s_configure(i2s_dev, I2S_DIR_RX, &codec_cfg.dai_cfg.i2s);
+	audio_codec_stop_output(codec_dev);
+
+	return ret;
+}
+
+static int i2s_rx_set_baud(const struct device *uart, uint32_t baud)
+{
+	struct uart_config cfg;
+	int ret;
+
+	ret = uart_config_get(uart, &cfg);
+	if (ret != 0) {
+		return ret;
+	}
+
+	cfg.baudrate = baud;
+	ret = uart_configure(uart, &cfg);
+	/* Reconfiguring clears the interrupt enables the shell set up */
+	uart_irq_rx_enable(uart);
+	uart_irq_err_enable(uart);
+
+	return ret;
+}
+
+#endif /* BEE_PM_TEST_I2S_RX */
+
+static int shell_pm_test_i2s_rx(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(sh);
+
+#if defined(BEE_PM_TEST_I2S_RX)
+	const struct device *uart = DEVICE_DT_GET(DT_CHOSEN(zephyr_shell_uart));
+	uint32_t seconds = argc > 1 ? (uint32_t)strtoul(argv[1], NULL, 10) : 3;
+	uint32_t expected = seconds * I2S_RX_BYTES_PER_S;
+	struct uart_config cfg;
+	uint32_t sent = 0;
+	int ret;
+
+	pm_test_print_wakeup_count();
+
+	if (!i2s_dev || !codec_dev) {
+		printf("I2S or codec device not found\n");
+		return 0;
+	}
+
+	ret = uart_config_get(uart, &cfg);
+	if (ret != 0) {
+		printf("uart config get failed: %d\n", ret);
+		return ret;
+	}
+
+	printf("i2s_rx dump start: %u baud, %u s, %u bytes per s\n", I2S_DUMP_BAUD, seconds,
+	       I2S_RX_BYTES_PER_S);
+	/* Let the line above go out and the PC follow before the baud changes */
+	k_msleep(200);
+
+	/* poll_out takes no reference, keep the UART awake for the dump */
+	(void)pm_device_runtime_get(uart);
+	ret = i2s_rx_set_baud(uart, I2S_DUMP_BAUD);
+	if (ret == 0) {
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+		/* The PCK600 debug output takes MICBIAS as PON_PPU */
+		debug_port_aon_output(DEBUG_PCK600_OUTPUT_TO_VPON_PPU, DISABLE);
+#endif
+		ret = i2s_rx_record(seconds, &sent, uart);
+#if defined(CONFIG_REALTEK_BEE_HAS_PCK600)
+		debug_port_aon_output(DEBUG_PCK600_OUTPUT_TO_VPON_PPU, ENABLE);
+#endif
+	}
+
+	/* The PC switches back once the dump has been quiet for a while */
+	k_msleep(500);
+	(void)i2s_rx_set_baud(uart, cfg.baudrate);
+	(void)pm_device_runtime_put(uart);
+	k_msleep(100);
+
+	/* Whole blocks go out until the time is up */
+	if (ret == 0 && (sent < expected * 95 / 100 || sent > expected * 105 / 100)) {
+		ret = -EIO;
+	}
+
+	pm_test_print_wakeup_count();
+	printf("[%lld] i2s_rx test %s: %u bytes sent, %u expected, error %d\n", k_uptime_get(),
+	       ret == 0 ? "PASS" : "FAIL", sent, expected, ret);
+#endif /* BEE_PM_TEST_I2S_RX */
 
 	return 0;
 }
@@ -1551,16 +2217,23 @@ INPUT_CALLBACK_DEFINE(DEVICE_DT_GET(DT_NODELABEL(keyscan)), keyscan_input_cb, NU
 #endif /* CONFIG_INPUT */
 
 /* Shell commands */
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_pm_test_counter,
+			       SHELL_CMD_ARG(latch, NULL,
+					     "latch count capture test [toggles [interval_ms]]",
+					     shell_pm_test_latch, 0, 2),
+			       SHELL_SUBCMD_SET_END);
+
 #define SHELL_CMD_ARG_CREATE                                                                       \
 	SHELL_CMD_ARG(uart, NULL, "uart pm test", shell_pm_test_uart, 0, 0),                       \
 		SHELL_CMD_ARG(shell_uart_put, NULL,                                                \
 			      "hand back the runtime pm reference the shell backend holds",        \
 			      shell_pm_test_shell_uart_put, 0, 0),                                 \
 		SHELL_CMD_ARG(uartdma, NULL, "uart dma pm test", shell_pm_test_uart_dma, 0, 0),    \
-		SHELL_CMD_ARG(gpio, NULL, "gpio pm test [debounce_ms]", shell_pm_test_gpio, 0, 1), \
+		SHELL_CMD_ARG(gpio, NULL, "gpio pm test [debounce_ms [timeout_ms]]",               \
+			      shell_pm_test_gpio, 0, 2),                                           \
 		SHELL_CMD_ARG(pwm, NULL, "pwm pm test", shell_pm_test_pwm, 0, 0),                  \
 		SHELL_CMD_ARG(lppwm, NULL, "lppwm pm test", shell_pm_test_lppwm, 0, 0),            \
-		SHELL_CMD_ARG(counter, NULL, "counter pm test (input time in ms)",                 \
+		SHELL_CMD_ARG(counter, &sub_pm_test_counter, "counter pm test (input time in ms)", \
 			      shell_pm_test_counter, 2, 0),                                        \
 		SHELL_CMD_ARG(spi, NULL, "spi pm test", shell_pm_test_spi, 0, 0),                  \
 		SHELL_CMD_ARG(rtc, NULL, "rtc pm test", shell_pm_test_rtc, 0, 0),                  \
@@ -1574,6 +2247,10 @@ INPUT_CALLBACK_DEFINE(DEVICE_DT_GET(DT_NODELABEL(keyscan)), keyscan_input_cb, NU
 		SHELL_CMD_ARG(adc, NULL, "adc pm test", shell_pm_test_adc, 0, 0),                  \
 		SHELL_CMD_ARG(sdhc, NULL, "sdhc/sdio pm test", shell_pm_test_sdhc, 0, 0),          \
 		SHELL_CMD_ARG(can, NULL, "can pm test", shell_pm_test_can, 0, 0),                  \
+		SHELL_CMD_ARG(ir_tx, NULL, "ir tx pm test [frames]", shell_pm_test_ir_tx, 0, 1),   \
+		SHELL_CMD_ARG(ir_rx, NULL, "ir rx pm test [frames]", shell_pm_test_ir_rx, 0, 1),   \
+		SHELL_CMD_ARG(i2s_rx, NULL, "i2s rx pm test [seconds]", shell_pm_test_i2s_rx, 0,   \
+			      1),                                                                  \
 		SHELL_SUBCMD_SET_END
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_pm_test, SHELL_CMD_ARG_CREATE);

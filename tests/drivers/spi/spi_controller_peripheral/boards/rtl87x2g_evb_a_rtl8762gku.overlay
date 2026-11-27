@@ -8,7 +8,7 @@
 	status = "okay";
 	pinctrl-0 = <&spi1_default>;
 	pinctrl-names = "default";
-	cs-gpios = <&gpiob 8 GPIO_ACTIVE_LOW>;
+	cs-gpios = <&gpiob 6 GPIO_ACTIVE_LOW>;
 	dmas = <&dma0 0 BEE_DMA_HANDSHAKE_SPI1_TX
 		(BEE_DMA_M2P | BEE_DMA_SRC_INC | BEE_DMA_DST_FIXED | BEE_DMA_SRC_WIDTH_8BIT |
 		 BEE_DMA_DST_WIDTH_8BIT | BEE_DMA_SRC_MSIZE(BEE_DMA_MSIZE_1) |
@@ -54,9 +54,9 @@ dut_spis: &spi0_slave {
 &pinctrl {
 	spi1_default: spi1_default {
 		group1 {
-			psels = <BEE_PSEL(SPI1_CLK_MASTER, P4_0)>,
-				<BEE_PSEL(SPI1_MO_MASTER, P4_1)>,
-				<BEE_PSEL(SPI1_MI_MASTER, P4_2)>;
+			psels = <BEE_PSEL(SPI1_CLK_MASTER, P0_4)>,
+				<BEE_PSEL(SPI1_MO_MASTER, P2_3)>,
+				<BEE_PSEL(SPI1_MI_MASTER, P2_4)>;
 			output-enable;
 			output-high;
 			bias-pull-up;
@@ -65,10 +65,10 @@ dut_spis: &spi0_slave {
 
 	spi0_slave_default: spi0_slave_default {
 		group1 {
-			psels = <BEE_PSEL(SPI0_CLK_SLAVE, P4_4)>,
-				<BEE_PSEL(SPI0_SI_SLAVE, P4_5)>,
-				<BEE_PSEL(SPI0_SO_SLAVE, P4_6)>,
-				<BEE_PSEL(SPI0_CSN_0_SLAVE, P4_7)>;
+			psels = <BEE_PSEL(SPI0_CLK_SLAVE, P0_5)>,
+				<BEE_PSEL(SPI0_SI_SLAVE, P3_2)>,
+				<BEE_PSEL(SPI0_SO_SLAVE, P3_3)>,
+				<BEE_PSEL(SPI0_CSN_0_SLAVE, P4_2)>;
 			output-enable;
 			output-high;
 			bias-pull-up;
@@ -77,7 +77,7 @@ dut_spis: &spi0_slave {
 
 	gpiob_default: gpiob_default {
 		group1 {
-			psels = <BEE_PSEL_GPIOB_8_P4_3>;
+			psels = <BEE_PSEL_GPIOB_6_P4_1>;
 		};
 	};
 };
